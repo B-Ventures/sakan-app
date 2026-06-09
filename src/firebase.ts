@@ -1,10 +1,23 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, doc, collection, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, collection, getDocFromServer, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
+
+// satisfaction of Layer 3 & 10: Multi-tab offline caching persistence
+if (typeof window !== 'undefined') {
+  enableMultiTabIndexedDbPersistence(db)
+    .catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn('Firestore multi-tab persistence failed-precondition, falling back to cached single tab');
+      } else if (err.code === 'unimplemented') {
+        console.warn('Firestore offline persistence is unimplemented in this browser context');
+      }
+    });
+}
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 

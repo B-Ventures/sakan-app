@@ -15,8 +15,7 @@ service cloud.firestore {
     function isOwner(buildingId) {
       return isSignedIn() && 
         exists(/databases/$(database)/documents/buildings/$(buildingId)) &&
-        ( !('ownerId' in get(/databases/$(database)/documents/buildings/$(buildingId)).data) || 
-          get(/databases/$(database)/documents/buildings/$(buildingId)).data.ownerId == request.auth.uid );
+        get(/databases/$(database)/documents/buildings/$(buildingId)).data.ownerId == request.auth.uid;
     }
 
     function isValidId(id) {
@@ -76,6 +75,18 @@ service cloud.firestore {
         && request.resource.data.title is string
         && request.resource.data.title.size() <= 200;
       allow delete: if isSignedIn() && isOwner(buildingId);
+    }
+
+    // Audit logs under a building (Write-Once / Append-Only)
+    match /buildings/{buildingId}/auditLogs/{logId} {
+      allow get, list: if isSignedIn() && isOwner(buildingId);
+      allow create: if isSignedIn()
+        && isOwner(buildingId)
+        && request.resource.data.action is string
+        && request.resource.data.action.size() <= 100
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 1000;
+      allow update, delete: if false;
     }
   }
 }

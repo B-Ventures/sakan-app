@@ -12,7 +12,16 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { Building, Tenant, Payment, Expense } from './types';
+import { Building, Tenant, Payment, Expense, AuditLog } from './types';
+import { clientRateLimiter } from './utils/rateLimiter';
+
+// satisfaction of Layer 9: Rate limiting validation gate before cloud writes
+function enforceRateLimit(actionKey: string = 'cloud_write') {
+  const result = clientRateLimiter.attemptAction(actionKey);
+  if (!result.allowed) {
+    throw new Error(`RATE_LIMIT: Client throttle activated. Please wait ${result.resetSec} seconds before sending more requests.`);
+  }
+}
 
 // ==========================================
 // Building Operations
@@ -37,6 +46,7 @@ export async function fetchUserBuildings(userId: string): Promise<Building[]> {
 export async function createBuilding(building: Omit<Building, 'id' | 'createdAt'> & { id?: string }): Promise<Building> {
   const path = 'buildings';
   try {
+    enforceRateLimit('building_write');
     const buildingsRef = collection(db, path);
     const newDocRef = building.id ? doc(buildingsRef, building.id) : doc(buildingsRef);
     const id = newDocRef.id;
@@ -57,6 +67,7 @@ export async function createBuilding(building: Omit<Building, 'id' | 'createdAt'
 export async function saveBuilding(building: Building): Promise<Building> {
   const path = `buildings/${building.id}`;
   try {
+    enforceRateLimit('building_write');
     await setDoc(doc(db, 'buildings', building.id), building, { merge: true });
     return building;
   } catch (error) {
@@ -68,6 +79,7 @@ export async function saveBuilding(building: Building): Promise<Building> {
 export async function removeBuilding(buildingId: string): Promise<void> {
   const path = `buildings/${buildingId}`;
   try {
+    enforceRateLimit('building_write');
     await deleteDoc(doc(db, 'buildings', buildingId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -97,6 +109,7 @@ export function subscribeToTenants(buildingId: string, onUpdate: (tenants: Tenan
 export async function saveTenant(buildingId: string, tenant: Omit<Tenant, 'id'> & { id?: string }): Promise<Tenant> {
   const path = `buildings/${buildingId}/tenants`;
   try {
+    enforceRateLimit('tenant_write');
     const tenantsRef = collection(db, 'buildings', buildingId, 'tenants');
     const docRef = tenant.id ? doc(tenantsRef, tenant.id) : doc(tenantsRef);
     const finalTenant: Tenant = {
@@ -114,6 +127,7 @@ export async function saveTenant(buildingId: string, tenant: Omit<Tenant, 'id'> 
 export async function removeTenant(buildingId: string, tenantId: string): Promise<void> {
   const path = `buildings/${buildingId}/tenants/${tenantId}`;
   try {
+    enforceRateLimit('tenant_write');
     await deleteDoc(doc(db, 'buildings', buildingId, 'tenants', tenantId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -143,6 +157,7 @@ export function subscribeToPayments(buildingId: string, onUpdate: (payments: Pay
 export async function savePayment(buildingId: string, payment: Omit<Payment, 'id'> & { id?: string }): Promise<Payment> {
   const path = `buildings/${buildingId}/payments`;
   try {
+    enforceRateLimit('payment_write');
     const paymentsRef = collection(db, 'buildings', buildingId, 'payments');
     const docRef = payment.id ? doc(paymentsRef, payment.id) : doc(paymentsRef);
     const finalPayment: Payment = {
@@ -160,6 +175,7 @@ export async function savePayment(buildingId: string, payment: Omit<Payment, 'id
 export async function changePaymentStatus(buildingId: string, paymentId: string, status: 'Paid' | 'Pending' | 'Overdue'): Promise<void> {
   const path = `buildings/${buildingId}/payments/${paymentId}`;
   try {
+    enforceRateLimit('payment_write');
     const docRef = doc(db, 'buildings', buildingId, 'payments', paymentId);
     await updateDoc(docRef, { status });
   } catch (error) {
@@ -170,6 +186,7 @@ export async function changePaymentStatus(buildingId: string, paymentId: string,
 export async function removePayment(buildingId: string, paymentId: string): Promise<void> {
   const path = `buildings/${buildingId}/payments/${paymentId}`;
   try {
+    enforceRateLimit('payment_write');
     await deleteDoc(doc(db, 'buildings', buildingId, 'payments', paymentId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -199,6 +216,7 @@ export function subscribeToExpenses(buildingId: string, onUpdate: (expenses: Exp
 export async function saveExpense(buildingId: string, expense: Omit<Expense, 'id'> & { id?: string }): Promise<Expense> {
   const path = `buildings/${buildingId}/expenses`;
   try {
+    enforceRateLimit('expense_write');
     const expensesRef = collection(db, 'buildings', buildingId, 'expenses');
     const docRef = expense.id ? doc(expensesRef, expense.id) : doc(expensesRef);
     const finalExpense: Expense = {
@@ -216,8 +234,73 @@ export async function saveExpense(buildingId: string, expense: Omit<Expense, 'id
 export async function removeExpense(buildingId: string, expenseId: string): Promise<void> {
   const path = `buildings/${buildingId}/expenses/${expenseId}`;
   try {
+    enforceRateLimit('expense_write');
     await deleteDoc(doc(db, 'buildings', buildingId, 'expenses', expenseId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+// ==========================================
+// System Audit Log Operations
+// ==========================================
+
+export async function logAction(
+  buildingId: string,
+  userId: string,
+  userEmail: string,
+  action: string,
+  details: string,
+  entityId?: string,
+  entityType?: 'tenant' | 'payment' | 'expense' | 'building' | 'system',
+  meta?: Record<string, any>
+): Promise<AuditLog | null> {
+  const path = `buildings/${buildingId}/auditLogs`;
+  try {
+    const logsRef = collection(db, 'buildings', buildingId, 'auditLogs');
+    const docRef = doc(logsRef);
+    const finalLog: AuditLog = {
+      id: docRef.id,
+      userId,
+      userEmail,
+      action,
+      timestamp: new Date().toISOString(),
+      details,
+      entityId,
+      entityType,
+      meta,
+    };
+    await setDoc(docRef, finalLog);
+    return finalLog;
+  } catch (error) {
+    console.error("Failed to write system audit log:", error);
+    return null;
+  }
+}
+
+export function subscribeToAuditLogs(
+  buildingId: string,
+  onUpdate: (logs: AuditLog[]) => void,
+  onError: (err: any) => void
+) {
+  const path = `buildings/${buildingId}/auditLogs`;
+  const q = collection(db, 'buildings', buildingId, 'auditLogs');
+  
+  return onSnapshot(q, (snapshot) => {
+    const logs: AuditLog[] = [];
+    snapshot.forEach((docSnap) => {
+      logs.push({ id: docSnap.id, ...docSnap.data() } as AuditLog);
+    });
+    // Sort client-side descending by timestamp to ensure consistent chronological order
+    const sortedLogs = [...logs].sort((a, b) => {
+      const timeA = a.timestamp || '';
+      const timeB = b.timestamp || '';
+      return timeB.localeCompare(timeA);
+    });
+    onUpdate(sortedLogs);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, path);
+    onError(error);
+  });
+}
+

@@ -83,6 +83,23 @@
         "attachmentUrl": { "type": "string" }
       },
       "required": ["id", "title", "category", "amount", "date"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Logged action performed on the system for security and auditing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "string" },
+        "entityId": { "type": "string" },
+        "entityType": { "type": "string" },
+        "meta": { "type": "object" }
+      },
+      "required": ["id", "userId", "userEmail", "action", "timestamp", "details"]
     }
   },
   "firestore": {
@@ -105,6 +122,10 @@
     "/buildings/{buildingId}/expenses/{expenseId}": {
       "schema": "Expense",
       "description": "Logged expenses for a specific building"
+    },
+    "/buildings/{buildingId}/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Logged actions performed in this building's scope"
     }
   }
 }

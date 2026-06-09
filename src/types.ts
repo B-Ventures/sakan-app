@@ -82,6 +82,18 @@ export interface Building {
   receiptTemplate?: string; // Custom WhatsApp payment receipt confirmation template
 }
 
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  action: string; // e.g., "CREATE_TENANT", "UPDATE_PAYMENT", "UPDATE_BUILDING_TEMPLATE"
+  timestamp: string; // ISO String
+  details: string; // Descriptive human readable explanation
+  entityId?: string;
+  entityType?: 'tenant' | 'payment' | 'expense' | 'building' | 'system';
+  meta?: Record<string, any>; // Flexible debugging metadata
+}
+
 export function formatCurrency(amount: number, currency: string = 'JOD'): string {
   const rounded = amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   if (currency === 'USD') {

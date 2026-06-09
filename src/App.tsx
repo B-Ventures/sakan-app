@@ -27,7 +27,8 @@ import {
   Lock,
   ArrowRight,
   Settings,
-  Upload
+  Upload,
+  Shield
 } from 'lucide-react';
 import { auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
@@ -44,11 +45,15 @@ import {
   removePayment,
   subscribeToExpenses,
   saveExpense,
-  removeExpense
+  removeExpense,
+  logAction,
+  subscribeToAuditLogs
 } from './firebaseService';
 import PropertySettingsModal from './components/PropertySettingsModal';
 import DataImporter from './components/DataImporter';
 import ConfirmationDialog from './components/ConfirmationDialog';
+import AuditTrail from './components/AuditTrail';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
@@ -83,6 +88,16 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [triggerRefresh, setTriggerRefresh] = useState(0);
   const [buildingToDeleteId, setBuildingToDeleteId] = useState<string | null>(null);
+
+  // GLOBAL FLOATING TOAST NOTIFICATION SERVICE
+  const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+
+  const showGlobalToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setGlobalToast({ message, type });
+    setTimeout(() => {
+      setGlobalToast(prev => prev?.message === message ? null : prev);
+    }, 4500);
+  };
 
   const activeUserId = currentUser?.uid || (isDemoMode ? demoUser?.uid : null);
   const activeUserEmail = currentUser?.email || (isDemoMode ? demoUser?.email : null);
@@ -164,6 +179,11 @@ export default function App() {
       setTenants([]);
       setPayments([]);
       setExpenses([]);
+      return;
+    }
+
+    // Safeguard: Prevent subscribing to real database with a demo building ID during transition
+    if (!isDemoMode && activeBuilding.id.startsWith('demo-')) {
       return;
     }
 
@@ -268,7 +288,7 @@ export default function App() {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error('Google Sign In failed:', error);
-      alert('Sign in request could not complete. This can resolve once you run this app directly outside the sandbox frame.');
+      showGlobalToast('Sign in request could not complete. Run this app directly outside the sandbox tab to connect Google accounts.', 'warning');
     } finally {
       setAuthLoading(false);
     }
@@ -400,6 +420,18 @@ export default function App() {
 
       // Re-fetch everything and auto-select new building
       await refreshBuildingsList(activeUserId, addedBuilding.id);
+      
+      // Save audit log
+      await logAction(
+        addedBuilding.id,
+        activeUserId,
+        activeUserEmail || '',
+        'CREATE_BUILDING',
+        `Property building "${addedBuilding.name}" was successfully created.` + (seedDemoData ? ' Pre-seeded with sandbox records.' : ''),
+        addedBuilding.id,
+        'building'
+      );
+
       setIsNewBuildingModalOpen(false);
       setNewBuildingName('');
       setNewBuildingAddress('');
@@ -425,6 +457,17 @@ export default function App() {
       await refreshBuildingsList(activeUserId);
       return;
     }
+
+    // Save audit log before deletion so record is captured
+    await logAction(
+      buildingId,
+      activeUserId,
+      activeUserEmail || '',
+      'DELETE_BUILDING',
+      `Property building ID "${buildingId}" was requested to be deleted.`,
+      buildingId,
+      'building'
+    );
 
     await removeBuilding(buildingId);
     await refreshBuildingsList(activeUserId);
@@ -463,6 +506,17 @@ export default function App() {
 
     try {
       const added = await saveTenant(activeBuilding.id, newTenant);
+      
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'CREATE_TENANT',
+        `Tenant "${added.name}" added to Unit "${added.unit}" with rent ${added.monthlyRent} ${activeBuilding.currency || 'JOD'}.`,
+        added.id,
+        'tenant'
+      );
+
       if (newTenant.status === 'active') {
         const pendingPayment = {
           tenantId: added.id,
@@ -476,6 +530,16 @@ export default function App() {
           receiptNumber: `REC-2026-${added.unit.replace(/\s+/g, '')}-06`,
         };
         await savePayment(activeBuilding.id, pendingPayment);
+        
+        await logAction(
+          activeBuilding.id,
+          activeUserId || '',
+          activeUserEmail || '',
+          'CREATE_PAYMENT',
+          `Auto-generated rent cycle pending payment of ${added.monthlyRent} ${activeBuilding.currency || 'JOD'} for "${added.name}" (Unit ${added.unit}, Month: 2026-06).`,
+          undefined,
+          'payment'
+        );
       }
     } catch (e) {
       console.error(e);
@@ -509,6 +573,16 @@ export default function App() {
     try {
       await saveTenant(activeBuilding.id, updatedTenant);
       
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'UPDATE_TENANT',
+        `Tenant "${updatedTenant.name}" (Unit "${updatedTenant.unit}") profile/leasing details updated.`,
+        updatedTenant.id,
+        'tenant'
+      );
+
       // Update matching payment metadata if name/unit changes
       const updatedPayments = payments.map((p) => {
         if (p.tenantId === updatedTenant.id) {
@@ -543,7 +617,22 @@ export default function App() {
     }
 
     try {
+      const tenantToDel = tenants.find(t => t.id === id);
+      const tenantName = tenantToDel ? tenantToDel.name : id;
+      const tenantUnit = tenantToDel ? tenantToDel.unit : '';
+
       await removeTenant(activeBuilding.id, id);
+      
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'DELETE_TENANT',
+        `Tenant "${tenantName}" (Unit "${tenantUnit}") was removed. Associated payments deleted.`,
+        id,
+        'tenant'
+      );
+
       const matched = payments.filter((p) => p.tenantId === id);
       for (const p of matched) {
         await removePayment(activeBuilding.id, p.id);
@@ -569,11 +658,103 @@ export default function App() {
       return;
     }
     try {
+      await logAction(
+        activeBuilding.id,
+        activeUserId,
+        activeUserEmail || '',
+        'UPDATE_BUILDING_SETTINGS',
+        `Building configuration updated: ${Object.keys(updatedFields).join(', ')}.`,
+        activeBuilding.id,
+        'building',
+        { fields: updatedFields }
+      );
+
       await saveBuilding(newB);
       setBuildings(prev => prev.map(b => b.id === activeBuilding.id ? newB : b));
       setActiveBuilding(newB);
     } catch (error) {
       console.error('Failed to update building settings:', error);
+    }
+  };
+
+  // --- RESTORE BACKUP SNAPSHOT ---
+  const handleRestoreBackup = async (backupData: { tenants: Tenant[], payments: Payment[], expenses: Expense[] }) => {
+    if (!activeBuilding || !activeUserId) return;
+
+    if (isDemoMode) {
+      const bId = activeBuilding.id;
+      localStorage.setItem(`demo_tenants_${bId}`, JSON.stringify(backupData.tenants));
+      localStorage.setItem(`demo_payments_${bId}`, JSON.stringify(backupData.payments));
+      localStorage.setItem(`demo_expenses_${bId}`, JSON.stringify(backupData.expenses));
+
+      setTenants(backupData.tenants);
+      setPayments(backupData.payments);
+      setExpenses(backupData.expenses);
+      showGlobalToast('Backup restored successfully to local demo session!', 'success');
+      return;
+    }
+
+    try {
+      showGlobalToast('Syncing backup database records to Cloud...', 'info');
+
+      // 1. Log Action
+      await logAction(
+        activeBuilding.id,
+        activeUserId,
+        activeUserEmail || '',
+        'RESTORE_BACKUP',
+        `Restored property workspace containing ${backupData.tenants.length} tenants, ${backupData.payments.length} payments, and ${backupData.expenses.length} expenses.`,
+        activeBuilding.id,
+        'building'
+      );
+
+      // 2. Iterate and write records using cloud APIs.
+      for (const tenant of backupData.tenants) {
+        await saveTenant(activeBuilding.id, {
+          name: tenant.name,
+          unit: tenant.unit,
+          monthlyRent: tenant.monthlyRent,
+          rentDueDateDay: tenant.rentDueDateDay,
+          startDate: tenant.startDate,
+          endDate: tenant.endDate,
+          phone: tenant.phone || '',
+          email: tenant.email || '',
+          status: tenant.status,
+        });
+      }
+
+      for (const payment of backupData.payments) {
+        await savePayment(activeBuilding.id, {
+          tenantId: payment.tenantId,
+          tenantName: payment.tenantName,
+          unit: payment.unit,
+          amount: payment.amount,
+          date: payment.date,
+          monthPaidFor: payment.monthPaidFor,
+          method: payment.method,
+          status: payment.status,
+          notes: payment.notes || '',
+          receiptNumber: payment.receiptNumber || '',
+        });
+      }
+
+      for (const expense of backupData.expenses) {
+        await saveExpense(activeBuilding.id, {
+          title: expense.title,
+          category: expense.category,
+          amount: expense.amount,
+          date: expense.date,
+          notes: expense.notes || '',
+          attachmentName: expense.attachmentName || '',
+          attachmentUrl: expense.attachmentUrl || '',
+        });
+      }
+
+      setTriggerRefresh(prev => prev + 1);
+      showGlobalToast('Restored backup completely into Firestore collection!', 'success');
+    } catch (err) {
+      console.error('Core dump recovery failed:', err);
+      showGlobalToast('Disaster Recovery write failed. Verify cloud permission limits.', 'error');
     }
   };
 
@@ -589,6 +770,17 @@ export default function App() {
     }
 
     try {
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'UPDATE_PAYMENT',
+        `Rent payment record updated for "${updatedPayment.tenantName}" (Unit "${updatedPayment.unit}") for Month ${updatedPayment.monthPaidFor} of ${updatedPayment.amount} ${activeBuilding.currency || 'JOD'}.`,
+        updatedPayment.id,
+        'payment',
+        { payment: updatedPayment }
+      );
+
       await savePayment(activeBuilding.id, updatedPayment);
     } catch (e) {
       console.error(e);
@@ -618,6 +810,16 @@ export default function App() {
         receiptNumber: receiptCode,
       };
       await savePayment(activeBuilding.id, payload);
+
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'CREATE_PAYMENT',
+        `Rent payment manually logged for "${newPaymentArgs.tenantName}" (Unit "${newPaymentArgs.unit}") for Month ${newPaymentArgs.monthPaidFor} of amount ${newPaymentArgs.amount} ${activeBuilding.currency || 'JOD'}.`,
+        undefined,
+        'payment'
+      );
     } catch (e) {
       console.error(e);
     }
@@ -651,6 +853,16 @@ export default function App() {
           date: datePaid || p.date,
         };
         await savePayment(activeBuilding.id, updated);
+
+        await logAction(
+          activeBuilding.id,
+          activeUserId || '',
+          activeUserEmail || '',
+          'UPDATE_PAYMENT',
+          `Payment status marked as "${status}" for "${p.tenantName}" (Unit "${p.unit}", Month ${p.monthPaidFor}).`,
+          id,
+          'payment'
+        );
       }
     } catch (e) {
       console.error(e);
@@ -668,7 +880,18 @@ export default function App() {
     }
 
     try {
+      const p = payments.find((x) => x.id === id);
       await removePayment(activeBuilding.id, id);
+
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'DELETE_PAYMENT',
+        `Payment record of ${p ? p.amount : ''} for "${p ? p.tenantName : ''}" (Month ${p ? p.monthPaidFor : ''}) was deleted.`,
+        id,
+        'payment'
+      );
     } catch (e) {
       console.error(e);
     }
@@ -686,6 +909,16 @@ export default function App() {
     }
 
     try {
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'UPDATE_EXPENSE',
+        `Maintenance expense record updated: "${updatedExpense.title}" (Amount: ${updatedExpense.amount} ${activeBuilding.currency || 'JOD'}, Category: "${updatedExpense.category}").`,
+        updatedExpense.id,
+        'expense'
+      );
+
       await saveExpense(activeBuilding.id, updatedExpense);
     } catch (e) {
       console.error(e);
@@ -708,6 +941,16 @@ export default function App() {
 
     try {
       await saveExpense(activeBuilding.id, newExpenseArgs);
+
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'CREATE_EXPENSE',
+        `New expense logged: "${newExpenseArgs.title}" (Amount: ${newExpenseArgs.amount} ${activeBuilding.currency || 'JOD'}, Category: "${newExpenseArgs.category}").`,
+        undefined,
+        'expense'
+      );
     } catch (e) {
       console.error(e);
     }
@@ -724,7 +967,18 @@ export default function App() {
     }
 
     try {
+      const exp = expenses.find((x) => x.id === id);
       await removeExpense(activeBuilding.id, id);
+
+      await logAction(
+        activeBuilding.id,
+        activeUserId || '',
+        activeUserEmail || '',
+        'DELETE_EXPENSE',
+        `Expense logged for "${exp ? exp.title : ''}" of amount ${exp ? exp.amount : ''} ${activeBuilding.currency || 'JOD'} was deleted.`,
+        id,
+        'expense'
+      );
     } catch (e) {
       console.error(e);
     }
@@ -1002,6 +1256,19 @@ export default function App() {
               <FileText className="w-4 h-4" />
               Statements & Alerts
             </button>
+
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'audit'
+                  ? 'bg-slate-100 text-slate-900 font-bold'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+              id="tab-btn-audit"
+            >
+              <Shield className="w-4 h-4" />
+              Security Audit Trail
+            </button>
           </nav>
 
           {/* Connected Profile Details */}
@@ -1105,6 +1372,7 @@ export default function App() {
               {activeTab === 'payments' && 'Income Collections Ledger'}
               {activeTab === 'expenses' && 'Building Outflow Expenses'}
               {activeTab === 'reminders' && 'Statements & Alerts'}
+              {activeTab === 'audit' && 'System Audit Trail Ledger'}
             </h1>
           </div>
           
@@ -1199,6 +1467,13 @@ export default function App() {
                   expenses={expenses} 
                   building={activeBuilding}
                   onUpdateBuildingSettings={handleUpdateBuildingSettings}
+                />
+              )}
+
+              {activeTab === 'audit' && (
+                <AuditTrail 
+                  activeBuilding={activeBuilding}
+                  isDemoMode={isDemoMode}
                 />
               )}
             </>
@@ -1319,6 +1594,11 @@ export default function App() {
           onClose={() => setIsPropertySettingsOpen(false)}
           building={activeBuilding}
           onUpdateSettings={handleUpdateBuildingSettings}
+          tenants={tenants}
+          payments={payments}
+          expenses={expenses}
+          isDemoMode={isDemoMode}
+          onRestoreBackup={handleRestoreBackup}
         />
       )}
 
@@ -1348,6 +1628,48 @@ export default function App() {
         }}
         onCancel={() => setBuildingToDeleteId(null)}
       />
+
+      {/* GLOBAL TOAST FLIGHT PANEL */}
+      <AnimatePresence>
+        {globalToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 p-4 rounded-2xl shadow-xl border select-none max-w-sm font-sans"
+            style={{
+              backgroundColor:
+                globalToast.type === 'success' ? '#ECFDF5' :
+                globalToast.type === 'error' ? '#FEF2F2' :
+                globalToast.type === 'warning' ? '#FFFBEB' : '#EFF6FF',
+              borderColor:
+                globalToast.type === 'success' ? '#A7F3D0' :
+                globalToast.type === 'error' ? '#FCA5A5' :
+                globalToast.type === 'warning' ? '#FDE68A' : '#BFDBFE',
+              color:
+                globalToast.type === 'success' ? '#065F46' :
+                globalToast.type === 'error' ? '#991B1B' :
+                globalToast.type === 'warning' ? '#92400E' : '#1E40AF',
+            }}
+          >
+            <span className="font-extrabold text-sm md:text-md">
+              {globalToast.type === 'success' && '✅'}
+              {globalToast.type === 'error' && '❌'}
+              {globalToast.type === 'warning' && '⚠️'}
+              {globalToast.type === 'info' && '💡'}
+            </span>
+            <div className="flex-1">
+              <p className="text-xs font-bold leading-normal">{globalToast.message}</p>
+            </div>
+            <button
+              onClick={() => setGlobalToast(null)}
+              className="text-[10px] font-extrabold hover:opacity-80 px-1 py-0.5 rounded cursor-pointer"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

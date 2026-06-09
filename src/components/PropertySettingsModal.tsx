@@ -4,23 +4,33 @@
  */
 
 import React, { useState } from 'react';
-import { Building, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_PAYMENT_METHODS, DEFAULT_INCOME_CATEGORIES } from '../types';
-import { Settings, Home, DollarSign, Wallet, FileSpreadsheet, Plus, Edit2, Trash2, Save, X, Activity } from 'lucide-react';
+import { Building, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_PAYMENT_METHODS, DEFAULT_INCOME_CATEGORIES, Tenant, Payment, Expense } from '../types';
+import { Settings, Home, DollarSign, Wallet, FileSpreadsheet, Plus, Edit2, Trash2, Save, X, Activity, Download, Upload, Shield, RefreshCw } from 'lucide-react';
 
 interface PropertySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   building: Building;
   onUpdateSettings: (updatedFields: Partial<Building>) => Promise<void>;
+  tenants: Tenant[];
+  payments: Payment[];
+  expenses: Expense[];
+  isDemoMode: boolean;
+  onRestoreBackup?: (backupData: { tenants: Tenant[], payments: Payment[], expenses: Expense[] }) => Promise<void>;
 }
 
-type SettingsTab = 'general' | 'expenses' | 'paymentMethods' | 'incomeSplits';
+type SettingsTab = 'general' | 'expenses' | 'paymentMethods' | 'incomeSplits' | 'backup';
 
 export default function PropertySettingsModal({
   isOpen,
   onClose,
   building,
   onUpdateSettings,
+  tenants = [],
+  payments = [],
+  expenses = [],
+  isDemoMode = false,
+  onRestoreBackup,
 }: PropertySettingsModalProps) {
   const [activeTab, setActiveTab ] = useState<SettingsTab>('general');
 
@@ -389,6 +399,16 @@ export default function PropertySettingsModal({
                 <DollarSign className="w-4 h-4" />
                 Income Split Fees
               </button>
+
+              <button
+                onClick={() => { setActiveTab('backup'); setEditingIndex(null); }}
+                className={`flex items-center gap-2 px-3 py-2 md:py-2.5 rounded-xl transition-all shrink-0 ${
+                  activeTab === 'backup' ? 'bg-white text-amber-600 border border-amber-100 shadow-xs' : 'hover:bg-slate-100/50 hover:text-slate-700 bg-slate-100/40 md:bg-transparent'
+                }`}
+              >
+                <RefreshCw className="w-4 h-4 text-amber-500 hover:rotate-45 transition-transform" />
+                Backup & Recovery
+              </button>
             </nav>
           </div>
 
@@ -411,12 +431,14 @@ export default function PropertySettingsModal({
                   {activeTab === 'expenses' && 'Manage Expense Categories'}
                   {activeTab === 'paymentMethods' && 'Manage Rent Payment Methods'}
                   {activeTab === 'incomeSplits' && 'Manage Income Split Fields'}
+                  {activeTab === 'backup' && 'Data Sovereignty & Active Dev Stack'}
                 </h4>
                 <p className="text-[11px] md:text-xs text-slate-400 mt-1">
                   {activeTab === 'general' && 'Update the active property name and its registered address.'}
                   {activeTab === 'expenses' && 'Define custom tags for grouping maintenance costs.'}
                   {activeTab === 'paymentMethods' && 'Add/Remove supported options for receiving rent.'}
                   {activeTab === 'incomeSplits' && 'Add, edit or rename sub-components for the payment ledger.'}
+                  {activeTab === 'backup' && 'Download JSON backups of all building files, restore states, or examine cloud parameters.'}
                 </p>
               </div>
               <button onClick={onClose} className="hidden md:block text-slate-300 hover:text-slate-500 font-bold text-sm">
@@ -668,6 +690,146 @@ export default function PropertySettingsModal({
                       No configurations found.
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: BACKUP & RECOVERY */}
+            {activeTab === 'backup' && (
+              <div className="space-y-4 animate-in fade-in duration-200 font-sans">
+                {/* Backup & Restore Interactive Panel */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Download Card */}
+                  <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/60 hover:bg-slate-100/50 transition-all flex flex-col justify-between space-y-3">
+                    <div>
+                      <h5 className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <Download className="w-3.5 h-3.5 text-blue-500" />
+                        Export JSON Backup
+                      </h5>
+                      <p className="text-[10px] text-slate-400 mt-1 lines-2 leading-relaxed">
+                        Download a complete ledger snapshot containing contact details, payments sheets, and maintenance logs.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const backupData = {
+                          version: "1.0",
+                          exportedAt: new Date().toISOString(),
+                          building: {
+                            id: building.id,
+                            name: building.name,
+                            address: building.address,
+                            currency: building.currency,
+                            defaultBaseRent: building.defaultBaseRent,
+                            defaultGuardFee: building.defaultGuardFee,
+                            defaultMaintenanceFee: building.defaultMaintenanceFee,
+                          },
+                          tenants,
+                          payments,
+                          expenses,
+                        };
+                        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `property_backup_${building.name.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().split('T')[0]}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showToast("JSON Backup downloaded successfully!", "success");
+                      }}
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[10px] flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" />
+                      Download Backup
+                    </button>
+                  </div>
+
+                  {/* Restore Card */}
+                  <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/60 hover:bg-slate-100/50 transition-all flex flex-col justify-between space-y-3">
+                    <div>
+                      <h5 className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5 text-amber-500" />
+                        Restore From Backup
+                      </h5>
+                      <p className="text-[10px] text-slate-400 mt-1 lines-2 leading-relaxed">
+                        Import a previously exported JSON backup file to overwrite and recovery local configurations.
+                      </p>
+                    </div>
+                    <div>
+                      <input
+                        type="file"
+                        id="backup-upload-input"
+                        accept=".json"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = async (event) => {
+                            try {
+                              const raw = event.target?.result as string;
+                              const parsed = JSON.parse(raw);
+                              if (!parsed.tenants || !parsed.payments || !parsed.expenses) {
+                                throw new Error("Required collections (tenants/payments/expenses) are missing in the JSON file.");
+                              }
+                              if (onRestoreBackup) {
+                                await onRestoreBackup({
+                                  tenants: parsed.tenants,
+                                  payments: parsed.payments,
+                                  expenses: parsed.expenses,
+                                });
+                                showToast("Backup data recovered successfully!", "success");
+                              } else {
+                                showToast("Missing restore handler configuration.", "error");
+                              }
+                            } catch (err: any) {
+                              showToast(`Restore Failed: ${err?.message || "Invalid JSON structure"}`, "error");
+                            }
+                          };
+                          reader.readAsText(file);
+                        }}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="backup-upload-input"
+                        className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-[10px] flex items-center justify-center gap-1 shadow-sm transition-colors cursor-pointer text-center"
+                      >
+                        <Upload className="w-3 h-3" />
+                        Upload & Restore JSON
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 13 Layers Stack Info Display Dashboard */}
+                <div className="border border-blue-100 bg-blue-50/30 rounded-2xl p-4 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-blue-600 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-800">Production Architecture Specifications (13 Layers)</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] text-slate-600 bg-white/70 p-3 rounded-xl border border-blue-50/50">
+                    <div className="flex justify-between border-b border-slate-50 py-0.5">
+                      <span className="text-slate-400">Layer 4: Auth</span>
+                      <span className="font-semibold font-mono text-slate-700">Firebase OAuth</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-50 py-0.5">
+                      <span className="text-slate-400">Layer 8: Rules (RLS)</span>
+                      <span className="font-semibold font-mono text-slate-700">Active</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-50 py-0.5">
+                      <span className="text-slate-400">Layer 3: Caching</span>
+                      <span className="font-semibold font-mono text-slate-700">Offline Enabled</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-50 py-0.5">
+                      <span className="text-slate-400">Layer 13: Availability</span>
+                      <span className="font-semibold font-mono text-slate-700">JSON Archiver</span>
+                    </div>
+                  </div>
+                  <div className="text-[9px] text-slate-400 leading-normal font-medium">
+                    This architecture leverages real-time stream subscription patterns, strict validation ABAC guards, atomic write-once logs, client cache persistence, and robust JSON backup.
+                  </div>
                 </div>
               </div>
             )}
