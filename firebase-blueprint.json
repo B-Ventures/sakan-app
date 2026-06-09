@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing account details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email"]
+    },
+    "Building": {
+      "title": "Building",
+      "description": "A property building managed by an owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId"]
+    },
+    "Tenant": {
+      "title": "Tenant",
+      "description": "Tenant renting a unit in a building",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "unit": { "type": "string" },
+        "monthlyRent": { "type": "number" },
+        "guardFee": { "type": "number" },
+        "maintenanceFee": { "type": "number" },
+        "rentDueDateDay": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "unit", "monthlyRent", "rentDueDateDay"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "A logged rent payment for a tenant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "tenantName": { "type": "string" },
+        "unit": { "type": "string" },
+        "amount": { "type": "number" },
+        "rentPaid": { "type": "number" },
+        "guardPaid": { "type": "number" },
+        "maintenancePaid": { "type": "number" },
+        "date": { "type": "string" },
+        "monthPaidFor": { "type": "string" },
+        "method": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "receiptNumber": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "tenantName", "unit", "amount", "date", "status"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Expense logged for a building",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "notes": { "type": "string" },
+        "attachmentName": { "type": "string" },
+        "attachmentUrl": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "amount", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Global user accounts"
+    },
+    "/buildings/{buildingId}": {
+      "schema": "Building",
+      "description": "Buildings managed by property owners"
+    },
+    "/buildings/{buildingId}/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Tenants residing in a specific building"
+    },
+    "/buildings/{buildingId}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Logged rent payments for a specific building"
+    },
+    "/buildings/{buildingId}/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Logged expenses for a specific building"
+    }
+  }
+}

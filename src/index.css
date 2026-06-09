@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  /* Hide standard layout wrapper containers and control elements */
+  body, html {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: #000000 !important;
+  }
+
+  /* Hide app navigation sidebar, headers, controls, and selectors */
+  aside, 
+  header, 
+  nav, 
+  button, 
+  form, 
+  input, 
+  select, 
+  textarea,
+  .no-print,
+  #desktop-sidebar,
+  div[class*="grid-cols-5"], /* mobile bottom nav */
+  #statements-generator-module > div:first-child, /* statement tabs selector */
+  #statements-generator-module .lg\:col-span-1, /* filter form */
+  #receipt-modal > div:last-child, /* receipt dialog footer buttons */
+  #receipt-modal > div:first-child, /* receipt dialog header button */
+  .backdrop-blur-xs,
+  .fixed.inset-0:not(.print-mode) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Override any parent container height or overflow restrictions to prevent clipping */
+  #root,
+  .flex.h-screen,
+  div[class*="overflow-y-auto"],
+  main,
+  #application-container,
+  #application-container > div,
+  #printable-statement-document,
+  #receipt-modal,
+  #receipt-print-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* Specific Account Statement Document View */
+  #printable-statement-document {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  #printable-statement-document * {
+    visibility: visible !important;
+  }
+
+  /* Receipt layout specificity */
+  #receipt-modal {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  #receipt-print-area {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  #receipt-print-area * {
+    visibility: visible !important;
+  }
+
+  /* Text color and contrast enhancements for black and white paper print quality */
+  .text-slate-900, .text-slate-800, .text-slate-700, .text-slate-600 {
+    color: #000000 !important;
+  }
+  .text-slate-400, .text-slate-500 {
+    color: #374151 !important;
+  }
+  .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-emerald-50, .bg-rose-50 {
+    background-color: transparent !important;
+    border-color: #cbd5e1 !important;
+  }
+  
+  /* Render table with clean horizontal rows and high legibility */
+  table {
+    width: 100% !important;
+    min-width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  th, td {
+    border-bottom: 1px solid #cbd5e1 !important;
+    padding: 8px !important;
+    white-space: normal !important; /* wrap if narrow */
+  }
+}
+
