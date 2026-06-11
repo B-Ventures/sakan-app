@@ -1,5 +1,5 @@
 {
-  "name": "Building Payments Tracker",
+  "name": "bProp",
   "description": "A comprehensive property payment and expense tracker for unit owners and property managers to manage tenant billing, expenses, and automated rent reminders.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

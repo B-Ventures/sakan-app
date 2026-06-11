@@ -335,12 +335,20 @@ export default function DashboardOverview({
                 const tenant = tenants.find(t => t.id === p.tenantId);
                 const hasPhone = tenant && tenant.phone;
 
+                // Use payment amount if it is greater than 0, otherwise calculate total active dues from tenant lease details
+                const dueAmount = p.amount > 0 
+                  ? p.amount 
+                  : (tenant 
+                      ? (tenant.monthlyRent + (tenant.guardFee ?? activeBuilding?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0))
+                      : 0
+                    );
+
                 // Send WhatsApp reminder
                 const waLink = tenant ? getReminderWhatsAppLink(
                   tenant.phone,
                   tenant.name,
                   tenant.unit,
-                  p.amount,
+                  dueAmount,
                   `Day ${tenant.rentDueDateDay}`,
                   p.monthPaidFor,
                   activeBuilding?.reminderTemplate,
@@ -360,7 +368,7 @@ export default function DashboardOverview({
                         <p className="text-xs text-slate-400 font-medium mt-0.5">Month: {p.monthPaidFor}</p>
                       </div>
                       <div className="text-right">
-                        <span className="font-mono font-bold text-xs text-slate-950">{formatCurrency(p.amount, activeBuilding?.currency || 'JOD')}</span>
+                        <span className="font-mono font-bold text-xs text-slate-950">{formatCurrency(dueAmount, activeBuilding?.currency || 'JOD')}</span>
                         <div>
                           <span className={`inline-block text-[9px] uppercase font-bold px-2 py-0.5 rounded ${
                             p.status === 'Overdue' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'

@@ -223,99 +223,100 @@ export default function ExpenseTracker({
         </div>
       </div>
 
-      {/* Expense ledger list / Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredExpenses.map((exp) => (
-          <div key={exp.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-            <div>
-              {/* Top Row - Category & value */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                <span className="bg-orange-50 text-orange-600 font-extrabold px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-mono">
-                  {exp.category}
-                </span>
-                <span className="text-slate-400 text-xs font-mono">{exp.date}</span>
-              </div>
-
-              {/* Expense Details */}
-              <div className="space-y shadow-none">
-                <h3 className="font-bold text-slate-800 text-sm leading-tight min-h-[40px] flex items-start">
-                  {exp.title}
-                </h3>
-
-                <h4 className="font-mono font-extrabold text-lg text-slate-900 flex items-center mt-2.5">
-                  {formatCurrency(exp.amount, activeBuilding?.currency || 'JOD')}
-                </h4>
-
-                {exp.notes && (
-                  <p className="text-slate-400 text-xs leading-relaxed max-line-clamp-2 mt-2">
-                    {exp.notes}
-                  </p>
-                )}
-
-                {/* Receipt Attachment Container */}
-                {exp.attachmentUrl && (
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <div 
-                        className="w-10 h-10 rounded-lg border bg-white overflow-hidden flex items-center justify-center shrink-0 cursor-pointer"
-                        onClick={() => setZoomedAttachment({ url: exp.attachmentUrl!, title: exp.title })}
-                      >
-                        {exp.attachmentUrl.startsWith('data:application/pdf') ? (
-                          <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-600 font-extrabold text-[10px] uppercase font-mono">
-                            PDF
-                          </div>
-                        ) : (
-                          <img 
-                            referrerPolicy="no-referrer" 
-                            src={exp.attachmentUrl} 
-                            alt="receipt mini stub" 
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="overflow-hidden">
-                        <span className="text-[11px] font-semibold text-slate-600 block truncate" title={exp.attachmentName}>
-                          {exp.attachmentName || 'Uploaded Receipt Attachment'}
-                        </span>
-                        <span className="text-[9px] text-blue-500 font-bold uppercase block">Receipt verified</span>
-                      </div>
+      {/* Expense ledger list / Table view similar to ledger */}
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden" id="expenses-table-container">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50">
+                <th className="py-3 px-4">Expense Details & Category</th>
+                <th className="py-3 px-4">Log Date</th>
+                <th className="py-3 px-4">Additional Notes</th>
+                <th className="py-3 px-4">Verified Receipt</th>
+                <th className="py-3 px-4">Outflow Cost</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100/50">
+              {filteredExpenses.map((exp) => (
+                <tr key={exp.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="py-4 px-4">
+                    <div>
+                      <span className="bg-orange-50 text-orange-600 font-extrabold px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-mono">
+                        {exp.category}
+                      </span>
+                      <div className="font-bold text-slate-800 text-sm mt-1.5">{exp.title}</div>
                     </div>
-                    <button
-                      onClick={() => setZoomedAttachment({ url: exp.attachmentUrl!, title: exp.title })}
-                      className="text-slate-400 hover:text-slate-600 p-1 bg-white hover:bg-slate-100 rounded border border-slate-100 transition-colors"
-                      title="Inspect Receipt Full Screen"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Action buttons banner */}
-            <div className="flex border-t border-slate-100 mt-5 pt-4 gap-2">
-              <button
-                onClick={() => openEditForm(exp)}
-                className="flex-1 text-slate-500 hover:text-slate-700 text-xs font-bold flex items-center justify-center gap-1 py-1 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                Edit
-              </button>
-              <button
-                onClick={() => {
-                  setDeleteConfirmId(exp.id);
-                }}
-                className="flex-1 text-rose-500 hover:text-rose-600 text-xs font-bold flex items-center justify-center gap-1 py-1 rounded-lg hover:bg-rose-50/55 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
+                  </td>
+                  <td className="py-4 px-4 text-xs font-mono text-slate-500 whitespace-nowrap">
+                    {exp.date}
+                  </td>
+                  <td className="py-4 px-4 text-xs text-slate-500 max-w-xs truncate" title={exp.notes}>
+                    {exp.notes || <span className="text-slate-300 italic">No notes</span>}
+                  </td>
+                  <td className="py-4 px-4">
+                    {exp.attachmentUrl ? (
+                      <div className="flex items-center gap-2 overflow-hidden max-w-[180px]">
+                        <div 
+                          className="w-8 h-8 rounded border bg-slate-50 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setZoomedAttachment({ url: exp.attachmentUrl!, title: exp.title })}
+                          title="Click to view full receipt"
+                        >
+                          {exp.attachmentUrl.startsWith('data:application/pdf') ? (
+                            <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-600 font-extrabold text-[8px] uppercase font-mono">
+                              PDF
+                            </div>
+                          ) : (
+                            <img 
+                              referrerPolicy="no-referrer" 
+                              src={exp.attachmentUrl} 
+                              alt="receipt mini stub" 
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="overflow-hidden">
+                          <span className="text-[10px] font-semibold text-slate-600 block truncate" title={exp.attachmentName}>
+                            {exp.attachmentName || 'Attachment'}
+                          </span>
+                          <span className="text-[8px] text-blue-500 font-bold uppercase block tracking-tight">Receipt Verified</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 text-xs italic">No attachment</span>
+                    )}
+                  </td>
+                  <td className="py-4 px-4">
+                    <span className="font-mono font-extrabold text-sm text-slate-900">
+                      {formatCurrency(exp.amount, activeBuilding?.currency || 'JOD')}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => openEditForm(exp)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition-colors animate-none"
+                        title="Edit entry"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmId(exp.id)}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-lg transition-colors"
+                        title="Remove entry"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {filteredExpenses.length === 0 && (
-          <div className="col-span-full text-center py-16 bg-white border border-dashed border-slate-200 rounded-3xl" id="empty-expenses-state">
+          <div className="text-center py-16 bg-white border-t border-slate-100" id="empty-expenses-state">
             <UploadCloud className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-slate-600">No expenses recorded for filters</p>
             <p className="text-xs text-slate-400 mt-1">Try resetting parameters or log a new building cost breakdown.</p>

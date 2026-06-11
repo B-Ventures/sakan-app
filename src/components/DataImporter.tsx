@@ -44,6 +44,7 @@ interface ParsedRecord {
   notes: string;
   statusText: string;
   statusType: 'success' | 'warning' | 'info';
+  status?: 'Paid' | 'Pending' | 'Overdue';
 }
 
 export default function DataImporter({
@@ -79,12 +80,12 @@ export default function DataImporter({
 
   // 1. Download CSV Helper
   const downloadCSVTemplate = () => {
-    const headers = "Type,Date,Name_or_Title,Unit,Category,Amount,Month_Paid_For,Payment_Method,Notes";
+    const headers = "Type,Date,Name_or_Title,Unit,Category,Amount,Month_Paid_For,Payment_Method,Notes,Status";
     const rows = [
-      "Income,2026-06-01,John Doe,101,Rent portion,1200.00,2026-06,Bank Transfer,Clean receipt for June rent",
-      "Income,2026-06-01,John Doe,101,Guard Salary,50.00,2026-06,Bank Transfer,Guard service portion",
-      "Expense,2026-06-03,Elevator Maintenance,,Maintenance,300.00,,,Monthly elevator service checklist",
-      "Expense,2026-06-04,Water Utilities,,Utilities,150.00,,,Water invoice Ref #4552"
+      "Income,2026-06-01,John Doe,101,Rent portion,1200.00,2026-06,Bank Transfer,Clean receipt for June rent,Paid",
+      "Income,2026-06-01,John Doe,101,Guard Salary,50.00,2026-06,Bank Transfer,Guard service portion,Paid",
+      "Income,2026-05-01,Sarah Smith,102,Rent portion,1000.00,2026-05,Bank Transfer,,Pending",
+      "Expense,2026-06-03,Elevator Maintenance,,Maintenance,300.00,,,Monthly elevator service checklist,"
     ];
     
     const csvContent = [headers, ...rows].join("\n");
@@ -93,7 +94,7 @@ export default function DataImporter({
     const link = document.createElement("a");
     link.id = 'download-template-link';
     link.setAttribute("href", url);
-    link.setAttribute("download", `${activeBuilding?.name || 'PropManage'}_Bookkeeping_Template.csv`);
+    link.setAttribute("download", `${activeBuilding?.name || 'bProp'}_Bookkeeping_Template.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -167,6 +168,7 @@ export default function DataImporter({
       const monthIdx = headers.indexOf('month_paid_for') !== -1 ? headers.indexOf('month_paid_for') : headers.indexOf('month');
       const methodIdx = headers.indexOf('payment_method') !== -1 ? headers.indexOf('payment_method') : headers.indexOf('method');
       const notesIdx = headers.indexOf('notes');
+      const statusIdx = headers.indexOf('status') !== -1 ? headers.indexOf('status') : headers.indexOf('payment_status');
 
       if (typeIdx === -1 || amtIdx === -1 || nameIdx === -1) {
         setErrorText('Invalid file format. Make sure the CSV contains Type, Name_or_Title, and Amount columns.');
@@ -188,6 +190,7 @@ export default function DataImporter({
         const rawMonth = monthIdx !== -1 ? (row[monthIdx]?.trim() || '') : '';
         const rawMethod = methodIdx !== -1 ? (row[methodIdx]?.trim() || '') : '';
         const rawNotes = notesIdx !== -1 ? (row[notesIdx]?.trim() || '') : '';
+        const rawStatus = statusIdx !== -1 ? (row[statusIdx]?.trim() || '') : '';
 
         // Validation & Type matching
         const cleanType = rawType.toLowerCase().startsWith('inc') ? 'income' : 'expense';
@@ -196,6 +199,17 @@ export default function DataImporter({
 
         const date = rawDate || new Date().toISOString().split('T')[0];
         const monthPaidFor = rawMonth || date.substring(0, 7);
+
+        // Map status
+        let paymentStatus: 'Paid' | 'Pending' | 'Overdue' = 'Paid';
+        if (cleanType === 'income' && rawStatus) {
+          const s = rawStatus.toLowerCase().trim();
+          if (s.includes('overdue')) {
+            paymentStatus = 'Overdue';
+          } else if (s.includes('pending') || s.includes('due') || s.includes('unpaid')) {
+            paymentStatus = 'Pending';
+          }
+        }
 
         // Analyze matching tenant or category validation
         let statusText = '';
@@ -207,13 +221,13 @@ export default function DataImporter({
           const matchedByUnit = tenants.find(t => t.unit.toLowerCase().trim() === rawUnit.toLowerCase().trim());
 
           if (matchedByName) {
-            statusText = `Tenant matched: "${rawName}" (Unit ${matchedByName.unit})`;
+            statusText = `Match: "${rawName}" (${paymentStatus})`;
             statusType = 'success';
           } else if (matchedByUnit) {
-            statusText = `Unit match: Tenant found on Unit ${rawUnit} (will associate automatically)`;
+            statusText = `Unit match: Unit ${rawUnit} (${paymentStatus})`;
             statusType = 'success';
           } else {
-            statusText = `New tenant: Will create active unit profile for Unit "${rawUnit || 'TBD'}"`;
+            statusText = `New Tenant Unit ${rawUnit || 'TBD'} (${paymentStatus})`;
             statusType = 'warning';
           }
         } else {
@@ -232,7 +246,8 @@ export default function DataImporter({
           paymentMethod: rawMethod || 'Bank Transfer',
           notes: rawNotes,
           statusText,
-          statusType
+          statusType,
+          status: cleanType === 'income' ? paymentStatus : undefined
         });
       }
 
@@ -439,7 +454,7 @@ export default function DataImporter({
             date: row.date,
             monthPaidFor: row.monthPaidFor || row.date.substring(0, 7),
             method: row.paymentMethod || 'Bank Transfer',
-            status: 'Paid',
+            status: row.status || 'Paid',
             notes: row.notes,
           };
 
@@ -531,7 +546,7 @@ export default function DataImporter({
                   CSV
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-800 block truncate">PropManage_Bookkeeping_Template.csv</span>
+                  <span className="text-xs font-bold text-slate-800 block truncate">bProp_Bookkeeping_Template.csv</span>
                   <span className="text-[10px] text-slate-400 block mt-0.5">Includes columns mapping and 4 beautiful demo row entries</span>
                 </div>
               </div>

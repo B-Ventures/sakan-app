@@ -15,6 +15,10 @@ interface StatementsGeneratorProps {
   building: Building | null;
   onTriggerStatusRefresh?: () => void;
   onUpdateBuildingSettings?: (fields: Partial<Building>) => Promise<void>;
+  onAutopilotSync?: (
+    paymentsToCreate: Omit<Payment, 'id'>[],
+    paymentsToUpdate: { id: string; status: Payment['status'] }[]
+  ) => Promise<void>;
 }
 
 export default function StatementsGenerator({
@@ -23,6 +27,7 @@ export default function StatementsGenerator({
   expenses,
   building,
   onUpdateBuildingSettings,
+  onAutopilotSync,
 }: StatementsGeneratorProps) {
   const [activeSubTab, setActiveSubTab] = useState<'statement' | 'automation'>('statement');
   
@@ -74,9 +79,7 @@ export default function StatementsGenerator({
     }
   };
   const [automationLog, setAutomationLog] = useState<Array<{ id: string; time: string; msg: string; type: 'info' | 'success' | 'warn' }>>([
-    { id: '1', time: '17:30:00', msg: 'Autopilot Share Analyzer daemon started.', type: 'info' },
-    { id: '2', time: '17:32:15', msg: 'Scanned 5 occupied units for June 2026 cycles.', type: 'info' },
-    { id: '3', time: '17:32:18', msg: 'Identified Unit 301 (David Kim) as Overdue.', type: 'warn' },
+    { id: 'init-1', time: new Date().toLocaleTimeString(), msg: 'Autopilot Share Analyzer daemon initialized. Waiting for cycle check execution...', type: 'info' },
   ]);
 
   const activeTenant = tenants.find(t => t.id === selectedTenantId);
@@ -448,13 +451,14 @@ export default function StatementsGenerator({
   const totalCommonYearBalance = totalCommonYearIncome - totalCommonYearExpense;
 
   // Parse custom template reminder text
-  const getParsedTemplate = (t: Tenant, pMonth: string) => {
+  const getParsedTemplate = (t: Tenant, pMonth: string, customAmount?: number) => {
+    const finalAmount = customAmount !== undefined ? customAmount : t.monthlyRent;
     return reminderTemplate
       .replace(/{TenantName}/g, t.name)
       .replace(/{BeneficiaryName}/g, t.name)
       .replace(/{Unit}/g, t.unit)
-      .replace(/{RentAmount}/g, formatVal(t.monthlyRent))
-      .replace(/{ShareAmount}/g, formatVal(t.monthlyRent))
+      .replace(/{RentAmount}/g, formatVal(finalAmount))
+      .replace(/{ShareAmount}/g, formatVal(finalAmount))
       .replace(/{DueDay}/g, t.rentDueDateDay.toString())
       .replace(/{Month}/g, pMonth);
   };
@@ -465,33 +469,139 @@ export default function StatementsGenerator({
     setTimeout(() => setCopiedSuccess(null), 2000);
   };
 
-  const runAutopilotScan = () => {
+  const runAutopilotScan = async () => {
     const timestamp = new Date().toLocaleTimeString();
-    const unpaidList = payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, '2026-06'));
-    
+    const targetMonth = '2026-06';
+    const currentDay = 9; // System active cycle reference date (June 9th, 2026)
+
     let logsToAdd: Array<{ id: string; time: string; msg: string; type: 'info' | 'success' | 'warn' }> = [
-      { id: Date.now().toString() + '-1', time: timestamp, msg: 'Autopilot billing cycle dues validation initiated manually.', type: 'info' },
+      { id: Date.now().toString() + '-start', time: timestamp, msg: `Autopilot initiated occupant scan for period ${targetMonth}.`, type: 'info' },
     ];
 
-    if (unpaidList.length > 0) {
-      unpaidList.forEach((p, idx) => {
+    const paymentsToCreate: Omit<Payment, 'id'>[] = [];
+    const paymentsToUpdate: { id: string; status: Payment['status'] }[] = [];
+
+    // Filter active tenants
+    const activeTenants = tenants.filter(t => t.status === 'active');
+    logsToAdd.push({
+      id: Date.now().toString() + '-scan-count',
+      time: timestamp,
+      msg: `Scanning ${activeTenants.length} active occupant agreements...`,
+      type: 'info'
+    });
+
+    activeTenants.forEach(tenant => {
+      // Find June 2026 payment reference
+      const existingPayment = payments.find(
+        p => p.tenantId === tenant.id && isMonthCovered(p.monthPaidFor, targetMonth)
+      );
+
+      const isPastDueDate = tenant.rentDueDateDay <= currentDay;
+      const expectedStatus: Payment['status'] = isPastDueDate ? 'Overdue' : 'Pending';
+
+      if (!existingPayment) {
+        // Missing billing cycle
+        const receiptCode = `REC-${targetMonth.replace('-', '')}-${tenant.unit.replace(/\s+/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
+        const guardFee = tenant.guardFee ?? building?.defaultGuardFee ?? 0;
+        const maintenanceFee = tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0;
+        const totalAmount = tenant.monthlyRent + guardFee + maintenanceFee;
+
+        const rec: Omit<Payment, 'id'> & { rentPaid: number; guardPaid: number; maintenancePaid: number } = {
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          unit: tenant.unit,
+          amount: totalAmount,
+          rentPaid: tenant.monthlyRent,
+          guardPaid: guardFee,
+          maintenancePaid: maintenanceFee,
+          date: '',
+          monthPaidFor: targetMonth,
+          method: 'Bank Transfer',
+          status: expectedStatus,
+          notes: 'Auto-posted by Autopilot Scheduler',
+          receiptNumber: receiptCode
+        };
+        paymentsToCreate.push(rec as any);
+
         logsToAdd.push({
-          id: Date.now().toString() + `-unpaid-${idx}`,
+          id: Date.now().toString() + `-create-${tenant.id}`,
           time: timestamp,
-          msg: `Reminder prepared for ${p.tenantName} (Unit ${p.unit}) - Balance outstanding: ${formatVal(p.amount)}`,
+          msg: `Unit ${tenant.unit} (${tenant.name}) has no billing registry. Auto-posting new ${expectedStatus} rent record (${formatVal(totalAmount)}).`,
+          type: isPastDueDate ? 'warn' : 'info'
+        });
+      } else if (existingPayment.status === 'Pending' && isPastDueDate) {
+        // Exceeded configured due date
+        paymentsToUpdate.push({ id: existingPayment.id, status: 'Overdue' });
+
+        logsToAdd.push({
+          id: Date.now().toString() + `-promote-${tenant.id}`,
+          time: timestamp,
+          msg: `Unit ${tenant.unit} (${tenant.name}) passed its due day (Day ${tenant.rentDueDateDay}). Auto-promoting status to OVERDUE.`,
           type: 'warn'
         });
-      });
+      }
+    });
+
+    if (paymentsToCreate.length > 0 || paymentsToUpdate.length > 0) {
+      if (onAutopilotSync) {
+        try {
+          await onAutopilotSync(paymentsToCreate, paymentsToUpdate);
+          logsToAdd.push({
+            id: Date.now().toString() + '-sync-success',
+            time: timestamp,
+            msg: `Scheduler processed ${paymentsToCreate.length} postings and promoted ${paymentsToUpdate.length} accounts to database cleanly.`,
+            type: 'success'
+          });
+        } catch (err) {
+          logsToAdd.push({
+            id: Date.now().toString() + '-sync-err',
+            time: timestamp,
+            msg: `Scheduler write pipeline encountered transaction write limits.`,
+            type: 'warn'
+          });
+        }
+      } else {
+        logsToAdd.push({
+          id: Date.now().toString() + '-sync-missing-cb',
+          time: timestamp,
+          msg: `Local state synchronized. Verify cloud parameters configuration.`,
+          type: 'warn'
+        });
+      }
     } else {
       logsToAdd.push({
-        id: Date.now().toString() + '-success',
+        id: Date.now().toString() + '-clean',
         time: timestamp,
-        msg: 'All active occupant monthly share postings fully cleared for current period.',
+        msg: `General Ledger status is healthy. All active occupants check out correct.`,
         type: 'success'
       });
     }
 
-    setAutomationLog(prev => [...logsToAdd, ...prev].slice(0, 15));
+    // Load prepared reminders for unpaid ones
+    const updatedUnpaid = payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, targetMonth));
+    
+    paymentsToCreate.forEach(c => {
+      logsToAdd.push({
+        id: Date.now().toString() + `-remind-${c.tenantId}`,
+        time: timestamp,
+        msg: `Reminder prepared for ${c.tenantName} (Unit ${c.unit}) - Balance outstanding: ${formatVal(c.amount)}`,
+        type: 'warn'
+      });
+    });
+
+    updatedUnpaid.forEach((p, idx) => {
+      const isAlreadyLogged = paymentsToCreate.some(c => c.tenantId === p.tenantId) || paymentsToUpdate.some(u => u.id === p.id);
+      if (!isAlreadyLogged) {
+        logsToAdd.push({
+          id: Date.now().toString() + `-exist-remind-${idx}`,
+          time: timestamp,
+          msg: `Reminder prepared for ${p.tenantName} (Unit ${p.unit}) - Balance outstanding: ${formatVal(p.amount)} [Status: ${p.status}]`,
+          type: 'warn'
+        });
+      }
+    });
+
+    setAutomationLog(prev => [...logsToAdd, ...prev].slice(0, 25));
   };
 
   return (
@@ -1463,12 +1573,20 @@ export default function StatementsGenerator({
                   .filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, '2026-06'))
                   .map(p => {
                     const tenant = tenants.find(t => t.id === p.tenantId);
-                    const parsedMsg = tenant ? getParsedTemplate(tenant, p.monthPaidFor) : '';
+                    
+                    const dueAmount = p.amount > 0
+                      ? p.amount
+                      : (tenant
+                          ? (tenant.monthlyRent + (tenant.guardFee ?? building?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0))
+                          : 0
+                        );
+
+                    const parsedMsg = tenant ? getParsedTemplate(tenant, p.monthPaidFor, dueAmount) : '';
                     const customWaLink = tenant ? getReminderWhatsAppLink(
                       tenant.phone,
                       tenant.name,
                       tenant.unit,
-                      p.amount,
+                      dueAmount,
                       `Day ${tenant.rentDueDateDay}`,
                       p.monthPaidFor,
                       reminderTemplate,
@@ -1486,7 +1604,7 @@ export default function StatementsGenerator({
                           </div>
                           <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                             <span>Balance Outstanding:</span>
-                            <span className="font-semibold text-slate-700 font-mono">{formatVal(p.amount)}</span>
+                            <span className="font-semibold text-slate-700 font-mono">{formatVal(dueAmount)}</span>
                             <span>• Due Day: Day {tenant?.rentDueDateDay}</span>
                           </div>
                         </div>

@@ -6,7 +6,7 @@
 
 class ClientRateLimiter {
   private requestHistory: Map<string, number[]> = new Map();
-  private maxRequests: number = 8; // Allowing max 8 key modifications
+  private maxRequests: number = 150; // Allowing max 150 key modifications to accommodate bulk updates like Autopilot Sync
   private timeWindowMs: number = 10000; // in a rolling 10 seconds window
 
   /**

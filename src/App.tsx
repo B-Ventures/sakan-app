@@ -897,6 +897,87 @@ export default function App() {
     }
   };
 
+  // --- AUTOMATED AUTOPILOT SYNCHRONIZER ENGINE ---
+  const handleAutopilotSync = async (
+    paymentsToCreate: Omit<Payment, 'id'>[],
+    paymentsToUpdate: { id: string; status: Payment['status'] }[]
+  ) => {
+    if (!activeBuilding) return;
+
+    if (isDemoMode) {
+      let currentPayments = [...payments];
+
+      // 1. Process status updates
+      currentPayments = currentPayments.map(p => {
+        const update = paymentsToUpdate.find(u => u.id === p.id);
+        if (update) {
+          return { ...p, status: update.status };
+        }
+        return p;
+      });
+
+      // 2. Process new bill postings
+      const created: Payment[] = paymentsToCreate.map((newP, idx) => ({
+        ...newP,
+        id: `demo-p-auto-${Date.now()}-${idx}`,
+      }));
+
+      const finalPayments = [...created, ...currentPayments];
+      setPayments(finalPayments);
+      localStorage.setItem(`demo_payments_${activeBuilding.id}`, JSON.stringify(finalPayments));
+      showGlobalToast(`Autopilot pipeline: Posted ${created.length} new bill cycles, updated ${paymentsToUpdate.length} accounts to Overdue!`, 'success');
+      return;
+    }
+
+    try {
+      showGlobalToast('Autopilot pipeline: executing Cloud transactions...', 'info');
+
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+      // Process updates
+      for (const update of paymentsToUpdate) {
+        const p = payments.find(x => x.id === update.id);
+        if (p) {
+          const updated = { ...p, status: update.status };
+          await delay(600);
+          await savePayment(activeBuilding.id, updated);
+          await delay(400);
+          await logAction(
+            activeBuilding.id,
+            activeUserId || '',
+            activeUserEmail || '',
+            'UPDATE_PAYMENT',
+            `Autopilot promoted status to "${update.status}" (overdue) for occupant "${p.tenantName}" (Unit "${p.unit}").`,
+            p.id,
+            'payment'
+          );
+        }
+      }
+
+      // Process creations
+      for (const newP of paymentsToCreate) {
+        await delay(600);
+        await savePayment(activeBuilding.id, newP);
+        await delay(400);
+        await logAction(
+          activeBuilding.id,
+          activeUserId || '',
+          activeUserEmail || '',
+          'CREATE_PAYMENT',
+          `Autopilot auto-generated pending/overdue cycle posting of amount ${newP.amount} ${activeBuilding.currency || 'JOD'} for occupant "${newP.tenantName}" (Unit "${newP.unit}", Month 2026-06).`,
+          undefined,
+          'payment'
+        );
+      }
+
+      setTriggerRefresh(prev => prev + 1);
+      showGlobalToast(`Autopilot Sync complete! Posted ${paymentsToCreate.length} billing cycles, promoted ${paymentsToUpdate.length} to Overdue.`, 'success');
+    } catch (err: any) {
+      console.error('Autopilot write transaction failed:', err);
+      showGlobalToast('Autopilot pipeline encountered write limits or permission blocks.', 'error');
+    }
+  };
+
   // --- EXPENSES METHODS ---
   const handleEditExpense = async (updatedExpense: Expense) => {
     if (!activeBuilding) return;
@@ -1002,8 +1083,8 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans">
         <div className="max-w-md w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8 animate-in fade-in duration-300">
           <div className="text-center space-y-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl mx-auto shadow-md">P</div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">PropManage</h1>
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl mx-auto shadow-md">bP</div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">bProp</h1>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
               Real-time property portal to track rent payouts, tenant ledger, and building outflow expenses.
             </p>
@@ -1467,6 +1548,7 @@ export default function App() {
                   expenses={expenses} 
                   building={activeBuilding}
                   onUpdateBuildingSettings={handleUpdateBuildingSettings}
+                  onAutopilotSync={handleAutopilotSync}
                 />
               )}
 

@@ -23,6 +23,21 @@ function enforceRateLimit(actionKey: string = 'cloud_write') {
   }
 }
 
+// Clean helper to strip any field set to undefined so setDoc doesn't fail with "Unsupported field value: undefined"
+function cleanUndefined<T extends Record<string, any>>(obj: T): T {
+  const clean: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        clean[key] = cleanUndefined(value);
+      } else {
+        clean[key] = value;
+      }
+    }
+  }
+  return clean as T;
+}
+
 // ==========================================
 // Building Operations
 // ==========================================
@@ -56,7 +71,7 @@ export async function createBuilding(building: Omit<Building, 'id' | 'createdAt'
       id,
       createdAt,
     };
-    await setDoc(newDocRef, newBuilding);
+    await setDoc(newDocRef, cleanUndefined(newBuilding));
     return newBuilding;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -68,7 +83,7 @@ export async function saveBuilding(building: Building): Promise<Building> {
   const path = `buildings/${building.id}`;
   try {
     enforceRateLimit('building_write');
-    await setDoc(doc(db, 'buildings', building.id), building, { merge: true });
+    await setDoc(doc(db, 'buildings', building.id), cleanUndefined(building), { merge: true });
     return building;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -116,7 +131,7 @@ export async function saveTenant(buildingId: string, tenant: Omit<Tenant, 'id'> 
       ...tenant,
       id: docRef.id,
     };
-    await setDoc(docRef, finalTenant);
+    await setDoc(docRef, cleanUndefined(finalTenant));
     return finalTenant;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -164,7 +179,7 @@ export async function savePayment(buildingId: string, payment: Omit<Payment, 'id
       ...payment,
       id: docRef.id,
     };
-    await setDoc(docRef, finalPayment);
+    await setDoc(docRef, cleanUndefined(finalPayment));
     return finalPayment;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -223,7 +238,7 @@ export async function saveExpense(buildingId: string, expense: Omit<Expense, 'id
       ...expense,
       id: docRef.id,
     };
-    await setDoc(docRef, finalExpense);
+    await setDoc(docRef, cleanUndefined(finalExpense));
     return finalExpense;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -270,7 +285,7 @@ export async function logAction(
       entityType,
       meta,
     };
-    await setDoc(docRef, finalLog);
+    await setDoc(docRef, cleanUndefined(finalLog));
     return finalLog;
   } catch (error) {
     console.error("Failed to write system audit log:", error);

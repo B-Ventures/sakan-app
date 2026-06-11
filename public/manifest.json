@@ -1,6 +1,6 @@
 {
-  "name": "PropManage Building Payments & Expenses Tracker",
-  "short_name": "PropManage",
+  "name": "bProp Building Payments & Expenses Tracker",
+  "short_name": "bProp",
   "description": "Secure building property management, tenant Rent Ledger, statements and expenses manager.",
   "start_url": "/",
   "display": "standalone",
