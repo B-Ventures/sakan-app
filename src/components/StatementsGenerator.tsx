@@ -79,7 +79,7 @@ export default function StatementsGenerator({
     }
   };
   const [automationLog, setAutomationLog] = useState<Array<{ id: string; time: string; msg: string; type: 'info' | 'success' | 'warn' }>>([
-    { id: 'init-1', time: new Date().toLocaleTimeString(), msg: 'Autopilot Share Analyzer daemon initialized. Waiting for cycle check execution...', type: 'info' },
+    { id: 'init-1', time: new Date().toLocaleTimeString(), msg: 'Billing scheduler standing by. Run Cycle Check to audit occupant invoices and identify overdue balances.', type: 'info' },
   ]);
 
   const activeTenant = tenants.find(t => t.id === selectedTenantId);
@@ -615,7 +615,7 @@ export default function StatementsGenerator({
     const currentDay = 9; // System active cycle reference date (June 9th, 2026)
 
     let logsToAdd: Array<{ id: string; time: string; msg: string; type: 'info' | 'success' | 'warn' }> = [
-      { id: Date.now().toString() + '-start', time: timestamp, msg: `Autopilot initiated occupant scan for period ${targetMonth}.`, type: 'info' },
+      { id: Date.now().toString() + '-start', time: timestamp, msg: `Billing scan initiated for current cycle (${targetMonth}).`, type: 'info' },
     ];
 
     const paymentsToCreate: Omit<Payment, 'id'>[] = [];
@@ -626,7 +626,7 @@ export default function StatementsGenerator({
     logsToAdd.push({
       id: Date.now().toString() + '-scan-count',
       time: timestamp,
-      msg: `Scanning ${activeTenants.length} active occupant agreements...`,
+      msg: `Auditing agreements for ${activeTenants.length} active residents...`,
       type: 'info'
     });
 
@@ -666,7 +666,7 @@ export default function StatementsGenerator({
         logsToAdd.push({
           id: Date.now().toString() + `-create-${tenant.id}`,
           time: timestamp,
-          msg: `Unit ${tenant.unit} (${tenant.name}) has no billing registry. Auto-posting new ${expectedStatus} rent record (${formatVal(totalAmount)}).`,
+          msg: `Unit ${tenant.unit} (${tenant.name}) has no billing registry. Auto-generated new ${expectedStatus} invoice (${formatVal(totalAmount)}).`,
           type: isPastDueDate ? 'warn' : 'info'
         });
       } else if (existingPayment.status === 'Pending' && isPastDueDate) {
@@ -676,7 +676,7 @@ export default function StatementsGenerator({
         logsToAdd.push({
           id: Date.now().toString() + `-promote-${tenant.id}`,
           time: timestamp,
-          msg: `Unit ${tenant.unit} (${tenant.name}) passed its due day (Day ${tenant.rentDueDateDay}). Auto-promoting status to OVERDUE.`,
+          msg: `Unit ${tenant.unit} (${tenant.name}) is past its due date (Day ${tenant.rentDueDateDay}). Status updated to OVERDUE.`,
           type: 'warn'
         });
       }
@@ -689,14 +689,14 @@ export default function StatementsGenerator({
           logsToAdd.push({
             id: Date.now().toString() + '-sync-success',
             time: timestamp,
-            msg: `Scheduler processed ${paymentsToCreate.length} postings and promoted ${paymentsToUpdate.length} accounts to database cleanly.`,
+            msg: `Billing audit complete. Saved ${paymentsToCreate.length} new invoices and marked ${paymentsToUpdate.length} accounts as overdue.`,
             type: 'success'
           });
         } catch (err) {
           logsToAdd.push({
             id: Date.now().toString() + '-sync-err',
             time: timestamp,
-            msg: `Scheduler write pipeline encountered transaction write limits.`,
+            msg: `Unable to commit automated postings to database.`,
             type: 'warn'
           });
         }
@@ -704,7 +704,7 @@ export default function StatementsGenerator({
         logsToAdd.push({
           id: Date.now().toString() + '-sync-missing-cb',
           time: timestamp,
-          msg: `Local state synchronized. Verify cloud parameters configuration.`,
+          msg: `Local system state updated with scanned cycle values.`,
           type: 'warn'
         });
       }
@@ -712,7 +712,7 @@ export default function StatementsGenerator({
       logsToAdd.push({
         id: Date.now().toString() + '-clean',
         time: timestamp,
-        msg: `General Ledger status is healthy. All active occupants check out correct.`,
+        msg: `Billing ledger audit healthy. No missing entries or overdue changes needed.`,
         type: 'success'
       });
     }
@@ -724,7 +724,7 @@ export default function StatementsGenerator({
       logsToAdd.push({
         id: Date.now().toString() + `-remind-${c.tenantId}`,
         time: timestamp,
-        msg: `Reminder prepared for ${c.tenantName} (Unit ${c.unit}) - Balance outstanding: ${formatVal(c.amount)}`,
+        msg: `Notification draft ready for ${c.tenantName} (Unit ${c.unit}) — Balance: ${formatVal(c.amount)}`,
         type: 'warn'
       });
     });
@@ -735,7 +735,7 @@ export default function StatementsGenerator({
         logsToAdd.push({
           id: Date.now().toString() + `-exist-remind-${idx}`,
           time: timestamp,
-          msg: `Reminder prepared for ${p.tenantName} (Unit ${p.unit}) - Balance outstanding: ${formatVal(p.amount)} [Status: ${p.status}]`,
+          msg: `Active dues reminder for ${p.tenantName} (Unit ${p.unit}) — Balance: ${formatVal(p.amount)} [Status: ${p.status}]`,
           type: 'warn'
         });
       }
@@ -1593,10 +1593,105 @@ export default function StatementsGenerator({
  
       {/* RENDER REMINDERS & AUTOMATIONS SUBTAB */}
       {activeSubTab === 'automation' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="reminders-automation-center">
-          {/* Form setup template */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Automation text template */}
+        <div className="space-y-6" id="reminders-automation-center">
+          
+          {/* 1. Outstanding Collections (Current Cycle) - Dynamic Outstanding Invoices at the Top */}
+          <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                 <h3 className="font-bold text-slate-800 text-md">Outstanding Collections (Current Cycle)</h3>
+                 <p className="text-xs text-slate-400">Residents currently requiring cycle notifications</p>
+              </div>
+              <button
+                onClick={runAutopilotScan}
+                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Run Cycle Check
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {payments
+                .filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth))
+                .map(p => {
+                  const tenant = tenants.find(t => t.id === p.tenantId);
+                  
+                  const dueAmount = p.amount > 0
+                    ? p.amount
+                    : (tenant
+                        ? (tenant.monthlyRent + (tenant.guardFee ?? building?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0))
+                        : 0
+                      );
+
+                  const parsedMsg = tenant ? getParsedTemplate(tenant, p.monthPaidFor, dueAmount) : '';
+                  const customWaLink = tenant ? getReminderWhatsAppLink(
+                    tenant.phone,
+                    tenant.name,
+                    tenant.unit,
+                    dueAmount,
+                    `Day ${tenant.rentDueDateDay}`,
+                    p.monthPaidFor,
+                    reminderTemplate,
+                    building?.currency || 'JOD'
+                  ) : '#';
+
+                  return (
+                    <div key={p.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 text-sm">{p.tenantName}</span>
+                          <span className="bg-blue-50 text-blue-700 text-[10px] font-bold font-mono px-2 py-0.5 rounded">
+                            Unit {p.unit}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                          <span>Balance Outstanding:</span>
+                          <span className="font-semibold text-slate-700 font-mono">{formatVal(dueAmount)}</span>
+                          <span>• Due Day: Day {tenant?.rentDueDateDay}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button
+                          onClick={() => copyToClipboard(parsedMsg, p.id)}
+                          className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 transition-colors animate-none"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          {copiedSuccess === p.id ? 'Copied!' : 'Copy Template'}
+                        </button>
+                        
+                        {tenant?.phone ? (
+                          <a
+                            href={customWaLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl px-3 py-2 transition-colors animate-none"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            Send Reminder
+                          </a>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">No phone attached</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth)).length === 0 && (
+                <div className="text-center py-10 text-slate-400">
+                  <CheckCircle className="w-9 h-9 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-700">All balances are currently clear</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Excellent collections compliance this month!</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 2. Middle Row: Two message template widgets side-by-side inside a 2-column layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Monthly Dues Reminder Template */}
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
               <h3 className="font-bold text-slate-800 text-lg flex items-center gap-1.5">
                 <Bot className="w-5 h-5 text-blue-500" />
@@ -1606,7 +1701,7 @@ export default function StatementsGenerator({
                 Configure template codes used to automate monthly payment notifications sent via WhatsApp and copy panels.
               </p>
 
-               <div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">Message Layout</label>
                 <textarea
                   value={reminderTemplate}
@@ -1669,7 +1764,7 @@ export default function StatementsGenerator({
                 <textarea
                   value={receiptTemplate}
                   onChange={(e) => setReceiptTemplate(e.target.value)}
-                  className="w-full text-xs p-3 rounded-xl border focus:outline-none focus:border-emerald-500 h-40 leading-relaxed font-sans"
+                  className="w-full text-xs p-3 rounded-xl border focus:outline-none focus:border-emerald-500 h-32 leading-relaxed font-sans"
                   placeholder="Enter custom template text here..."
                 />
                 
@@ -1713,136 +1808,64 @@ export default function StatementsGenerator({
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* List outstanding tenants needing reminders */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+          {/* 3. Bottom Row: Billing Cycle Audit Assistant (Full Width with a beautiful responsive layout) */}
+          <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col space-y-4">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-slate-800 text-sm font-bold flex items-center gap-1.5 font-sans">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+                Billing Cycle Audit Assistant
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1">Real-time automation status & ledger synchronization</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column: Explainer / Business Value */}
+              <div className="bg-blue-50/40 border border-blue-100/50 p-4 rounded-xl space-y-3 flex flex-col justify-center">
+                <span className="font-bold text-blue-700 block uppercase tracking-wider text-[10px]">What is this tool?</span>
+                <p className="text-slate-600 leading-relaxed text-xs">
+                  Manually billing every resident each month is tedious. The <strong className="text-slate-700">Run Cycle Check</strong> scanner automates this:
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-slate-500 text-xs pl-1">
+                  <li>Detects which units are missing billing entries for the current month.</li>
+                  <li>Auto-generates <strong className="text-slate-700">Pending</strong> ledger items based on tenant rent and fees.</li>
+                  <li>Identifies past-due balances and updates status to <strong className="text-rose-600 font-semibold">Overdue</strong> to enable one-click WhatsApp reminders.</li>
+                </ul>
+              </div>
+
+              {/* Right Column: Feed and Operations */}
+              <div className="space-y-3 flex flex-col justify-between">
                 <div>
-                   <h3 className="font-bold text-slate-800 text-md">Outstanding Collections (Current Cycle)</h3>
-                   <p className="text-xs text-slate-400">Residents currently requiring cycle notifications</p>
+                  <span className="font-bold text-slate-500 block uppercase tracking-wider text-[9.5px] mb-2.5">Audit & Sync Feed</span>
+                  <div className="font-mono text-[11px] space-y-3 max-h-[160px] overflow-y-auto pr-1 scrollbar-thin">
+                    {automationLog.map(log => (
+                      <div key={log.id} className="flex gap-2 items-start border-l-2 pl-2 border-slate-100">
+                        <span className="text-slate-400 shrink-0 text-[10px]">[{log.time}]</span>
+                        <p className={
+                          log.type === 'warn' ? 'text-amber-600 font-medium' : log.type === 'success' ? 'text-emerald-600 font-medium' : 'text-slate-600'
+                        }>
+                          {log.msg}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
                 <button
-                  onClick={runAutopilotScan}
-                  className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-colors"
+                  onClick={() => {
+                    setAutomationLog([
+                      { id: Date.now().toString(), time: new Date().toLocaleTimeString(), msg: 'Cleared audit logs cache.', type: 'info' },
+                    ]);
+                  }}
+                  className="w-full border border-slate-200 text-[10.5px] hover:bg-slate-50 font-bold py-2 px-3 rounded-xl text-slate-500 text-center transition-all cursor-pointer"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Run Cycle Check
+                  Clear Audit Log
                 </button>
               </div>
-
-              <div className="divide-y divide-slate-100">
-                {payments
-                  .filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth))
-                  .map(p => {
-                    const tenant = tenants.find(t => t.id === p.tenantId);
-                    
-                    const dueAmount = p.amount > 0
-                      ? p.amount
-                      : (tenant
-                          ? (tenant.monthlyRent + (tenant.guardFee ?? building?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0))
-                          : 0
-                        );
-
-                    const parsedMsg = tenant ? getParsedTemplate(tenant, p.monthPaidFor, dueAmount) : '';
-                    const customWaLink = tenant ? getReminderWhatsAppLink(
-                      tenant.phone,
-                      tenant.name,
-                      tenant.unit,
-                      dueAmount,
-                      `Day ${tenant.rentDueDateDay}`,
-                      p.monthPaidFor,
-                      reminderTemplate,
-                      building?.currency || 'JOD'
-                    ) : '#';
-
-                    return (
-                      <div key={p.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800 text-sm">{p.tenantName}</span>
-                            <span className="bg-blue-50 text-blue-700 text-[10px] font-bold font-mono px-2 py-0.5 rounded">
-                              Unit {p.unit}
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                            <span>Balance Outstanding:</span>
-                            <span className="font-semibold text-slate-700 font-mono">{formatVal(dueAmount)}</span>
-                            <span>• Due Day: Day {tenant?.rentDueDateDay}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full md:w-auto">
-                          <button
-                            onClick={() => copyToClipboard(parsedMsg, p.id)}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 transition-colors animate-none"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                            {copiedSuccess === p.id ? 'Copied!' : 'Copy Template'}
-                          </button>
-                          
-                          {tenant?.phone ? (
-                            <a
-                              href={customWaLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl px-3 py-2 transition-colors animate-none"
-                            >
-                              <Send className="w-3.5 h-3.5" />
-                              Send Reminder
-                            </a>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No phone attached</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                {payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth)).length === 0 && (
-                  <div className="text-center py-10 text-slate-400">
-                    <CheckCircle className="w-9 h-9 text-emerald-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-700">All balances are currently clear</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Excellent collections compliance this month!</p>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* Logs of automations system */}
-          <div className="bg-slate-900 text-slate-200 p-5 rounded-2xl flex flex-col h-fit">
-            <div className="border-b border-slate-800 pb-4 mb-4">
-              <h3 className="font-mono text-sm uppercase tracking-widest font-bold text-slate-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Autopilot System Console
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-1">Real-time automation scheduler status & audits</p>
-            </div>
-
-            <div className="font-mono text-xs space-y-3 max-h-[350px] overflow-y-auto pr-1">
-              {automationLog.map(log => (
-                <div key={log.id} className="flex gap-2">
-                  <span className="text-slate-500 hover:text-slate-400 cursor-default shrink-0">[{log.time}]</span>
-                  <p className={
-                    log.type === 'warn' ? 'text-amber-400 font-semibold' : log.type === 'success' ? 'text-emerald-400' : 'text-slate-300'
-                  }>
-                    {log.msg}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => {
-                setAutomationLog([
-                  { id: Date.now().toString(), time: new Date().toLocaleTimeString(), msg: 'Cleaning up console buffers...', type: 'info' },
-                ]);
-              }}
-              className="mt-6 border border-slate-700 text-[10px] font-mono hover:bg-slate-800 font-bold py-1.5 px-3 rounded-lg text-slate-400 text-center"
-            >
-              Clear Console Output
-            </button>
-          </div>
         </div>
       )}
     </div>
