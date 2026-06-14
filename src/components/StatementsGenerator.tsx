@@ -287,6 +287,93 @@ export default function StatementsGenerator({
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
   };
 
+  // Helper: Prior Common Balance accumulator before a given targetMonth OR targetYear
+  const getPriorCommonBalance = React.useCallback((targetMonth: string | null, targetYear: string | null) => {
+    const limitMonthStr = targetMonth ? targetMonth : `${targetYear}-01`;
+    
+    // Incomes
+    let priorIncomeSum = 0;
+    payments.filter(p => p.status === 'Paid').forEach(p => {
+      let divisor = 1;
+      let monthsCovered: string[] = [];
+      if (p.monthPaidFor && p.monthPaidFor.includes(' to ')) {
+        const [start, end] = p.monthPaidFor.split(/\s*to\s*/);
+        divisor = getMonthCount(start, end);
+        const [startY, startM] = start.split('-').map(Number);
+        const [endY, endM] = end.split('-').map(Number);
+        if (!isNaN(startY) && !isNaN(startM) && !isNaN(endY) && !isNaN(endM)) {
+          const m1 = startY * 12 + startM - 1;
+          const m2 = endY * 12 + endM - 1;
+          for (let i = m1; i <= m2; i++) {
+            const y = Math.floor(i / 12);
+            const m = (i % 12) + 1;
+            monthsCovered.push(`${y}-${String(m).padStart(2, '0')}`);
+          }
+        }
+      } else {
+        monthsCovered = [p.monthPaidFor];
+      }
+
+      monthsCovered.forEach(mStr => {
+        if (mStr < limitMonthStr) {
+          let splits = p.splits;
+          if (!splits) {
+            if (p.category) {
+              splits = { [p.category]: p.amount };
+            } else if (p.rentPaid !== undefined || p.guardPaid !== undefined || p.maintenancePaid !== undefined) {
+              splits = {};
+              if (p.rentPaid !== undefined) splits['Rent portion'] = p.rentPaid;
+              if (p.guardPaid !== undefined) splits['Guard Salary'] = p.guardPaid;
+              if (p.maintenancePaid !== undefined) splits['Service Box'] = p.maintenancePaid;
+            }
+          }
+
+          if (splits) {
+            Object.entries(splits).forEach(([cat, val]) => {
+              if (isCategoryInListVal(commonIncomesList, cat) && val > 0) {
+                priorIncomeSum += Number(val || 0) / divisor;
+              }
+            });
+            if (isCategoryInListVal(commonIncomesList, 'Rent portion')) {
+              const rentVal = splits['Rent portion'] || splits['Rent'] || 0;
+              if (rentVal > 0) {
+                priorIncomeSum += Number(rentVal) / divisor;
+              }
+            }
+          } else {
+            const defaultG = building?.defaultGuardFee ?? 50;
+            const defaultM = building?.defaultMaintenanceFee ?? 30;
+            if (isCategoryInListVal(commonIncomesList, 'Guard Salary')) {
+              priorIncomeSum += (p.guardPaid !== undefined ? Number(p.guardPaid) : Math.min(p.amount, defaultG)) / divisor;
+            }
+            if (isCategoryInListVal(commonIncomesList, 'Service Box')) {
+              priorIncomeSum += (p.maintenancePaid !== undefined ? Number(p.maintenancePaid) : Math.min(Math.max(0, p.amount - (p.guardPaid ?? defaultG)), defaultM)) / divisor;
+            }
+            if (isCategoryInListVal(commonIncomesList, 'Rent portion')) {
+              const defaultGVal = p.guardPaid ?? defaultG;
+              const defaultMVal = p.maintenancePaid ?? defaultM;
+              const calculatedRent = p.rentPaid ?? Math.max(0, p.amount - defaultGVal - defaultMVal);
+              if (calculatedRent > 0) {
+                priorIncomeSum += Number(calculatedRent) / divisor;
+              }
+            }
+          }
+        }
+      });
+    });
+
+    // Expenses
+    const priorExpenseSum = expenses
+      .filter(e => e.date && getYearMonthFromDateStr(e.date) < limitMonthStr && isCategoryInListVal(commonExpensesList, e.category))
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+    return {
+      income: priorIncomeSum,
+      expense: priorExpenseSum,
+      balance: priorIncomeSum - priorExpenseSum,
+    };
+  }, [payments, expenses, commonIncomesList, commonExpensesList, building, isCategoryInListVal]);
+
   // 1. Common Incomes filtering and postings (for Single Month view)
   const paymentsInMonth = payments.filter(p => p.status === 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth));
   const totalCommonIncome = getCommonIncomeForMonth(statementMonth);
@@ -418,6 +505,12 @@ export default function StatementsGenerator({
 
   const netCommonBalance = totalCommonIncome - totalCommonExpense;
 
+  const priorCommonMonth = React.useMemo(() => {
+    return getPriorCommonBalance(statementMonth, null);
+  }, [getPriorCommonBalance, statementMonth]);
+
+  const endingCommonMonthBalance = priorCommonMonth.balance + netCommonBalance;
+
   // --- FULL YEAR CALCULATIONS ---
 
   // Unit rows for full year
@@ -490,6 +583,12 @@ export default function StatementsGenerator({
   const totalCommonYearIncome = commonYearRows.reduce((sum, r) => sum + r.commonIncome, 0);
   const totalCommonYearExpense = commonYearRows.reduce((sum, r) => sum + r.commonExpense, 0);
   const totalCommonYearBalance = totalCommonYearIncome - totalCommonYearExpense;
+
+  const priorCommonYear = React.useMemo(() => {
+    return getPriorCommonBalance(null, statementYear);
+  }, [getPriorCommonBalance, statementYear]);
+
+  const endingCommonYearBalance = priorCommonYear.balance + totalCommonYearBalance;
 
   // Parse custom template reminder text
   const getParsedTemplate = (t: Tenant, pMonth: string, customAmount?: number) => {
@@ -840,7 +939,13 @@ export default function StatementsGenerator({
                   </div>
 
                   {/* Common Area Financial overview boxes */}
-                  <div className="grid grid-cols-3 gap-3 font-sans">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                      <span className="text-[10px] font-bold text-slate-500 block uppercase">Beginning Balance</span>
+                      <span className={`font-bold text-base font-mono ${priorCommonYear.balance >= 0 ? 'text-slate-700' : 'text-rose-700'}`}>
+                        {priorCommonYear.balance >= 0 ? '+' : ''}{formatVal(priorCommonYear.balance)}
+                      </span>
+                    </div>
                     <div className="bg-emerald-50/40 p-3 rounded-xl border border-emerald-100/50 text-center">
                       <span className="text-[10px] font-bold text-emerald-600 block uppercase">Annual Income</span>
                       <span className="font-bold text-emerald-800 text-base font-mono">+{formatVal(totalCommonYearIncome)}</span>
@@ -850,17 +955,17 @@ export default function StatementsGenerator({
                       <span className="font-bold text-slate-700 text-base font-mono">-{formatVal(totalCommonYearExpense)}</span>
                     </div>
                     <div className={`p-3 rounded-xl border text-center ${
-                      totalCommonYearBalance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-rose-50 border-rose-100'
+                      endingCommonYearBalance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-rose-50 border-rose-100'
                     }`}>
                       <span className={`text-[10px] font-bold block uppercase ${
-                        totalCommonYearBalance >= 0 ? 'text-sky-600' : 'text-rose-600'
+                        endingCommonYearBalance >= 0 ? 'text-sky-600' : 'text-rose-600'
                       }`}>
-                        {totalCommonYearBalance >= 0 ? 'Annual Surplus' : 'Annual Deficit'}
+                        {endingCommonYearBalance >= 0 ? 'Ending Balance' : 'Ending Balance'}
                       </span>
                       <span className={`font-bold text-base font-mono ${
-                        totalCommonYearBalance >= 0 ? 'text-sky-700' : 'text-rose-700'
+                        endingCommonYearBalance >= 0 ? 'text-sky-700' : 'text-rose-700'
                       }`}>
-                        {formatVal(totalCommonYearBalance)}
+                        {endingCommonYearBalance >= 0 ? '+' : ''}{formatVal(endingCommonYearBalance)}
                       </span>
                     </div>
                   </div>
@@ -1254,7 +1359,13 @@ export default function StatementsGenerator({
                 </div>
 
                 {/* Common Area Financial overview boxes */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                    <span className="text-[10px] font-bold text-slate-500 block uppercase">Beginning Balance</span>
+                    <span className={`font-bold text-md font-mono ${priorCommonMonth.balance >= 0 ? 'text-slate-700' : 'text-rose-600 font-extrabold'}`}>
+                      {priorCommonMonth.balance >= 0 ? '+' : ''}{formatVal(priorCommonMonth.balance)}
+                    </span>
+                  </div>
                   <div className="bg-emerald-50/40 p-3 rounded-xl border border-emerald-100/50 text-center">
                     <span className="text-[10px] font-bold text-emerald-600 block uppercase">Common Incomes</span>
                     <span className="font-bold text-emerald-800 text-md font-mono">+{formatVal(totalCommonIncome)}</span>
@@ -1264,17 +1375,17 @@ export default function StatementsGenerator({
                     <span className="font-bold text-slate-700 text-md font-mono">-{formatVal(totalCommonExpense)}</span>
                   </div>
                   <div className={`p-3 rounded-xl border text-center ${
-                    netCommonBalance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-rose-50 border-rose-100'
+                    endingCommonMonthBalance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-rose-50 border-rose-100'
                   }`}>
                     <span className={`text-[10px] font-bold block uppercase ${
-                      netCommonBalance >= 0 ? 'text-sky-600' : 'text-rose-600'
+                      endingCommonMonthBalance >= 0 ? 'text-sky-600' : 'text-rose-600'
                     }`}>
-                      {netCommonBalance >= 0 ? 'Treasury Surplus' : 'Treasury Deficit'}
+                      {endingCommonMonthBalance >= 0 ? 'Ending Balance' : 'Ending Balance'}
                     </span>
                     <span className={`font-bold text-md font-mono ${
-                      netCommonBalance >= 0 ? 'text-sky-700' : 'text-rose-700'
+                      endingCommonMonthBalance >= 0 ? 'text-sky-700' : 'text-rose-700'
                     }`}>
-                      {formatVal(netCommonBalance)}
+                      {endingCommonMonthBalance >= 0 ? '+' : ''}{formatVal(endingCommonMonthBalance)}
                     </span>
                   </div>
                 </div>
