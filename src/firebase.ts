@@ -8,14 +8,18 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRIT
 
 // satisfaction of Layer 3 & 10: Multi-tab offline caching persistence
 if (typeof window !== 'undefined') {
-  enableMultiTabIndexedDbPersistence(db)
-    .catch((err) => {
-      if (err.code === 'failed-precondition') {
-        console.warn('Firestore multi-tab persistence failed-precondition, falling back to cached single tab');
-      } else if (err.code === 'unimplemented') {
-        console.warn('Firestore offline persistence is unimplemented in this browser context');
-      }
-    });
+  if (window.self === window.top) {
+    enableMultiTabIndexedDbPersistence(db)
+      .catch((err) => {
+        if (err.code === 'failed-precondition') {
+          console.warn('Firestore multi-tab persistence failed-precondition, falling back to cached single tab');
+        } else if (err.code === 'unimplemented') {
+          console.warn('Firestore offline persistence is unimplemented in this browser context');
+        }
+      });
+  } else {
+    console.log('Running in sandboxed/iframe context. Skipping IndexedDB offline persistence to avoid QuotaExceededError.');
+  }
 }
 
 export const auth = getAuth(app);

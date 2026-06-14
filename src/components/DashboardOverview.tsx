@@ -34,10 +34,10 @@ export default function DashboardOverview({
   // Realized income (paid payments)
   const totalIncomePaid = payments
     .filter(p => p.status === 'Paid')
-    .reduce((sum, p) => sum + p.amount, 0);
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-  const defaultGuard = activeBuilding?.defaultGuardFee ?? 50;
-  const defaultMaint = activeBuilding?.defaultMaintenanceFee ?? 30;
+  const defaultGuard = Number(activeBuilding?.defaultGuardFee ?? 50);
+  const defaultMaint = Number(activeBuilding?.defaultMaintenanceFee ?? 30);
 
   let totalRentPaid = 0;
   let totalGuardPaid = 0;
@@ -45,12 +45,13 @@ export default function DashboardOverview({
 
   payments.filter(p => p.status === 'Paid').forEach(p => {
     if (p.rentPaid !== undefined || p.guardPaid !== undefined || p.maintenancePaid !== undefined) {
-      totalRentPaid += p.rentPaid ?? 0;
-      totalGuardPaid += p.guardPaid ?? 0;
-      totalMaintenancePaid += p.maintenancePaid ?? 0;
+      totalRentPaid += Number(p.rentPaid ?? 0);
+      totalGuardPaid += Number(p.guardPaid ?? 0);
+      totalMaintenancePaid += Number(p.maintenancePaid ?? 0);
     } else {
-      const gPaid = Math.min(p.amount, defaultGuard);
-      const remaining1 = Math.max(0, p.amount - gPaid);
+      const pAmount = Number(p.amount || 0);
+      const gPaid = Math.min(pAmount, defaultGuard);
+      const remaining1 = Math.max(0, pAmount - gPaid);
       const mPaid = Math.min(remaining1, defaultMaint);
       const rPaid = Math.max(0, remaining1 - mPaid);
 
@@ -61,10 +62,10 @@ export default function DashboardOverview({
   });
 
   // Projected Income (Paid + Pending + Overdue)
-  const totalProjectedIncome = payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalProjectedIncome = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
   // Total Expenses
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const netProfit = totalIncomePaid - totalExpenses;
 
   // Unpaid Rent Accounts (Pending & Overdue for current month or overall)
