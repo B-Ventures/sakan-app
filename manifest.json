@@ -1,12 +1,14 @@
 {
-  "name": "Grandview Building Payments Tracker",
-  "short_name": "PaymentsTracker",
-  "description": "Secure building collection tracker with itemized unit receipts and reminders.",
+  "id": "/",
+  "scope": "/",
+  "name": "bProp Building Payments & Expenses Tracker",
+  "short_name": "bProp",
+  "description": "Secure building property management, tenant Rent Ledger, statements and expenses manager.",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#ffffff",
+  "background_color": "#f8fafc",
   "theme_color": "#2563eb",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "https://img.icons8.com/color/192/000000/building.png",

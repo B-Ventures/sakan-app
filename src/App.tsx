@@ -28,7 +28,9 @@ import {
   ArrowRight,
   Settings,
   Upload,
-  Shield
+  Shield,
+  Smartphone,
+  Monitor
 } from 'lucide-react';
 import { auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
@@ -97,6 +99,58 @@ export default function App() {
     setTimeout(() => {
       setGlobalToast(prev => prev?.message === message ? null : prev);
     }, 4500);
+  };
+
+  // --- PROGRESSIVE WEB APP (PWA) INSTALL TRIGGER STATES ---
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState<boolean>(false);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+      showGlobalToast('✨ Property Payments tracker installed successfully!', 'success');
+    };
+
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    // Initial standalone display check
+    if (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone) {
+      setIsAppInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) {
+      showGlobalToast('The app is ready! Feel free to add it to your home screen using browser settings.', 'info');
+      return;
+    }
+    deferredPrompt.prompt();
+    try {
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        showGlobalToast('Installing your Property Management PWA App...', 'success');
+      }
+    } catch (err) {
+      console.warn('Installation prompt error:', err);
+    }
+    setDeferredPrompt(null);
+    setIsInstallable(false);
   };
 
   const activeUserId = currentUser?.uid || (isDemoMode ? demoUser?.uid : null);
@@ -1362,6 +1416,35 @@ export default function App() {
             </button>
           </nav>
 
+          {/* PWA Promotion Card / Installed Badge */}
+          {isInstallable && (
+            <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl space-y-3 shrink-0" id="pwa-install-sidebar-card">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                  <Smartphone className="w-4.5 h-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-[11px] font-extrabold text-blue-900 tracking-tight">Run as Native App</h4>
+                  <p className="text-[9px] font-medium text-blue-600 leading-snug mt-0.5">Launches from deck with high speed, offline cache & native overlays.</p>
+                </div>
+              </div>
+              <button
+                onClick={handleInstallPWA}
+                className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-extrabold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                Install Local App
+              </button>
+            </div>
+          )}
+
+          {isAppInstalled && (
+            <div className="mt-4 px-3 py-2 bg-emerald-50/40 border border-emerald-100/60 rounded-xl shrink-0 flex items-center gap-2" id="pwa-installed-sidebar-badge">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              <span className="text-[9px] font-bold text-emerald-800 tracking-wider uppercase font-mono">PWA App Active</span>
+            </div>
+          )}
+
           {/* Connected Profile Details */}
           <div className="mt-auto pt-4 border-t border-slate-100 space-y-4">
             <div className="flex items-center gap-3 justify-between">
@@ -1447,6 +1530,18 @@ export default function App() {
                   <Settings className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+              {/* PWA Mobile quick action */}
+              {isInstallable && (
+                <button
+                  onClick={handleInstallPWA}
+                  className="bg-blue-600 border border-blue-500 text-white px-2 py-1.5 rounded-lg flex items-center gap-1.5 shrink-0 text-[10px] font-extrabold cursor-pointer hover:bg-blue-700 transition-colors animate-pulse"
+                  title="Install Mobile App"
+                >
+                  <Smartphone className="w-3.5 h-3.5 animate-bounce" />
+                  Install App
+                </button>
+              )}
 
               {/* Quick LogOut for mobile */}
               <button
