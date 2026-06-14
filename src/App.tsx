@@ -286,9 +286,19 @@ export default function App() {
     try {
       setAuthLoading(true);
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google Sign In failed:', error);
-      showGlobalToast('Sign in request could not complete. Run this app directly outside the sandbox tab to connect Google accounts.', 'warning');
+      
+      const errorCode = error?.code || '';
+      const errorMessage = error?.message || '';
+      
+      if (errorCode === 'auth/unauthorized-domain') {
+        showGlobalToast("Unauthorized Domain! Add 'prop.bventures.me' to Authorized Domains in your Firebase Console (Authentication -> Settings).", 'error');
+      } else if (errorCode === 'auth/popup-closed-by-user') {
+        showGlobalToast('Sign in popup was closed. Please try again.', 'info');
+      } else {
+        showGlobalToast(`Sign in failed (${errorCode || 'Error'}): ${errorMessage || 'Unknown error'}. Check developer console.`, 'error');
+      }
     } finally {
       setAuthLoading(false);
     }
