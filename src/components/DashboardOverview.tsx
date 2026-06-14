@@ -154,32 +154,14 @@ export default function DashboardOverview({
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-4 space-y-3">
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</h3>
-              <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                <span className="text-blue-600 font-semibold text-[11px]">
-                  {formatCurrency(totalProjectedIncome, activeBuilding?.currency || 'JOD')}
-                </span>
-                <span>projectation</span>
-              </p>
-            </div>
-            
-            {/* Split sources breakdown */}
-            <div className="pt-2.5 border-t border-slate-100 grid grid-cols-3 gap-1.5 text-[10px] text-slate-500 font-medium leading-normal">
-              <div>
-                <span className="block text-slate-400 font-semibold mb-0.5">Base Share</span>
-                <span className="font-bold text-slate-800 font-mono text-[9px] truncate block">{formatCurrency(totalRentPaid, activeBuilding?.currency || 'JOD')}</span>
-              </div>
-              <div>
-                <span className="block text-slate-400 font-semibold mb-0.5">Guard</span>
-                <span className="font-bold text-slate-800 font-mono text-[9px] truncate block">{formatCurrency(totalGuardPaid, activeBuilding?.currency || 'JOD')}</span>
-              </div>
-              <div>
-                <span className="block text-slate-400 font-semibold mb-0.5">Svc Box</span>
-                <span className="font-bold text-slate-800 font-mono text-[9px] truncate block">{formatCurrency(totalMaintenancePaid, activeBuilding?.currency || 'JOD')}</span>
-              </div>
-            </div>
+          <div className="mt-4">
+            <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</h3>
+            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+              <span className="text-blue-600 font-semibold text-[11px]">
+                {formatCurrency(totalProjectedIncome, activeBuilding?.currency || 'JOD')}
+              </span>
+              <span>projectation</span>
+            </p>
           </div>
         </div>
 
@@ -277,6 +259,43 @@ export default function DashboardOverview({
                 </div>
                 <span className="text-xs font-semibold text-slate-600">Net Operating Flow</span>
               </div>
+            </div>
+          </div>
+
+          {/* Income Sources Splitting Visual */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm" id="income-distribution-card">
+            <h3 className="font-bold text-slate-800 text-lg mb-1">Income Distribution</h3>
+            <p className="text-xs text-slate-400 mb-5">Distributed breakdown of all collected income sources</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                { name: 'Base Share', amount: totalRentPaid },
+                { name: 'Guard', amount: totalGuardPaid },
+                { name: 'Svc Box', amount: totalMaintenancePaid }
+              ].map(source => {
+                const percentage = totalIncomePaid > 0 ? Math.round((source.amount / totalIncomePaid) * 100) : 0;
+                const maxSourceAmount = Math.max(totalRentPaid, totalGuardPaid, totalMaintenancePaid, 1);
+
+                return (
+                  <div key={source.name} className="space-y-1.5 p-3 rounded-xl hover:bg-slate-50 transition-colors">
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-700 font-semibold">{source.name}</span>
+                      <span className="text-slate-400 font-mono">{formatCurrency(source.amount, activeBuilding?.currency || 'JOD')} ({percentage}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-blue-600 h-full rounded-full" 
+                        style={{ width: `${(source.amount / maxSourceAmount) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })}
+              {totalIncomePaid === 0 && (
+                <div className="col-span-2 text-center text-sm py-8 text-slate-400">
+                  No collected income registered yet.
+                </div>
+              )}
             </div>
           </div>
 
