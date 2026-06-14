@@ -5,8 +5,9 @@
 
 import React, { useState } from 'react';
 import { Tenant, Payment, formatCurrency, getMonthCount } from '../types';
-import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save } from 'lucide-react';
+import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save, Download, Copy, FileImage } from 'lucide-react';
 import { getReceiptWhatsAppLink } from '../utils/whatsapp';
+import html2canvas from 'html2canvas';
 import ConfirmationDialog from './ConfirmationDialog';
 
 interface PaymentHistoryProps {
@@ -40,6 +41,317 @@ export default function PaymentHistory({
   
   // Selected Payment for Receipt Viewer
   const [viewingReceipt, setViewingReceipt] = useState<Payment | null>(null);
+  const [imageStatus, setImageStatus] = useState<'idle' | 'rendering' | 'copied' | 'downloaded' | 'error'>('idle');
+
+  const viewerTenant = viewingReceipt ? tenants.find(t => t.id === viewingReceipt.tenantId) : null;
+  const viewerPayMethodName = viewingReceipt ? (viewingReceipt.method || 'Bank Transfer') : '';
+  const viewerWaLink = (viewingReceipt && viewerTenant) ? getReceiptWhatsAppLink(
+    viewerTenant.phone,
+    viewerTenant.name,
+    viewingReceipt.unit,
+    viewingReceipt.amount,
+    viewingReceipt.monthPaidFor,
+    viewingReceipt.receiptNumber,
+    viewingReceipt.date || 'TBD',
+    viewerPayMethodName,
+    activeBuilding?.receiptTemplate,
+    activeBuilding?.currency || 'JOD'
+  ) : '#';
+
+  const parseColorParams = (str: string): number[] => {
+    const start = str.indexOf('(');
+    const end = str.lastIndexOf(')');
+    if (start === -1 || end === -1) return [];
+    const inner = str.slice(start + 1, end).trim();
+    const parts = inner.split(/[\s,/\u00A0]+/);
+    const nums: number[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      let p = parts[i].trim();
+      if (!p) continue;
+      let isPercent = false;
+      if (p.endsWith('%')) {
+        isPercent = true;
+        p = p.slice(0, -1);
+      }
+      if (p.endsWith('deg')) {
+        p = p.slice(0, -3);
+      }
+      let val = parseFloat(p);
+      if (isNaN(val)) val = 0;
+      if (isPercent) {
+        val = val / 100;
+      }
+      nums.push(val);
+    }
+    return nums;
+  };
+
+  const oklchToRgb = (oklchStr: string): string => {
+    try {
+      const nums = parseColorParams(oklchStr);
+      if (nums.length < 3) return 'rgb(120, 120, 120)';
+
+      const l = nums[0];
+      const c = nums[1];
+      const h = nums[2];
+      const a = nums.length >= 4 ? nums[3] : 1;
+
+      const hRad = (h * Math.PI) / 180;
+      const a_lab = c * Math.cos(hRad);
+      const b_lab = c * Math.sin(hRad);
+
+      const l1 = l + 0.3963377774 * a_lab + 0.2158037573 * b_lab;
+      const m1 = l - 0.1055613458 * a_lab - 0.0638541728 * b_lab;
+      const s1 = l - 0.0894841775 * a_lab - 1.2914855480 * b_lab;
+
+      const l_lms = l1 * l1 * l1;
+      const m_lms = m1 * m1 * m1;
+      const s_lms = s1 * s1 * s1;
+
+      const r_lin =  4.0767416621 * l_lms - 3.3077115913 * m_lms + 0.2309699292 * s_lms;
+      const g_lin = -1.2684380046 * l_lms + 2.6097574011 * m_lms - 0.3413193965 * s_lms;
+      const b_lin = -0.0041960863 * l_lms - 0.7034186147 * m_lms + 1.7076147010 * s_lms;
+
+      const gamma = (coeff: number) => {
+        return coeff <= 0.0031308
+          ? 12.92 * coeff
+          : 1.055 * Math.pow(coeff, 1 / 2.4) - 0.055;
+      };
+
+      const r = Math.round(Math.min(255, Math.max(0, gamma(r_lin) * 255)));
+      const g = Math.round(Math.min(255, Math.max(0, gamma(g_lin) * 255)));
+      const b = Math.round(Math.min(255, Math.max(0, gamma(b_lin) * 255)));
+
+      return nums.length >= 4 ? `rgba(${r}, ${g}, ${b}, ${a})` : `rgb(${r}, ${g}, ${b})`;
+    } catch (err) {
+      console.warn('Failed to parse OKLCH color, falling back:', err);
+      return 'rgb(120, 120, 120)';
+    }
+  };
+
+  const oklabToRgb = (oklabStr: string): string => {
+    try {
+      const nums = parseColorParams(oklabStr);
+      if (nums.length < 3) return 'rgb(120, 120, 120)';
+
+      const l = nums[0];
+      const a_lab = nums[1];
+      const b_lab = nums[2];
+      const alpha = nums.length >= 4 ? nums[3] : 1;
+
+      const l1 = l + 0.3963377774 * a_lab + 0.2158037573 * b_lab;
+      const m1 = l - 0.1055613458 * a_lab - 0.0638541728 * b_lab;
+      const s1 = l - 0.0894841775 * a_lab - 1.2914855480 * b_lab;
+
+      const l_lms = l1 * l1 * l1;
+      const m_lms = m1 * m1 * m1;
+      const s_lms = s1 * s1 * s1;
+
+      const r_lin =  4.0767416621 * l_lms - 3.3077115913 * m_lms + 0.2309699292 * s_lms;
+      const g_lin = -1.2684380046 * l_lms + 2.6097574011 * m_lms - 0.3413193965 * s_lms;
+      const b_lin = -0.0041960863 * l_lms - 0.7034186147 * m_lms + 1.7076147010 * s_lms;
+
+      const gamma = (coeff: number) => {
+        return coeff <= 0.0031308
+          ? 12.92 * coeff
+          : 1.055 * Math.pow(coeff, 1 / 2.4) - 0.055;
+      };
+
+      const r = Math.round(Math.min(255, Math.max(0, gamma(r_lin) * 255)));
+      const g = Math.round(Math.min(255, Math.max(0, gamma(g_lin) * 255)));
+      const b = Math.round(Math.min(255, Math.max(0, gamma(b_lin) * 255)));
+
+      return nums.length >= 4 ? `rgba(${r}, ${g}, ${b}, ${alpha})` : `rgb(${r}, ${g}, ${b})`;
+    } catch (err) {
+      console.warn('Failed to parse OKLAB color, falling back:', err);
+      return 'rgb(120, 120, 120)';
+    }
+  };
+
+  const replaceOklchAndOklab = (val: string): string => {
+    if (typeof val !== 'string') return val;
+    let res = val;
+    if (res.includes('oklch(')) {
+      res = res.replace(/oklch\([^)]+\)/gi, (m) => oklchToRgb(m));
+    }
+    if (res.includes('oklab(')) {
+      res = res.replace(/oklab\([^)]+\)/gi, (m) => oklabToRgb(m));
+    }
+    return res;
+  };
+
+  const runWithOklchPolyfill = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    const origGetComputedStyle = window.getComputedStyle;
+
+    try {
+      window.getComputedStyle = function (elt, pseudoElt) {
+        const style = origGetComputedStyle.call(window, elt, pseudoElt);
+        return new Proxy(style, {
+          get(target, prop) {
+            if (prop === 'getPropertyValue') {
+              return (propertyName: string) => {
+                const val = target.getPropertyValue(propertyName);
+                return replaceOklchAndOklab(val);
+              };
+            }
+            const val = target[prop as keyof typeof target];
+            if (typeof val === 'function') {
+              return (val as Function).bind(target);
+            }
+            if (typeof val === 'string') {
+              return replaceOklchAndOklab(val);
+            }
+            return val;
+          }
+        });
+      };
+    } catch (err) {
+      console.warn('Error setting up OKLCH polyfill overrides:', err);
+    }
+
+    try {
+      return await fn();
+    } finally {
+      try {
+        window.getComputedStyle = origGetComputedStyle;
+      } catch (err) {
+        console.error('Error restoring original CSS overrides:', err);
+      }
+    }
+  };
+
+  const proceedWithDownload = (canvas: HTMLCanvasElement) => {
+    const dataUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    const nameStr = viewingReceipt?.tenantName ? viewingReceipt.tenantName.replace(/\s+/g, '_') : 'resident';
+    const fileName = `Receipt_Unit_${viewingReceipt?.unit || 'X'}_${nameStr}_${viewingReceipt?.monthPaidFor || 'month'}.png`;
+    link.download = fileName;
+    link.href = dataUrl;
+    link.click();
+  };
+
+  const captureFullReceiptImage = async (): Promise<HTMLCanvasElement> => {
+    const element = document.getElementById('receipt-print-area');
+    if (!element) throw new Error('Receipt print area element not found');
+
+    // Scroll to top of receipt to prevent clipped or offset captured canvases
+    const originalScrollTop = element.scrollTop;
+    element.scrollTop = 0;
+
+    // Preserve original layout styles before temporary enlargement
+    const originalOverflow = element.style.overflow;
+    const originalMaxHeight = element.style.maxHeight;
+    const originalHeight = element.style.height;
+
+    const modalEl = document.getElementById('receipt-modal');
+    const parentContainer = element.parentElement;
+
+    const originalModalOverflow = modalEl ? modalEl.style.overflow : '';
+    const originalModalMaxHeight = modalEl ? modalEl.style.maxHeight : '';
+    const originalParentOverflow = parentContainer ? parentContainer.style.overflow : '';
+    const originalParentMaxHeight = parentContainer ? parentContainer.style.maxHeight : '';
+
+    // Temporarily expand container overflow constraints to permit complete layout rendering
+    element.style.setProperty('overflow', 'visible', 'important');
+    element.style.setProperty('max-height', 'none', 'important');
+    element.style.setProperty('height', 'auto', 'important');
+
+    if (parentContainer) {
+      parentContainer.style.setProperty('overflow', 'visible', 'important');
+      parentContainer.style.setProperty('max-height', 'none', 'important');
+      parentContainer.style.setProperty('height', 'auto', 'important');
+    }
+
+    if (modalEl) {
+      modalEl.style.setProperty('overflow', 'visible', 'important');
+      modalEl.style.setProperty('max-height', 'none', 'important');
+    }
+
+    try {
+      const targetWidth = element.offsetWidth || 384; // Default modal width fallback
+      const targetHeight = element.scrollHeight;
+
+      const canvas = await runWithOklchPolyfill(() => html2canvas(element, {
+        scale: 3, // Premium high-density capture
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        width: targetWidth,
+        height: targetHeight,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: targetWidth,
+        windowHeight: targetHeight,
+      }));
+
+      return canvas;
+    } finally {
+      // Synchronously restore original list constraints
+      element.scrollTop = originalScrollTop;
+      element.style.overflow = originalOverflow;
+      element.style.maxHeight = originalMaxHeight;
+      element.style.height = originalHeight;
+
+      if (parentContainer) {
+        parentContainer.style.overflow = originalParentOverflow;
+        parentContainer.style.maxHeight = originalParentMaxHeight;
+        parentContainer.style.height = '';
+      }
+
+      if (modalEl) {
+        modalEl.style.overflow = originalModalOverflow;
+        modalEl.style.maxHeight = originalModalMaxHeight;
+      }
+    }
+  };
+
+  const handleCopyImageToClipboard = async () => {
+    setImageStatus('rendering');
+    try {
+      const canvas = await captureFullReceiptImage();
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setImageStatus('error');
+          setTimeout(() => setImageStatus('idle'), 3000);
+          return;
+        }
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'image/png': blob
+            })
+          ]);
+          setImageStatus('copied');
+          setTimeout(() => setImageStatus('idle'), 6000);
+        } catch (err) {
+          console.error('Clipboard write blocked or failed, downloading instead:', err);
+          // Auto-fallback to download if iframe / secure context limits keyboard clipboard functionality
+          proceedWithDownload(canvas);
+          setImageStatus('downloaded');
+          setTimeout(() => setImageStatus('idle'), 6000);
+        }
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error rendering element:', error);
+      setImageStatus('error');
+      setTimeout(() => setImageStatus('idle'), 3000);
+    }
+  };
+
+  const handleDownloadPNG = async () => {
+    setImageStatus('rendering');
+    try {
+      const canvas = await captureFullReceiptImage();
+      proceedWithDownload(canvas);
+      setImageStatus('downloaded');
+      setTimeout(() => setImageStatus('idle'), 4000);
+    } catch (err) {
+      console.error('Error writing receipt file download:', err);
+      setImageStatus('error');
+      setTimeout(() => setImageStatus('idle'), 3000);
+    }
+  };
 
   // Form Fields State
   const [selectedTenantId, setSelectedTenantId] = useState('');
@@ -852,6 +1164,91 @@ export default function PaymentHistory({
                   *TX-GRANDVIEW-{viewingReceipt.receiptNumber}*
                 </span>
               </div>
+            </div>
+
+            {/* Digital Share & Screenshot Helpers (No Print) */}
+            <div className="bg-slate-50 border-t px-5 py-4 space-y-3.5 no-print text-xs shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700 tracking-wide uppercase text-[10px]">Digital Share Panel</span>
+                
+                {/* Image status dynamic badge */}
+                {imageStatus === 'rendering' && (
+                  <span className="text-[10px] text-blue-600 font-semibold animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                    Generating Receipt Image...
+                  </span>
+                )}
+                {imageStatus === 'copied' && (
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 animate-none">
+                    ✓ Image copied!
+                  </span>
+                )}
+                {imageStatus === 'downloaded' && (
+                  <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 animate-none">
+                    ✓ Downloaded PNG
+                  </span>
+                )}
+                {imageStatus === 'error' && (
+                  <span className="text-[10px] text-rose-600 font-semibold animate-none">
+                    ⚠ Failed to capture receipt
+                  </span>
+                )}
+                {imageStatus === 'idle' && (
+                  <span className="text-[9.5px] text-slate-400">Attach receipt photo instantly</span>
+                )}
+              </div>
+
+              {/* Action grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleCopyImageToClipboard}
+                  disabled={imageStatus === 'rendering'}
+                  className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
+                  title="Render receipt as PNG and copy to keyboard"
+                >
+                  <Copy className="w-3.5 h-3.5 text-blue-500" />
+                  Copy Image
+                </button>
+
+                <button
+                  onClick={handleDownloadPNG}
+                  disabled={imageStatus === 'rendering'}
+                  className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
+                  title="Download receipt as PNG image to device"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  Download PNG
+                </button>
+              </div>
+
+              {/* Explain explicit instruction to send with image */}
+              <div className="bg-blue-50/40 border border-blue-100/30 p-2.5 rounded-xl space-y-1 text-[10.5px] leading-relaxed text-slate-500">
+                <p className="text-slate-600 font-medium">
+                  💡 How to send on WhatsApp with the Receipt Image:
+                </p>
+                <ol className="list-decimal list-inside space-y-0.5 text-[10px] pl-0.5">
+                  <li>Click <strong className="text-slate-700">Copy Image</strong> (saves PNG to keyboard clipboard).</li>
+                  <li>Click <strong className="text-slate-700">Send to WhatsApp</strong> below (opens the chat).</li>
+                  <li>Simply <strong className="text-slate-700">Paste (Ctrl+V / Cmd+V)</strong> in WhatsApp to send image!</li>
+                </ol>
+              </div>
+
+              {/* Send WhatsApp action */}
+              {viewerTenant?.phone ? (
+                <a
+                  href={viewerWaLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 text-emerald-700 font-bold py-2 text-center rounded-xl transition-all font-sans cursor-pointer shadow-2xs"
+                >
+                  <Send className="w-3.5 h-3.5 text-emerald-600" />
+                  Send to WhatsApp ({viewerTenant.phone})
+                </a>
+              ) : (
+                <div className="bg-amber-50 border border-amber-100 p-2 rounded-xl text-center text-[10px] text-amber-700 font-medium">
+                  No phone contact on record for {viewingReceipt.tenantName} to send via WhatsApp.
+                </div>
+              )}
             </div>
 
             {/* Controls */}
