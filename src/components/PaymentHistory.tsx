@@ -686,10 +686,68 @@ export default function PaymentHistory({
 
       {/* Styled Interactive Payment Receipt Statement Modal */}
       {viewingReceipt && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 print-mode print-mode-modal">
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: portrait !important;
+                margin: 10mm 15mm !important;
+              }
+              body {
+                background-color: #ffffff !important;
+              }
+              /* Hide all normal body content */
+              body * {
+                visibility: hidden !important;
+              }
+              /* Keep only the print wrapper and receipt card visible */
+              .print-mode-modal,
+              .print-mode-modal *,
+              #receipt-modal,
+              #receipt-modal *,
+              #receipt-print-area,
+              #receipt-print-area * {
+                visibility: visible !important;
+              }
+              /* Center and style the receipt layout specifically for printing */
+              .print-mode-modal {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                background: #ffffff !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                z-index: 99999 !important;
+              }
+              #receipt-modal {
+                border: none !important;
+                box-shadow: none !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                max-width: 450px !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                display: block !important;
+              }
+              #receipt-print-area {
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+              }
+            }
+          `}} />
           <div className="bg-white rounded-2xl max-w-sm w-full border shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-zoom-in" id="receipt-modal">
             {/* Header */}
-            <div className="bg-slate-50 border-b px-5 py-4 flex justify-between items-center shrink-0">
+            <div className="bg-slate-50 border-b px-5 py-4 flex justify-between items-center shrink-0 no-print">
               <span className="text-xs font-bold text-slate-600 uppercase flex items-center gap-1.5">
                 <Receipt className="w-4 h-4 text-blue-500" />
                 Receipt Generator
@@ -797,7 +855,7 @@ export default function PaymentHistory({
             </div>
 
             {/* Controls */}
-            <div className="bg-slate-50 border-t p-4 flex gap-2">
+            <div className="bg-slate-50 border-t p-4 flex gap-2 no-print">
               <button
                 onClick={() => {
                   window.focus();
@@ -806,7 +864,7 @@ export default function PaymentHistory({
                 className="flex-1 flex justify-center items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors"
               >
                 <Printer className="w-4 h-4" />
-                Print Statement
+                Print Receipt
               </button>
               <button
                 onClick={() => setViewingReceipt(null)}
