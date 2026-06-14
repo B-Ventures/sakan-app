@@ -128,3 +128,63 @@ export function isMonthCovered(monthPaidFor: string, targetMonth: string): boole
   
   return normalizeMonthStr(monthPaidFor) === normTarget;
 }
+
+export function getMonthCount(start: string, end: string): number {
+  if (!start || !end) return 1;
+  const [startY, startM] = start.split('-').map(Number);
+  const [endY, endM] = end.split('-').map(Number);
+  if (isNaN(startY) || isNaN(startM) || isNaN(endY) || isNaN(endM)) return 1;
+  const m1 = startY * 12 + startM;
+  const m2 = endY * 12 + endM;
+  return Math.max(1, m2 - m1 + 1);
+}
+
+export function getYearMonthFromDateStr(dateStr: string): string {
+  if (!dateStr) return '';
+  const clean = dateStr.trim();
+  
+  // Case 1: YYYY-MM-DD or YYYY-MM
+  if (/^\d{4}-\d{2}/.test(clean)) {
+    return clean.substring(0, 7);
+  }
+  
+  // Case 2: M/D/YYYY or D/M/YYYY or M-D-YYYY
+  const parts = clean.split(/[-/]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      const year = parts[0];
+      const month = parts[1].padStart(2, '0');
+      return `${year}-${month}`;
+    }
+    
+    if (parts[2].length === 4) {
+      const year = parts[2];
+      const jsDate = new Date(clean);
+      if (!isNaN(jsDate.getTime())) {
+        const y = jsDate.getFullYear();
+        const m = String(jsDate.getMonth() + 1).padStart(2, '0');
+        return `${y}-${m}`;
+      }
+      
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
+      let monthVal = 1;
+      if (p0 <= 12) {
+        monthVal = p0;
+      } else if (p1 <= 12) {
+        monthVal = p1;
+      }
+      const month = String(monthVal).padStart(2, '0');
+      return `${year}-${month}`;
+    }
+  }
+  
+  const jsDate = new Date(clean);
+  if (!isNaN(jsDate.getTime())) {
+    const y = jsDate.getFullYear();
+    const m = String(jsDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+  
+  return clean.substring(0, 7);
+}

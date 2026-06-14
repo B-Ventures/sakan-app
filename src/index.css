@@ -7,52 +7,41 @@
 }
 
 @media print {
-  @page {
-    size: landscape;
-    margin: 10mm;
+  /* Retain exact colors, gradients, and backgrounds under all browser print configurations */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Hide standard layout wrapper containers and control elements */
+  /* Default page configuration: Portrait size for standard, narrower, vertical statements */
+  @page {
+    size: portrait;
+    margin: 12mm 15mm;
+  }
+
+  /* Landscape layout configuration: for the wide master spreadsheet annual ledger table */
+  @page landscape-layout {
+    size: landscape;
+    margin: 10mm 15mm;
+  }
+
+  /* Hide standard interface layouts, buttons, navigations, headers, and dashboard widgets */
   body, html {
     height: auto !important;
     min-height: auto !important;
     overflow: visible !important;
-    background: white !important;
+    background: #ffffff !important;
     color: #000000 !important;
+    font-family: "Inter", sans-serif !important;
   }
 
-  /* Hide app navigation sidebar, headers, controls, and selectors */
-  aside, 
-  header, 
-  nav, 
-  button, 
-  form, 
-  input, 
-  select, 
-  textarea,
-  .no-print,
-  #desktop-sidebar,
-  div[class*="grid-cols-5"], /* mobile bottom nav */
-  #statements-generator-module > div:first-child, /* statement tabs selector */
-  #statements-generator-module .lg\:col-span-1, /* filter form */
-  #receipt-modal > div:last-child, /* receipt dialog footer buttons */
-  #receipt-modal > div:first-child, /* receipt dialog header button */
-  .backdrop-blur-xs,
-  .fixed.inset-0:not(.print-mode) {
-    display: none !important;
-    visibility: hidden !important;
-  }
-
-  /* Override any parent container height or overflow restrictions to prevent clipping */
+  /* Prevent split of the key document frame internally or weird height cuts */
   #root,
   .flex.h-screen,
   div[class*="overflow-y-auto"],
   main,
   #application-container,
-  #application-container > div,
-  #printable-statement-document,
-  #receipt-modal,
-  #receipt-print-area {
+  #application-container > div {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -67,60 +56,195 @@
     background: transparent !important;
   }
 
-  /* Specific Account Statement Document View */
+  /* Strict hide elements that do not belong in exports or statements printed cards */
+  aside,
+  header,
+  nav,
+  button,
+  form,
+  input,
+  select,
+  textarea,
+  .no-print,
+  #desktop-sidebar,
+  div[class*="grid-cols-5"], /* mobile bottom nav representation */
+  #statements-generator-module > div:first-child, /* sub tabs */
+  #statements-generator-module .lg\:col-span-1, /* filter panel side card */
+  #receipt-modal > div:last-child,
+  #receipt-modal > div:first-child,
+  .backdrop-blur-xs,
+  .inline-flex.rounded-xl, /* button or controller arrays */
+  .fixed.inset-0:not(.print-mode) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Core Document Wrapper styling overrides to fit page canvas perfect */
   #printable-statement-document {
     display: block !important;
     visibility: visible !important;
     width: 100% !important;
     max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   #printable-statement-document * {
     visibility: visible !important;
   }
 
-  /* Receipt layout specificity */
-  #receipt-modal {
-    display: block !important;
-    visibility: visible !important;
-    width: 100% !important;
-    max-width: 100% !important;
+  /* Prevent overlapping sticky coordinates or scrolls inside table wrapper containers */
+  div.overflow-x-auto,
+  div.overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+    border-radius: 8px !important;
+    border: 1px solid #cbd5e1 !important;
   }
 
+  /* ========================================================
+     TABLE LAYOUT & TYPOGRAPHY REFINEMENTS
+     ======================================================== */
+  table {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+  }
+
+  /* Reset default cell rendering for standard portrait reports */
+  th, td {
+    padding: 8px 10px !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    white-space: normal !important;
+  }
+
+  th {
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    background-color: #f8fafc !important;
+    border-top: 1px solid #cbd5e1 !important;
+  }
+
+  /* For ledger totals and highlights, keep borders high contrast */
+  tr.bg-slate-50,
+  tr.bg-slate-100 {
+    background-color: #f1f5f9 !important;
+  }
+
+  /* Overrides for specific landscape-mode table (12-month common area) */
+  .print-landscape {
+    page: landscape-layout !important;
+  }
+
+  .print-landscape table {
+    table-layout: fixed !important; /* Perfect fit under columns */
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+
+  .print-landscape th,
+  .print-landscape td {
+    font-size: 8px !important;
+    padding: 5px 3px !important;
+    border-right: 1px solid #e2e8f0 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    word-break: break-all !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+  }
+
+  /* Explicit column width configuration for 12 months landscape matrix matches page perfectly */
+  .print-landscape th:first-child,
+  .print-landscape td:first-child {
+    width: 17% !important;
+    font-size: 8.5px !important;
+    text-align: left !important;
+    font-weight: 700 !important;
+    background-color: #f8fafc !important;
+    white-space: normal !important;
+  }
+
+  /* The 12 months columns */
+  .print-landscape th:not(:first-child),
+  .print-landscape td:not(:first-child) {
+    width: 6.9% !important;
+    text-align: right !important;
+  }
+
+  /* Remove sticky left column offsets causing text overlay during rendering print layers */
+  .sticky {
+    position: static !important;
+  }
+
+  /* Ensure colors and text classes stand out clearly */
+  .text-emerald-600, .text-emerald-700, .text-emerald-800 {
+    color: #047857 !important;
+    font-weight: 700 !important;
+  }
+
+  .text-rose-600, .text-rose-700, .text-rose-800, .text-rose-900 {
+    color: #b91c1c !important;
+    font-weight: 700 !important;
+  }
+
+  .text-blue-600, .text-blue-700 {
+    color: #1d4ed8 !important;
+    font-weight: 700 !important;
+  }
+
+  .text-slate-400, .text-slate-500 {
+    color: #475569 !important;
+  }
+
+  /* Retain badge background shades & colored financial boxes perfectly */
+  .bg-emerald-50, .bg-emerald-50\/40, .bg-emerald-50\/50, .bg-emerald-50\/10, .bg-emerald-50\/30 {
+    background-color: #ecfdf5 !important;
+    border: 1px solid #a7f3d0 !important;
+  }
+
+  .bg-rose-50, .bg-rose-50\/40, .bg-rose-50\/10, .bg-rose-50\/20, .bg-rose-50\/30 {
+    background-color: #fff1f2 !important;
+    border: 1px solid #fecdd3 !important;
+  }
+
+  .bg-blue-50, .bg-blue-50\/40, .bg-sky-50 {
+    background-color: #f0f9ff !important;
+    border: 1px solid #bae6fd !important;
+  }
+
+  .bg-slate-50, .bg-slate-50\/30, .bg-slate-50\/40, .bg-slate-100 {
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  /* Receipt Layout specific print controls */
+  #receipt-modal,
   #receipt-print-area {
     display: block !important;
     visibility: visible !important;
     width: 100% !important;
-    max-width: 100% !important;
-    overflow: visible !important;
+    max-width: 500px !important;
+    margin: 10mm auto !important;
+    padding: 15px !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 12px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   #receipt-print-area * {
     visibility: visible !important;
-  }
-
-  /* Text color and contrast enhancements for black and white paper print quality */
-  .text-slate-900, .text-slate-800, .text-slate-700, .text-slate-600 {
-    color: #000000 !important;
-  }
-  .text-slate-400, .text-slate-500 {
-    color: #374151 !important;
-  }
-  .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-emerald-50, .bg-rose-50 {
-    background-color: transparent !important;
-    border-color: #cbd5e1 !important;
-  }
-  
-  /* Render table with clean horizontal rows and high legibility */
-  table {
-    width: 100% !important;
-    min-width: 100% !important;
-    border-collapse: collapse !important;
-  }
-  th, td {
-    border-bottom: 1px solid #cbd5e1 !important;
-    padding: 8px !important;
-    white-space: normal !important; /* wrap if narrow */
   }
 }
 

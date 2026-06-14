@@ -4,20 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Tenant, Payment, formatCurrency } from '../types';
+import { Tenant, Payment, formatCurrency, getMonthCount } from '../types';
 import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save } from 'lucide-react';
 import { getReceiptWhatsAppLink } from '../utils/whatsapp';
 import ConfirmationDialog from './ConfirmationDialog';
-
-const getMonthCount = (start: string, end: string): number => {
-  if (!start || !end) return 1;
-  const [startY, startM] = start.split('-').map(Number);
-  const [endY, endM] = end.split('-').map(Number);
-  if (isNaN(startY) || isNaN(startM) || isNaN(endY) || isNaN(endM)) return 1;
-  const m1 = startY * 12 + startM;
-  const m2 = endY * 12 + endM;
-  return Math.max(1, m2 - m1 + 1);
-};
 
 interface PaymentHistoryProps {
   payments: Payment[];

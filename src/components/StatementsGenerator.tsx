@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Tenant, Payment, Expense, Building, isMonthCovered, formatCurrency } from '../types';
+import { Tenant, Payment, Expense, Building, isMonthCovered, formatCurrency, getMonthCount, getYearMonthFromDateStr } from '../types';
 import { FileText, Calendar, Send, Mail, CheckCircle, RefreshCw, Eye, Printer, Bot, AlertTriangle, MessageSquare, Copy, ShieldAlert, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { getReminderWhatsAppLink } from '../utils/whatsapp';
 
@@ -111,7 +111,21 @@ export default function StatementsGenerator({
 
   // --- COMMON AREA COMPUTATIONS ---
   const commonIncomesList = building?.commonAreaIncomeCategories || ['Guard Salary', 'Service Box'];
-  const commonExpensesList = building?.commonAreaExpenseCategories || ['Staff Salary', 'Cleaning', 'Utilities'];
+  const commonExpensesList = building?.commonAreaExpenseCategories || [
+    'Guard Salary',
+    'Electricity Bill',
+    'Gas Maintenance',
+    'Water Bill',
+    'Alarm/security system',
+    'Elevator Maintenance',
+    'Cleaning',
+    'Other',
+    'Maintenance',
+    'Utilities',
+    'Insurance',
+    'Tax',
+    'Staff Salary'
+  ];
 
   // --- SEGMENTED MASTER SPREADSHEET DATA HELPERS ---
   const filteredMonths = React.useMemo(() => {
@@ -144,7 +158,7 @@ export default function StatementsGenerator({
   const getExpenseAmount = React.useCallback((category: string, monthStr: string) => {
     const normCategory = category.toLowerCase().trim();
     return expenses
-      .filter(e => e.date && e.date.substring(0, 7) === monthStr && (e.category.toLowerCase().trim() === normCategory))
+      .filter(e => e.date && getYearMonthFromDateStr(e.date) === monthStr && (e.category.toLowerCase().trim() === normCategory))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
   }, [expenses]);
 
@@ -155,6 +169,12 @@ export default function StatementsGenerator({
     
     let sum = 0;
     tenantPayments.forEach(p => {
+      let divisor = 1;
+      if (p.monthPaidFor && p.monthPaidFor.includes(' to ')) {
+        const parts = p.monthPaidFor.split(/\s*to\s*/);
+        divisor = getMonthCount(parts[0], parts[1]);
+      }
+
       // Reconstruct splits dynamically if missing but single category or fields are present
       let splits = p.splits;
       if (!splits) {
@@ -171,13 +191,13 @@ export default function StatementsGenerator({
       if (splits) {
         Object.entries(splits).forEach(([cat, val]) => {
           if (isCategoryInListVal(commonIncomesList, cat) && val > 0) {
-            sum += Number(val || 0);
+            sum += Number(val || 0) / divisor;
           }
         });
         if (isCategoryInListVal(commonIncomesList, 'Rent portion')) {
           const rentVal = splits['Rent portion'] || splits['Rent'] || 0;
           if (rentVal > 0) {
-            sum += Number(rentVal);
+            sum += Number(rentVal) / divisor;
           }
         }
       } else {
@@ -185,17 +205,17 @@ export default function StatementsGenerator({
         const defaultG = building?.defaultGuardFee ?? 50;
         const defaultM = building?.defaultMaintenanceFee ?? 30;
         if (isCategoryInListVal(commonIncomesList, 'Guard Salary')) {
-          sum += Number(p.guardPaid ?? Math.min(p.amount, defaultG));
+          sum += (p.guardPaid !== undefined ? Number(p.guardPaid) : Math.min(p.amount, defaultG)) / divisor;
         }
         if (isCategoryInListVal(commonIncomesList, 'Service Box')) {
-          sum += Number(p.maintenancePaid ?? Math.min(Math.max(0, p.amount - (p.guardPaid ?? defaultG)), defaultM));
+          sum += (p.maintenancePaid !== undefined ? Number(p.maintenancePaid) : Math.min(Math.max(0, p.amount - (p.guardPaid ?? defaultG)), defaultM)) / divisor;
         }
         if (isCategoryInListVal(commonIncomesList, 'Rent portion')) {
           const defaultGVal = p.guardPaid ?? defaultG;
           const defaultMVal = p.maintenancePaid ?? defaultM;
           const calculatedRent = p.rentPaid ?? Math.max(0, p.amount - defaultGVal - defaultMVal);
           if (calculatedRent > 0) {
-            sum += Number(calculatedRent);
+            sum += Number(calculatedRent) / divisor;
           }
         }
       }
@@ -208,6 +228,12 @@ export default function StatementsGenerator({
     const pMonth = payments.filter(p => p.status === 'Paid' && isMonthCovered(p.monthPaidFor, targetMonth));
     let sum = 0;
     pMonth.forEach(p => {
+      let divisor = 1;
+      if (p.monthPaidFor && p.monthPaidFor.includes(' to ')) {
+        const parts = p.monthPaidFor.split(/\s*to\s*/);
+        divisor = getMonthCount(parts[0], parts[1]);
+      }
+
       let splits = p.splits;
       if (!splits) {
         if (p.category) {
@@ -223,30 +249,30 @@ export default function StatementsGenerator({
       if (splits) {
         Object.entries(splits).forEach(([cat, val]) => {
           if (isCategoryInListVal(commonIncomesList, cat) && val > 0) {
-            sum += Number(val || 0);
+            sum += Number(val || 0) / divisor;
           }
         });
         if (isCategoryInListVal(commonIncomesList, 'Rent portion')) {
           const rentVal = splits['Rent portion'] || splits['Rent'] || 0;
           if (rentVal > 0) {
-            sum += Number(rentVal);
+            sum += Number(rentVal) / divisor;
           }
         }
       } else {
         const defaultG = building?.defaultGuardFee ?? 50;
         const defaultM = building?.defaultMaintenanceFee ?? 30;
         if (isCategoryInListVal(commonIncomesList, 'Guard Salary')) {
-          sum += Number(p.guardPaid ?? Math.min(p.amount, defaultG));
+          sum += (p.guardPaid !== undefined ? Number(p.guardPaid) : Math.min(p.amount, defaultG)) / divisor;
         }
         if (isCategoryInListVal(commonIncomesList, 'Service Box')) {
-          sum += Number(p.maintenancePaid ?? Math.min(Math.max(0, p.amount - (p.guardPaid ?? defaultG)), defaultM));
+          sum += (p.maintenancePaid !== undefined ? Number(p.maintenancePaid) : Math.min(Math.max(0, p.amount - (p.guardPaid ?? defaultG)), defaultM)) / divisor;
         }
         if (isCategoryInListVal(commonIncomesList, 'Rent portion')) {
           const defaultGVal = p.guardPaid ?? defaultG;
           const defaultMVal = p.maintenancePaid ?? defaultM;
           const calculatedRent = p.rentPaid ?? Math.max(0, p.amount - defaultGVal - defaultMVal);
           if (calculatedRent > 0) {
-            sum += Number(calculatedRent);
+            sum += Number(calculatedRent) / divisor;
           }
         }
       }
@@ -257,7 +283,7 @@ export default function StatementsGenerator({
   // Helper: Common Expenses sum for a given month
   const getCommonExpenseForMonth = (targetMonth: string) => {
     return expenses
-      .filter(e => e.date && e.date.substring(0, 7) === targetMonth && isCategoryInListVal(commonExpensesList, e.category))
+      .filter(e => e.date && getYearMonthFromDateStr(e.date) === targetMonth && isCategoryInListVal(commonExpensesList, e.category))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
   };
 
@@ -275,6 +301,12 @@ export default function StatementsGenerator({
   }> = [];
 
   paymentsInMonth.forEach(p => {
+    let divisor = 1;
+    if (p.monthPaidFor && p.monthPaidFor.includes(' to ')) {
+      const parts = p.monthPaidFor.split(/\s*to\s*/);
+      divisor = getMonthCount(parts[0], parts[1]);
+    }
+
     let splits = p.splits;
     if (!splits) {
       if (p.category) {
@@ -293,11 +325,11 @@ export default function StatementsGenerator({
           commonIncomePostings.push({
             id: `${p.id}-${cat}`,
             date: p.date,
-            reference: `${p.tenantName} (Unit ${p.unit}) - ${cat} Contribution`,
+            reference: `${p.tenantName} (Unit ${p.unit}) - ${cat} Contribution${divisor > 1 ? ` (Split 1/${divisor})` : ''}`,
             category: cat,
             method: p.method,
             type: 'income',
-            amount: val,
+            amount: val / divisor,
           });
         }
       });
@@ -310,11 +342,11 @@ export default function StatementsGenerator({
           commonIncomePostings.push({
             id: `${p.id}-guard`,
             date: p.date,
-            reference: `${p.tenantName} (Unit ${p.unit}) - Guard Salary Fee`,
+            reference: `${p.tenantName} (Unit ${p.unit}) - Guard Salary Fee${divisor > 1 ? ` (Split 1/${divisor})` : ''}`,
             category: 'Guard Salary',
             method: p.method,
             type: 'income',
-            amount: amt,
+            amount: amt / divisor,
           });
         }
       }
@@ -324,11 +356,11 @@ export default function StatementsGenerator({
           commonIncomePostings.push({
             id: `${p.id}-maint`,
             date: p.date,
-            reference: `${p.tenantName} (Unit ${p.unit}) - Service Box Levy`,
+            reference: `${p.tenantName} (Unit ${p.unit}) - Service Box Levy${divisor > 1 ? ` (Split 1/${divisor})` : ''}`,
             category: 'Service Box',
             method: p.method,
             type: 'income',
-            amount: amt,
+            amount: amt / divisor,
           });
         }
       }
@@ -342,18 +374,18 @@ export default function StatementsGenerator({
         commonIncomePostings.push({
           id: `${p.id}-rent`,
           date: p.date,
-          reference: `${p.tenantName} (Unit ${p.unit}) - Rent portion contribution`,
+          reference: `${p.tenantName} (Unit ${p.unit}) - Rent portion contribution${divisor > 1 ? ` (Split 1/${divisor})` : ''}`,
           category: 'Rent portion',
           method: p.method,
           type: 'income',
-          amount: calculatedRent,
+          amount: calculatedRent / divisor,
         });
       }
     }
   });
 
   // 2. Common Expenses filtering and postings (for Single Month view)
-  const expensesInMonth = expenses.filter(e => e.date && e.date.substring(0, 7) === statementMonth);
+  const expensesInMonth = expenses.filter(e => e.date && getYearMonthFromDateStr(e.date) === statementMonth);
   const totalCommonExpense = getCommonExpenseForMonth(statementMonth);
   const commonExpensePostings: Array<{
     id: string;
@@ -366,7 +398,7 @@ export default function StatementsGenerator({
   }> = [];
 
   expensesInMonth.forEach(e => {
-    if (commonExpensesList.includes(e.category)) {
+    if (isCategoryInListVal(commonExpensesList, e.category)) {
       commonExpensePostings.push({
         id: e.id,
         date: e.date,
@@ -402,12 +434,21 @@ export default function StatementsGenerator({
       isActive = false;
     }
 
+    const currentYearMonth = new Date().toISOString().substring(0, 7); // e.g., "2026-06"
     const dueAmount = isActive ? (Number(rentVal) + Number(guardVal) + Number(maintVal)) : 0;
+    
     const paidAmount = payments
       .filter(p => p.tenantId === selectedTenantId && p.status === 'Paid' && isMonthCovered(p.monthPaidFor, mStr))
-      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      .reduce((sum, p) => {
+        let divisor = 1;
+        if (p.monthPaidFor && p.monthPaidFor.includes(' to ')) {
+          const parts = p.monthPaidFor.split(/\s*to\s*/);
+          divisor = getMonthCount(parts[0], parts[1]);
+        }
+        return sum + (Number(p.amount || 0) / divisor);
+      }, 0);
 
-    const outstanding = isActive ? Math.max(dueAmount - paidAmount, 0) : 0;
+    const outstanding = (isActive && mStr <= currentYearMonth) ? Math.max(dueAmount - paidAmount, 0) : 0;
 
     const matchedPayments = payments.filter(
       p => p.tenantId === selectedTenantId && p.status === 'Paid' && isMonthCovered(p.monthPaidFor, mStr)
@@ -760,7 +801,9 @@ export default function StatementsGenerator({
           </div>
 
           {/* Statement Document View */}
-          <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-6 md:p-8 shadow-sm space-y-6" id="printable-statement-document">
+          <div className={`lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-6 md:p-8 shadow-sm space-y-6 ${
+            statementType === 'commonArea' && statementScope === 'year' ? 'print-landscape' : 'print-portrait'
+          }`} id="printable-statement-document">
             {statementScope === 'year' ? (
               // ============================================
               // RENDER ANNUAL VIEW (COMMON AREA OR UNIT LEDGER)
@@ -800,11 +843,11 @@ export default function StatementsGenerator({
                   <div className="grid grid-cols-3 gap-3 font-sans">
                     <div className="bg-emerald-50/40 p-3 rounded-xl border border-emerald-100/50 text-center">
                       <span className="text-[10px] font-bold text-emerald-600 block uppercase">Annual Income</span>
-                      <span className="font-bold text-emerald-800 text-md font-mono font-sans">+{formatVal(totalCommonYearIncome)}</span>
+                      <span className="font-bold text-emerald-800 text-base font-mono">+{formatVal(totalCommonYearIncome)}</span>
                     </div>
                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 block uppercase font-mono">Annual Expenses</span>
-                      <span className="font-bold text-slate-700 text-md font-mono font-sans">-{formatVal(totalCommonYearExpense)}</span>
+                      <span className="text-[10px] font-bold text-slate-400 block uppercase">Annual Expenses</span>
+                      <span className="font-bold text-slate-700 text-base font-mono">-{formatVal(totalCommonYearExpense)}</span>
                     </div>
                     <div className={`p-3 rounded-xl border text-center ${
                       totalCommonYearBalance >= 0 ? 'bg-sky-50 border-sky-100' : 'bg-rose-50 border-rose-100'
@@ -814,7 +857,7 @@ export default function StatementsGenerator({
                       }`}>
                         {totalCommonYearBalance >= 0 ? 'Annual Surplus' : 'Annual Deficit'}
                       </span>
-                      <span className={`font-bold text-md font-mono font-sans ${
+                      <span className={`font-bold text-base font-mono ${
                         totalCommonYearBalance >= 0 ? 'text-sky-700' : 'text-rose-700'
                       }`}>
                         {formatVal(totalCommonYearBalance)}
@@ -1570,7 +1613,7 @@ export default function StatementsGenerator({
 
               <div className="divide-y divide-slate-100">
                 {payments
-                  .filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, '2026-06'))
+                  .filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth))
                   .map(p => {
                     const tenant = tenants.find(t => t.id === p.tenantId);
                     
@@ -1636,7 +1679,7 @@ export default function StatementsGenerator({
                     );
                   })}
 
-                {payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, '2026-06')).length === 0 && (
+                {payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth)).length === 0 && (
                   <div className="text-center py-10 text-slate-400">
                     <CheckCircle className="w-9 h-9 text-emerald-400 mx-auto mb-2" />
                     <p className="text-xs font-semibold text-slate-700">All balances are currently clear</p>
