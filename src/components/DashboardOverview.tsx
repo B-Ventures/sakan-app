@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Tenant, Payment, Expense, ExpenseCategory, formatCurrency } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, Building, Percent, AlertCircle, Calendar, ArrowUpRight, ArrowDownRight, Send, Upload } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Building, Percent, AlertCircle, Calendar, ArrowUpRight, ArrowDownRight, Send, Upload, Search } from 'lucide-react';
 import { getReminderWhatsAppLink } from '../utils/whatsapp';
 
 interface DashboardOverviewProps {
@@ -26,6 +26,8 @@ export default function DashboardOverview({
   onOpenImportModal,
   activeBuilding,
 }: DashboardOverviewProps) {
+  const [searchQuery, setSearchQuery] = React.useState('');
+
   // Calculations
   const occupiedUnits = tenants.filter(t => t.status === 'active').length;
   const totalUnits = tenants.length;
@@ -104,31 +106,7 @@ export default function DashboardOverview({
 
   return (
     <div className="space-y-6" id="dashboard-tab">
-      {/* Import historical ledger promo banner */}
-      {onOpenImportModal && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs" id="bulk-import-banner">
-          <div className="flex items-start gap-3 text-left">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md shrink-0">
-              <Upload className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="font-extrabold text-slate-800 text-xs">Bulk Import Historical Bookkeeping</h4>
-              <p className="text-[10.5px] text-slate-400 mt-0.5 leading-relaxed">
-                Excel or Google Sheets bookkeeping? Download our custom format template, fill your records, and upload to update everything at once.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onOpenImportModal}
-            id="dashboard-btn-open-importer"
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl shrink-0 shadow-sm transition-colors cursor-pointer"
-          >
-            Import Ledger (CSV)
-          </button>
-        </div>
-      )}
-
-      {/* KPI Cards */}
+      {/* Informative KPI Cards at the Top */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Net Flow */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-net">
@@ -198,93 +176,105 @@ export default function DashboardOverview({
         </div>
       </div>
 
-      {/* Main Core Section: Charts and Alerts Split */}
+      {/* Unified Financial Insights Row (Equal-Height horizontal block) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 columns: Visual Charts & Analytics */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Income vs Expenses Visual custom SVG bar widget */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
+        
+        {/* 1. Financial Performance Breakdown Bar Chart */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-[390px] hover:shadow-md transition-shadow">
+          <div>
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="font-bold text-slate-800 text-lg">Financial Performance Breakdown</h3>
-                <p className="text-xs text-slate-400">Total share collections versus maintenance & building expenses</p>
+                <h3 className="font-bold text-slate-800 text-sm">Financial Performance</h3>
+                <p className="text-[11px] text-slate-400">Collected income vs costs</p>
               </div>
-              <div className="flex gap-4 text-xs">
-                <span className="flex items-center gap-1.5 font-medium"><span className="w-3 h-3 bg-blue-500 rounded"></span>Income</span>
-                <span className="flex items-center gap-1.5 font-medium"><span className="w-3 h-3 bg-orange-500 rounded"></span>Expenses</span>
+              <div className="flex gap-2.5 text-[10px] shrink-0">
+                <span className="flex items-center gap-1 font-medium text-slate-600">
+                  <span className="w-2.5 h-2.5 bg-blue-500 rounded-xs"></span>In
+                </span>
+                <span className="flex items-center gap-1 font-medium text-slate-600">
+                  <span className="w-2.5 h-2.5 bg-orange-500 rounded-xs"></span>Out
+                </span>
               </div>
             </div>
 
-            {/* Custom high-performance SVG bar container */}
-            <div className="relative h-48 w-full border-b border-slate-100 mt-6 flex items-end justify-around pb-2">
+            {/* Custom SVG Bar Chart Container */}
+            <div className="relative h-44 w-full border-b border-slate-100 mt-6 flex items-end justify-around pb-2 px-2">
               {/* Scale Labels */}
-              <div className="absolute left-0 top-0 text-[10px] text-slate-400 flex flex-col justify-between h-full pointer-events-none">
+              <div className="absolute left-0 top-0 text-[9px] text-slate-400 flex flex-col justify-between h-full pointer-events-none">
                 <span>{formatCurrency(Math.max(totalIncomePaid, totalExpenses, 1000), activeBuilding?.currency || 'JOD')}</span>
                 <span>{formatCurrency(Math.round(Math.max(totalIncomePaid, totalExpenses, 1000) / 2), activeBuilding?.currency || 'JOD')}</span>
                 <span>{formatCurrency(0, activeBuilding?.currency || 'JOD')}</span>
               </div>
 
-              {/* Real Bar 1: Income Chart bar */}
-              <div className="flex flex-col items-center gap-2 w-1/4">
-                <div className="w-16 bg-blue-100 hover:bg-blue-200 rounded-t-lg relative transition-all duration-300" 
-                     style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 140}px` }}>
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[10px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none">
+              {/* Bar 1: Gross Received */}
+              <div className="flex flex-col items-center gap-1.5 w-1/3">
+                <div className="w-10 sm:w-12 bg-blue-100 hover:bg-blue-200 rounded-t-md relative transition-all duration-300" 
+                     style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 128}px` }}>
+                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[9px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none whitespace-nowrap z-10">
                     {formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}
                   </div>
-                  <div className="w-full h-full bg-gradient-to-t from-blue-600 to-blue-500 rounded-t-lg"></div>
+                  <div className="w-full h-full bg-gradient-to-t from-blue-600 to-blue-500 rounded-t-md shadow-xs"></div>
                 </div>
-                <span className="text-xs font-semibold text-slate-600">Gross Income Received</span>
+                <span className="text-[10.5px] font-bold text-slate-500 whitespace-nowrap text-center">Received</span>
               </div>
 
-              {/* Real Bar 2: Expenses Logged bar */}
-              <div className="flex flex-col items-center gap-2 w-1/4">
-                <div className="w-16 bg-orange-100 hover:bg-orange-200 rounded-t-lg relative transition-all duration-300"
-                     style={{ height: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 140}px` }}>
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[10px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none border">
+              {/* Bar 2: Total Operational Costs */}
+              <div className="flex flex-col items-center gap-1.5 w-1/3">
+                <div className="w-10 sm:w-12 bg-orange-100 hover:bg-orange-200 rounded-t-md relative transition-all duration-300"
+                     style={{ height: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 128}px` }}>
+                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[9px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none whitespace-nowrap z-10">
                     {formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}
                   </div>
-                  <div className="w-full h-full bg-gradient-to-t from-orange-500 to-orange-400 rounded-t-lg"></div>
+                  <div className="w-full h-full bg-gradient-to-t from-orange-500 to-orange-400 rounded-t-md shadow-xs"></div>
                 </div>
-                <span className="text-xs font-semibold text-slate-600">Total Operational Cost</span>
+                <span className="text-[10.5px] font-bold text-slate-500 whitespace-nowrap text-center">Costs</span>
               </div>
 
-              {/* Real Bar 3: Net Cash flow bar */}
-              <div className="flex flex-col items-center gap-2 w-1/4">
-                <div className={`w-16 rounded-t-lg relative transition-all duration-300 ${netProfit >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}
-                     style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 140}px` }}>
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[10px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none">
+              {/* Bar 3: Net Cash Flow */}
+              <div className="flex flex-col items-center gap-1.5 w-1/3">
+                <div className={`w-10 sm:w-12 rounded-t-md relative transition-all duration-300 ${netProfit >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}
+                     style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 128}px` }}>
+                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[9px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none whitespace-nowrap z-10">
                     {formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}
                   </div>
-                  <div className={`w-full h-full rounded-t-lg bg-gradient-to-t ${netProfit >= 0 ? 'from-emerald-500 to-emerald-400' : 'from-rose-500 to-rose-400'}`}></div>
+                  <div className={`w-full h-full rounded-t-md bg-gradient-to-t ${netProfit >= 0 ? 'from-emerald-500 to-emerald-400 shadow-xs' : 'from-rose-500 to-rose-400 shadow-xs'}`}></div>
                 </div>
-                <span className="text-xs font-semibold text-slate-600">Net Operating Flow</span>
+                <span className="text-[10.5px] font-bold text-slate-500 whitespace-nowrap text-center">Net Flow</span>
               </div>
             </div>
           </div>
+          <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-50 flex justify-between items-center bg-slate-50/50 p-2 rounded-xl mt-3">
+            <span>Performance Status:</span>
+            <span className={`font-extrabold uppercase text-[10.5px] tracking-wider ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+              {netProfit >= 0 ? 'Surplus' : 'Deficit'}
+            </span>
+          </div>
+        </div>
 
-          {/* Income Sources Splitting Visual */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm" id="income-distribution-card">
-            <h3 className="font-bold text-slate-800 text-lg mb-1">Income Distribution</h3>
-            <p className="text-xs text-slate-400 mb-5">Distributed breakdown of all collected income sources</p>
+        {/* 2. Income Distribution Progressive Breakdown */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-[390px] hover:shadow-md transition-shadow" id="income-distribution-card">
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm">Income Distribution</h3>
+            <p className="text-[11px] text-slate-400 mb-5">Breakdown of collected income components</p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-4">
               {[
                 { name: 'Base Share', amount: totalRentPaid },
-                { name: 'Guard', amount: totalGuardPaid },
-                { name: 'Svc Box', amount: totalMaintenancePaid }
+                { name: 'Guard Share', amount: totalGuardPaid },
+                { name: 'Svc Box Share', amount: totalMaintenancePaid }
               ].map(source => {
-                const percentage = totalIncomePaid > 0 ? Math.round((source.amount / totalIncomePaid) * 100) : 0;
+                const percentage = totalIncomePaid > 0 ? Math.round((source.amount / totalIncomePaid) * 105) : 0;
                 const maxSourceAmount = Math.max(totalRentPaid, totalGuardPaid, totalMaintenancePaid, 1);
 
                 return (
-                  <div key={source.name} className="space-y-1.5 p-3 rounded-xl hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-700 font-semibold">{source.name}</span>
-                      <span className="text-slate-400 font-mono">{formatCurrency(source.amount, activeBuilding?.currency || 'JOD')} ({percentage}%)</span>
+                  <div key={source.name} className="space-y-1.5 p-1 rounded-lg hover:bg-slate-50/50 transition-colors">
+                    <div className="flex justify-between text-[11px] font-semibold text-slate-700">
+                      <span>{source.name}</span>
+                      <span className="text-slate-500 font-mono text-[10px]">{formatCurrency(source.amount, activeBuilding?.currency || 'JOD')} ({Math.min(100, percentage)}%)</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div 
-                        className="bg-blue-600 h-full rounded-full" 
+                        className="bg-blue-600 h-full rounded-full transition-all duration-300" 
                         style={{ width: `${(source.amount / maxSourceAmount) * 100}%` }}
                       ></div>
                     </div>
@@ -292,33 +282,39 @@ export default function DashboardOverview({
                 );
               })}
               {totalIncomePaid === 0 && (
-                <div className="col-span-2 text-center text-sm py-8 text-slate-400">
+                <div className="text-center text-xs py-10 text-slate-400">
                   No collected income registered yet.
                 </div>
               )}
             </div>
           </div>
+          <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-50 flex justify-between items-center bg-blue-50/20 p-2 rounded-xl mt-3">
+            <span>Collected Realized:</span>
+            <span className="font-mono font-extrabold text-slate-800">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</span>
+          </div>
+        </div>
 
-          {/* Expense Categories Splitting Visual */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <h3 className="font-bold text-slate-800 text-lg mb-1">Expense Distribution</h3>
-            <p className="text-xs text-slate-400 mb-5">Categorized breakdown of all expenditures</p>
+        {/* 3. Expense Distribution Progressive Breakdown */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-[390px] hover:shadow-md transition-shadow">
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm">Expense Distribution</h3>
+            <p className="text-[11px] text-slate-400 mb-5">Breakdown of operational categories</p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-3.5 overflow-y-auto max-h-[200px] pr-0.5">
               {categoriesList.map(cat => {
                 const amount = expenseByCategory[cat];
                 const percentage = totalExpenses > 0 ? Math.round((amount / totalExpenses) * 100) : 0;
                 if (amount === 0) return null;
 
                 return (
-                  <div key={cat} className="space-y-1.5 p-3 rounded-xl hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-slate-700">{cat}</span>
-                      <span className="text-slate-400 font-mono">{formatCurrency(amount, activeBuilding?.currency || 'JOD')} ({percentage}%)</span>
+                  <div key={cat} className="space-y-1.5 p-1 rounded-lg hover:bg-slate-50/50 transition-colors">
+                    <div className="flex justify-between text-[11px] font-semibold text-slate-700">
+                      <span className="truncate max-w-[120px]" title={cat}>{cat}</span>
+                      <span className="text-slate-500 font-mono text-[10px] whitespace-nowrap">{formatCurrency(amount, activeBuilding?.currency || 'JOD')} ({percentage}%)</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div 
-                        className="bg-orange-500 h-full rounded-full" 
+                        className="bg-orange-500 h-full rounded-full transition-all duration-300" 
                         style={{ width: `${(amount / maxCategoryExpense) * 100}%` }}
                       ></div>
                     </div>
@@ -326,181 +322,254 @@ export default function DashboardOverview({
                 );
               })}
               {totalExpenses === 0 && (
-                <div className="col-span-2 text-center text-sm py-8 text-slate-400">
-                  No operational expenses logged yet.
+                <div className="text-center text-xs py-10 text-slate-400">
+                  No operational expenses logged.
                 </div>
               )}
             </div>
           </div>
-        </div>
-
-        {/* Right Column: Outstanding Balances & Actionable Reminders */}
-        <div className="space-y-6">
-          {/* Reminders list & outstanding payments panel */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-bold text-slate-800 text-lg">Reminders Center</h3>
-                <p className="text-xs text-slate-400">Generate Whatsapp reminder deep links</p>
-              </div>
-              <span className="bg-rose-50 text-rose-600 text-[11px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                {unpaidRentPayments.length} Pending
-              </span>
-            </div>
-
-            <div className="space-y-3 flex-1 overflow-y-auto max-h-[350px] pr-1">
-              {unpaidRentPayments.map(p => {
-                // Find matching tenant for phone information
-                const tenant = tenants.find(t => t.id === p.tenantId);
-                const hasPhone = tenant && tenant.phone;
-
-                // Use payment amount if it is greater than 0, otherwise calculate total active dues from tenant lease details
-                const dueAmount = p.amount > 0 
-                  ? p.amount 
-                  : (tenant 
-                      ? (tenant.monthlyRent + (tenant.guardFee ?? activeBuilding?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0))
-                      : 0
-                    );
-
-                // Send WhatsApp reminder
-                const waLink = tenant ? getReminderWhatsAppLink(
-                  tenant.phone,
-                  tenant.name,
-                  tenant.unit,
-                  dueAmount,
-                  `Day ${tenant.rentDueDateDay}`,
-                  p.monthPaidFor,
-                  activeBuilding?.reminderTemplate,
-                  activeBuilding?.currency || 'JOD'
-                ) : '#';
-
-                return (
-                  <div key={p.id} className="p-3 border border-slate-100 rounded-xl hover:border-blue-100 hover:bg-slate-50 transition-all flex flex-col justify-between gap-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-800 text-sm">{p.tenantName}</span>
-                          <span className="bg-slate-100 text-slate-600 text-[10px] uppercase font-mono px-1.5 py-0.5 rounded">
-                            Unit {p.unit}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 font-medium mt-0.5">Month: {p.monthPaidFor}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold text-xs text-slate-950">{formatCurrency(dueAmount, activeBuilding?.currency || 'JOD')}</span>
-                        <div>
-                          <span className={`inline-block text-[9px] uppercase font-bold px-2 py-0.5 rounded ${
-                            p.status === 'Overdue' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
-                          }`}>
-                            {p.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-1 pt-2 border-t border-slate-100/70">
-                      <span className="text-[10px] text-slate-400 font-medium">Due: Day {tenant?.rentDueDateDay || '5'}</span>
-                      {hasPhone ? (
-                        <a 
-                          href={waLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl px-2.5 py-1.5 transition-colors"
-                        >
-                          <Send className="w-3 h-3" />
-                          Send Remind Link
-                        </a>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 italic">No phone attached</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {unpaidRentPayments.length === 0 && (
-                <div className="text-center py-12 text-slate-300">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Percent className="w-6 h-6 text-slate-300" />
-                  </div>
-                  <p className="text-sm font-semibold text-slate-400">All current balances are clear</p>
-                  <p className="text-xs text-slate-400 mt-1">Excellent collection status this month!</p>
-                </div>
-              )}
-            </div>
-
-            {unpaidRentPayments.length > 0 && (
-              <button 
-                onClick={() => onNavigateToTab('reminders')}
-                className="w-full text-center py-2 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg mt-4 transition-colors"
-              >
-                View Automations Settings & Reminders →
-              </button>
-            )}
+          <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-50 flex justify-between items-center bg-orange-50/20 p-2 rounded-xl mt-3">
+            <span>Total Operational Out:</span>
+            <span className="font-mono font-extrabold text-slate-800">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</span>
           </div>
         </div>
+
       </div>
 
-      {/* Bottom Row - Rent ledger recent list */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-bold text-slate-800 text-lg">Union Ledger Overview</h3>
-            <p className="text-xs text-slate-400">Unified list of payouts and collections</p>
+      {/* Operations & Action Split Hub: Reminders Center (2/3 Wide) vs Union Ledger Overview Activity Feed (1/3 Narrow) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Side: Spacious, Fully Detailed Reminders Center (2/3 width) */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition-shadow">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 text-base">Reminders Center</h3>
+                <span className="bg-rose-50 text-rose-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                  <AlertCircle className="w-3 h-3" />
+                  {unpaidRentPayments.length} Active Dues
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Contact outstanding rent accounts & send customized billing statements</p>
+            </div>
+            
+            {/* Search Input Bar */}
+            <div className="relative w-full sm:w-60">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                <Search className="w-3.5 h-3.5" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search unit or tenant..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 text-xs pl-9 pr-3 py-2 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-150 rounded-xl transition-all font-medium outline-hidden"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[10px] font-bold text-slate-400 hover:text-slate-600"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Dues Cards Grid inside the spacious panel */}
+          <div className="space-y-4 overflow-y-auto max-h-[480px] pr-1.5 scrollbar-thin">
+            {(() => {
+              const filteredList = unpaidRentPayments.filter(p => {
+                const query = searchQuery.trim().toLowerCase();
+                if (!query) return true;
+                return p.tenantName.toLowerCase().includes(query) || p.unit.toLowerCase().includes(query);
+              });
+
+              if (filteredList.length === 0) {
+                return (
+                  <div className="text-center py-20 text-slate-350 bg-slate-50/50 rounded-2xl border border-dashed border-slate-150">
+                    <div className="w-12 h-12 bg-white shadow-xs rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Search className="w-5 h-5 text-slate-350" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-500">No outstanding dues match your filter</p>
+                    <p className="text-xs text-slate-400 mt-1">Try searching a different unit code or tenant name</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredList.map(p => {
+                    const tenant = tenants.find(t => t.id === p.tenantId);
+                    const hasPhone = tenant && tenant.phone;
+
+                    // Calculate due amounts and detailed splits
+                    const baseRent = Number(tenant?.monthlyRent ?? 0);
+                    const guardFee = Number(tenant?.guardFee ?? activeBuilding?.defaultGuardFee ?? 0);
+                    const maintenanceFee = Number(tenant?.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0);
+                    const totalDuesCalculated = baseRent + guardFee + maintenanceFee;
+
+                    const dueAmount = p.amount > 0 ? p.amount : totalDuesCalculated;
+
+                    const waLink = tenant ? getReminderWhatsAppLink(
+                      tenant.phone,
+                      tenant.name,
+                      tenant.unit,
+                      dueAmount,
+                      `Day ${tenant.rentDueDateDay}`,
+                      p.monthPaidFor,
+                      activeBuilding?.reminderTemplate,
+                      activeBuilding?.currency || 'JOD'
+                    ) : '#';
+
+                    return (
+                      <div key={p.id} className="p-4 border border-slate-100 bg-white rounded-xl hover:bg-slate-50/75 transition-all duration-205 flex flex-col justify-between gap-3.5 relative overflow-hidden group">
+                        {/* Unit Badge and Tenant details */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-10 h-10 bg-slate-50 group-hover:bg-blue-50/50 text-slate-700 group-hover:text-blue-600 font-extrabold text-xs flex items-center justify-center rounded-xl transition-colors border border-slate-100/80">
+                              U {p.unit}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-800 text-sm block tracking-tight line-clamp-1">{p.tenantName}</span>
+                              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Month: {p.monthPaidFor}</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-mono font-extrabold text-sm text-slate-900 block">{formatCurrency(dueAmount, activeBuilding?.currency || 'JOD')}</span>
+                            <span className={`inline-block text-[9px] uppercase font-bold px-1.5 py-0.5 rounded mt-1 ${
+                              p.status === 'Overdue' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              {p.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Detailed Split Breakdown Box */}
+                        <div className="grid grid-cols-3 gap-1 bg-slate-50 p-2.5 rounded-lg text-center border border-slate-100/50">
+                          <div>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Base rent</span>
+                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(baseRent, activeBuilding?.currency || 'JOD')}</span>
+                          </div>
+                          <div className="border-x border-slate-150">
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Guard</span>
+                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(guardFee, activeBuilding?.currency || 'JOD')}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Svc Box</span>
+                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(maintenanceFee, activeBuilding?.currency || 'JOD')}</span>
+                          </div>
+                        </div>
+
+                        {/* Card bottom details and WhatsApp triggers */}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-50">
+                          <span className="text-[10px] text-slate-450 font-semibold flex items-center gap-1 mt-1">
+                            <Calendar className="w-3 h-3 text-slate-400" />
+                            Due: Day {tenant?.rentDueDateDay || '5'} of month
+                          </span>
+
+                          {hasPhone ? (
+                            <a 
+                              href={waLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-white bg-emerald-50 hover:bg-emerald-600 rounded-xl px-3 py-2 transition-all duration-250 shrink-0 hover:shadow-xs focus:ring-1 focus:ring-emerald-200 cursor-pointer"
+                            >
+                              <Send className="w-3 h-3" />
+                              Send Reminder
+                            </a>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic font-medium">No contact attached</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
           <button 
-            onClick={() => onNavigateToTab('payments')}
-            className="text-xs font-bold text-slate-600 hover:text-slate-800"
+            onClick={() => onNavigateToTab('reminders')}
+            className="w-full text-center py-2.5 mt-5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/85 rounded-xl transition-all duration-200 focus:outline-hidden"
           >
-            Review Audit Trail
+            Go to Reminder Settings & System Automations &rarr;
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider">
-                <th className="pb-3 pt-2 pl-2">Details</th>
-                <th className="pb-3 pt-2">Scope/Category</th>
-                <th className="pb-3 pt-2">Date Logged</th>
-                <th className="pb-3 pt-2 text-right pr-2">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100/50">
+        {/* Right Side: High-density chronological Union Ledger Activity Feed (1/3 width) */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div>
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50">
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">Union Ledger Overview</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Chronological record of building cashflow</p>
+              </div>
+              <button 
+                onClick={() => onNavigateToTab('payments')}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 shrink-0 uppercase tracking-wider"
+              >
+                Full Trail
+              </button>
+            </div>
+
+            {/* List Activity Items */}
+            <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-0.5">
               {recentTransactions.map(tx => (
-                <tr key={tx.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-3 pl-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${tx.type === 'income' ? 'bg-blue-500' : 'bg-orange-500'}`}></span>
-                      <span className="font-medium text-slate-800 text-sm">{tx.title}</span>
-                    </div>
-                  </td>
-                  <td className="py-3">
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                <div 
+                  key={tx.id} 
+                  className="p-3 border border-slate-100 rounded-xl hover:bg-slate-50/75 transition-all duration-205 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`p-2 rounded-xl shrink-0 ${
                       tx.type === 'income' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'
                     }`}>
-                      {tx.category}
+                      {tx.type === 'income' ? (
+                        <ArrowUpRight className="w-4 h-4" />
+                      ) : (
+                        <ArrowDownRight className="w-4 h-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 text-xs truncate leading-normal" title={tx.title}>
+                        {tx.title}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 font-medium">
+                        <span className={`font-semibold uppercase text-[9px] px-1 py-0.2 rounded-sm shrink-0 ${
+                          tx.type === 'income' ? 'bg-blue-50/60 text-blue-500' : 'bg-orange-50/60 text-orange-500'
+                        }`}>
+                          {tx.category}
+                        </span>
+                        <span className="text-slate-350">•</span>
+                        <span>{tx.date || 'TBD'}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className={`font-mono font-extrabold text-xs block ${
+                      tx.type === 'income' ? 'text-blue-600' : 'text-orange-600'
+                    }`}>
+                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount || 0, activeBuilding?.currency || 'JOD')}
                     </span>
-                  </td>
-                  <td className="py-3 text-slate-500 text-xs font-mono">{tx.date || 'TBD'}</td>
-                  <td className={`py-3 text-right pr-2 font-mono font-bold text-xs ${
-                    tx.type === 'income' ? 'text-blue-600' : 'text-orange-500'
-                  }`}>
-                    {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount, activeBuilding?.currency || 'JOD')}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
+
               {recentTransactions.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="text-center py-6 text-slate-400">
-                    No transactions registered in this building.
-                  </td>
-                </tr>
+                <div className="text-center py-12 text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-150">
+                  <p className="text-xs font-medium">No recorded audit transactions yet.</p>
+                </div>
               )}
-            </tbody>
-          </table>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-slate-50/80 flex items-center justify-between text-[11px] text-slate-400 bg-slate-50/50 p-2.5 rounded-xl">
+            <span>Recent ledger entries:</span>
+            <span className="font-bold text-slate-700 font-mono">{recentTransactions.length} items</span>
+          </div>
         </div>
+
       </div>
     </div>
   );
