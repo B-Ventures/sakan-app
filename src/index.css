@@ -19,12 +19,6 @@
     margin: 12mm 15mm;
   }
 
-  /* Landscape layout configuration: for the wide master spreadsheet annual ledger table */
-  @page landscape-layout {
-    size: landscape;
-    margin: 10mm 15mm;
-  }
-
   /* Hide standard interface layouts, buttons, navigations, headers, and dashboard widgets */
   body, html {
     height: auto !important;
@@ -142,7 +136,6 @@
 
   /* Overrides for specific landscape-mode table (12-month common area) */
   .print-landscape {
-    page: landscape-layout !important;
   }
 
   .print-landscape table {

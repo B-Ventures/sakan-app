@@ -903,6 +903,14 @@ export default function StatementsGenerator({
           <div className={`lg:col-span-2 bg-white border border-slate-100 rounded-2xl p-6 md:p-8 shadow-sm space-y-6 ${
             statementType === 'commonArea' && statementScope === 'year' ? 'print-landscape' : 'print-portrait'
           }`} id="printable-statement-document">
+            <style dangerouslySetInnerHTML={{ __html: `
+              @media print {
+                @page {
+                  size: ${statementType === 'commonArea' && statementScope === 'year' ? 'landscape' : 'portrait'} !important;
+                  margin: ${statementType === 'commonArea' && statementScope === 'year' ? '10mm 12mm' : '12mm 15mm'} !important;
+                }
+              }
+            `}} />
             {statementScope === 'year' ? (
               // ============================================
               // RENDER ANNUAL VIEW (COMMON AREA OR UNIT LEDGER)
