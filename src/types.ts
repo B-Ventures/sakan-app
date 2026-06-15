@@ -188,3 +188,12 @@ export function getYearMonthFromDateStr(dateStr: string): string {
   
   return clean.substring(0, 7);
 }
+
+export interface UserRecord {
+  id: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  createdAt?: string;
+  isSuperAdmin?: boolean;
+}

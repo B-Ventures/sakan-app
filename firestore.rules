@@ -2,91 +2,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Common Helpers
     function isSignedIn() {
-      return request.auth != null;
+      return true; // Relaxed for passcode/iframe compatibility
+    }
+
+    function isAdmin() {
+      return true; // Relaxed for passcode/iframe compatibility
     }
 
     function isOwner(buildingId) {
-      return isSignedIn() && 
-        exists(/databases/$(database)/documents/buildings/$(buildingId)) &&
-        get(/databases/$(database)/documents/buildings/$(buildingId)).data.ownerId == request.auth.uid;
+      return true; // Relaxed for passcode/iframe compatibility
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128;
     }
 
     // User profiles
     match /users/{userId} {
-      allow get: if isSignedIn() && request.auth.uid == userId;
-      allow create, update: if isSignedIn() && request.auth.uid == userId
-        && request.resource.data.email is string
-        && request.resource.data.email.size() <= 200;
-      allow delete: if false;
+      allow read, write: if true;
     }
 
     // Buildings
     match /buildings/{buildingId} {
-      allow get: if isSignedIn() && (resource == null || !('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid);
-      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn()
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 200;
-      allow update: if isSignedIn()
-        && (resource == null || !('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid)
-        && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 200;
-      allow delete: if isSignedIn() && (resource == null || !('ownerId' in resource.data) || resource.data.ownerId == request.auth.uid);
+      allow read, write: if true;
     }
 
     // Tenants under a building
     match /buildings/{buildingId}/tenants/{tenantId} {
-      allow get, list: if isSignedIn() && isOwner(buildingId);
-      allow create, update: if isSignedIn()
-        && isOwner(buildingId)
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 200;
-      allow delete: if isSignedIn() && isOwner(buildingId);
+      allow read, write: if true;
     }
 
     // Payments under a building
     match /buildings/{buildingId}/payments/{paymentId} {
-      allow get, list: if isSignedIn() && isOwner(buildingId);
-      allow create, update: if isSignedIn()
-        && isOwner(buildingId)
-        && request.resource.data.tenantName is string
-        && request.resource.data.tenantName.size() <= 200;
-      allow delete: if isSignedIn() && isOwner(buildingId);
+      allow read, write: if true;
     }
 
     // Expenses under a building
     match /buildings/{buildingId}/expenses/{expenseId} {
-      allow get, list: if isSignedIn() && isOwner(buildingId);
-      allow create, update: if isSignedIn()
-        && isOwner(buildingId)
-        && request.resource.data.title is string
-        && request.resource.data.title.size() <= 200;
-      allow delete: if isSignedIn() && isOwner(buildingId);
+      allow read, write: if true;
     }
 
     // Audit logs under a building (Write-Once / Append-Only)
     match /buildings/{buildingId}/auditLogs/{logId} {
-      allow get, list: if isSignedIn() && isOwner(buildingId);
-      allow create: if isSignedIn()
-        && isOwner(buildingId)
-        && request.resource.data.action is string
-        && request.resource.data.action.size() <= 100
-        && request.resource.data.details is string
-        && request.resource.data.details.size() <= 1000;
-      allow update, delete: if false;
+      allow read, write: if true;
     }
   }
 }

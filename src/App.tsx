@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Tenant, Payment, Expense, Building as BuildingType } from './types';
+import { Tenant, Payment, Expense, Building as BuildingType, UserRecord } from './types';
 import { INITIAL_TENANTS, INITIAL_PAYMENTS, INITIAL_EXPENSES } from './mockData';
 import DashboardOverview from './components/DashboardOverview';
 import TenantList from './components/TenantList';
 import PaymentHistory from './components/PaymentHistory';
 import ExpenseTracker from './components/ExpenseTracker';
 import StatementsGenerator from './components/StatementsGenerator';
+import SuperAdminPanel from './components/SuperAdminPanel';
 import { 
   Building, 
   LayoutDashboard, 
@@ -30,7 +31,8 @@ import {
   Upload,
   Shield,
   Smartphone,
-  Monitor
+  Monitor,
+  Activity
 } from 'lucide-react';
 import { auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
@@ -49,7 +51,15 @@ import {
   saveExpense,
   removeExpense,
   logAction,
-  subscribeToAuditLogs
+  subscribeToAuditLogs,
+  registerUser,
+  fetchAllUsers,
+  fetchAllBuildings,
+  updateUserProfile,
+  deleteBuildingWithSubcollections,
+  fetchAllTenants,
+  fetchAllPayments,
+  fetchAllExpenses
 } from './firebaseService';
 import PropertySettingsModal from './components/PropertySettingsModal';
 import DataImporter from './components/DataImporter';
@@ -90,6 +100,18 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [triggerRefresh, setTriggerRefresh] = useState(0);
   const [buildingToDeleteId, setBuildingToDeleteId] = useState<string | null>(null);
+
+  // --- SUPERADMIN STATES ---
+  const [impersonatedUser, setImpersonatedUser] = useState<{ uid: string; email: string; displayName?: string } | null>(null);
+  const [isAdminFormVisible, setIsAdminFormVisible] = useState<boolean>(false);
+  const [adminEmailInput, setAdminEmailInput] = useState<string>('hisham@bosstsc.com');
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
+  const [allCustomers, setAllCustomers] = useState<UserRecord[]>([]);
+  const [allBuildings, setAllBuildings] = useState<BuildingType[]>([]);
+  const [allTenants, setAllTenants] = useState<any[]>([]);
+  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [allExpenses, setAllExpenses] = useState<any[]>([]);
+  const [superAdminLoading, setSuperAdminLoading] = useState<boolean>(false);
 
   // GLOBAL FLOATING TOAST NOTIFICATION SERVICE
   const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
@@ -153,9 +175,11 @@ export default function App() {
     setIsInstallable(false);
   };
 
-  const activeUserId = currentUser?.uid || (isDemoMode ? demoUser?.uid : null);
-  const activeUserEmail = currentUser?.email || (isDemoMode ? demoUser?.email : null);
-  const activeUserName = currentUser?.displayName || (isDemoMode ? demoUser?.displayName : null);
+  const activeUserId = impersonatedUser?.uid || currentUser?.uid || (isDemoMode ? demoUser?.uid : null);
+  const activeUserEmail = impersonatedUser?.email || currentUser?.email || (isDemoMode ? demoUser?.email : null);
+  const activeUserName = impersonatedUser?.displayName || currentUser?.displayName || (isDemoMode ? demoUser?.displayName : null);
+
+  const isSuperAdminSession = currentUser?.email === 'hisham@bosstsc.com' || currentUser?.email === 'hisham.balatiah@gmail.com' || currentUser?.uid === 'superadmin-hisham';
 
   // 1. Firebase Auth Listener
   useEffect(() => {
@@ -164,11 +188,23 @@ export default function App() {
         setIsDemoMode(false);
         setDemoUser(null);
         setCurrentUser(user);
+        
+        // Sync user profile to users collection so SuperAdmin list is fully populated
+        await registerUser({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL
+        });
+
         await refreshBuildingsList(user.uid);
       } else {
-        setCurrentUser(null);
-        // Do not reset demo mode in case they are active in a demo session
-        if (!isDemoMode) {
+        // Prevent clearing custom local superadmin mock login state if actively logged in
+        if (currentUser?.uid !== 'superadmin-hisham') {
+          setCurrentUser(null);
+          setImpersonatedUser(null);
+        }
+        if (!isDemoMode && currentUser?.uid !== 'superadmin-hisham') {
           setBuildings([]);
           setActiveBuilding(null);
         }
@@ -176,7 +212,50 @@ export default function App() {
       setAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [isDemoMode]);
+  }, [isDemoMode, currentUser]);
+
+  // Load SuperAdmin datasets on successful session detection
+  useEffect(() => {
+    if (isSuperAdminSession) {
+      loadSuperAdminDashboard();
+      setActiveTab('superadmin_analytics');
+    } else {
+      setAllCustomers([]);
+      setAllBuildings([]);
+    }
+  }, [currentUser, isSuperAdminSession]);
+
+  // Dynamic buildings sync: when the impersonated or active user id changes
+  useEffect(() => {
+    if (activeUserId && !isDemoMode) {
+      refreshBuildingsList(activeUserId);
+    }
+  }, [activeUserId, isDemoMode]);
+
+  const loadSuperAdminDashboard = async () => {
+    try {
+      setSuperAdminLoading(true);
+      const [usersList, buildingsList] = await Promise.all([
+        fetchAllUsers(),
+        fetchAllBuildings()
+      ]);
+      setAllCustomers(usersList);
+      setAllBuildings(buildingsList);
+
+      const [tenantsList, paymentsList, expensesList] = await Promise.all([
+        fetchAllTenants(buildingsList),
+        fetchAllPayments(buildingsList),
+        fetchAllExpenses(buildingsList)
+      ]);
+      setAllTenants(tenantsList);
+      setAllPayments(paymentsList);
+      setAllExpenses(expensesList);
+    } catch (err) {
+      console.error('Failed to load SuperAdmin workspace:', err);
+    } finally {
+      setSuperAdminLoading(false);
+    }
+  };
 
   // 2. Fetch/Refetch Buildings
   const refreshBuildingsList = async (userId: string, selectId?: string) => {
@@ -373,6 +452,42 @@ export default function App() {
     setAuthLoading(false);
   };
 
+  // SuperAdmin Secure Password Authentication
+  const handleSuperAdminPasswordSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const enteredEmail = adminEmailInput.trim().toLowerCase();
+    if (enteredEmail !== 'hisham@bosstsc.com' && enteredEmail !== 'hisham.balatiah@gmail.com') {
+      showGlobalToast('Invalid SuperAdmin email! Access Denied.', 'error');
+      return;
+    }
+    
+    const correctPassword = (import.meta as any).env.VITE_SUPERADMIN_PASSWORD || 'bosstsc2026';
+    if (adminPasswordInput === correctPassword) {
+      setIsDemoMode(false);
+      setDemoUser(null);
+      const mockAdmin: User = {
+        uid: 'superadmin-hisham',
+        email: enteredEmail,
+        displayName: enteredEmail === 'hisham.balatiah@gmail.com' ? 'Hisham (DevAdmin)' : 'Hisham (SuperAdmin)',
+        emailVerified: true,
+      } as any;
+      setCurrentUser(mockAdmin);
+      showGlobalToast('🔑 Logged in successfully as SuperAdmin!', 'success');
+      
+      // Register or update profile in users database
+      await registerUser({
+        uid: 'superadmin-hisham',
+        email: enteredEmail,
+        displayName: enteredEmail === 'hisham.balatiah@gmail.com' ? 'Hisham (DevAdmin)' : 'Hisham (SuperAdmin)',
+        photoURL: ''
+      });
+      
+      await refreshBuildingsList('superadmin-hisham');
+    } else {
+      showGlobalToast('Incorrect SuperAdmin password! Access Denied.', 'error');
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       if (isDemoMode) {
@@ -380,7 +495,14 @@ export default function App() {
         setDemoUser(null);
         setBuildings([]);
         setActiveBuilding(null);
+      } else if (currentUser?.uid === 'superadmin-hisham') {
+        setCurrentUser(null);
+        setImpersonatedUser(null);
+        setBuildings([]);
+        setActiveBuilding(null);
+        showGlobalToast('Admin session ended. Signed out.', 'info');
       } else {
+        setImpersonatedUser(null);
         await signOut(auth);
       }
     } catch (error) {
@@ -1183,13 +1305,60 @@ export default function App() {
               A secure, installable PWA designed for mobile with offline-first tracking.
             </p>
           </div>
+
+          {/* Collapsible SuperAdmin Password entryway */}
+          <div className="border-t border-slate-100/80 pt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setIsAdminFormVisible(!isAdminFormVisible)}
+              className="text-slate-400 hover:text-slate-600 transition-colors text-[10px] font-extrabold tracking-wider uppercase font-mono inline-flex items-center gap-1 cursor-pointer"
+            >
+              <Shield className="w-3 h-3 text-slate-400" />
+              {isAdminFormVisible ? 'Hide Admin access' : 'SuperAdmin Entrance'}
+            </button>
+
+            {isAdminFormVisible && (
+              <form onSubmit={handleSuperAdminPasswordSignIn} className="mt-4 p-4 bg-slate-50 border border-slate-200/60 rounded-2xl text-left space-y-3 animate-in slide-in-from-top-2 duration-200">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">SuperAdmin Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={adminEmailInput}
+                    onChange={(e) => setAdminEmailInput(e.target.value)}
+                    placeholder="hisham@bosstsc.com"
+                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-blue-500 font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">Secret Passcode</label>
+                  <input
+                    type="password"
+                    required
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    placeholder="Enter password"
+                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-blue-500 font-mono"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors cursor-pointer text-center uppercase tracking-wider font-mono"
+                >
+                  Verify Access
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
   // RENDER PROPERTY MANAGEMENT ONBOARDING (IF REGISTERS ZERO BUILDINGS)
-  if (buildings.length === 0) {
+  if (buildings.length === 0 && !(isSuperAdminSession && !impersonatedUser)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans">
         <form onSubmit={handleCreateBuilding} className="max-w-md w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-10 shadow-xl space-y-6">
@@ -1276,92 +1445,119 @@ export default function App() {
 
   // MAIN SECURE DASHBOARD FRAME
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden" id="application-container">
+    <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden" id="application-container">
+      {impersonatedUser && (
+        <div className="bg-red-600 text-white text-[11px] font-black tracking-wide py-2 px-4 shadow-md flex items-center justify-between shrink-0 select-none animate-in fade-in-50 slide-in-from-top-1 duration-200" id="impersonation-support-ribbon">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+            <span>⚠️ ACTIVE SUPPORT SESSION: WORKING UNDER OWNER CLIENT CONTEXT ({impersonatedUser.email})</span>
+          </div>
+          <button
+            onClick={() => {
+              setImpersonatedUser(null);
+              showGlobalToast('Diagnostic support tunnel ended.', 'success');
+            }}
+            className="px-3 py-1 bg-white hover:bg-slate-100 text-red-600 text-[9px] font-extrabold uppercase rounded transition-colors tracking-widest cursor-pointer"
+          >
+            End and Return
+          </button>
+        </div>
+      )}
+      <div className="flex flex-1 overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 border-r border-slate-200 bg-white flex-col shrink-0" id="desktop-sidebar">
         <div className="p-6 flex flex-col h-full overflow-y-auto">
           
-          {/* Building Selector Dropdown */}
-          <div className="relative mb-6">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsBuildingMenuOpen(!isBuildingMenuOpen)}
-                className="flex-1 flex items-center justify-between gap-2 p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-all text-left min-w-0"
-              >
-                <div className="min-w-0">
-                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">SELECTED PROPERTY</span>
-                  <span className="text-xs font-bold text-slate-800 block truncate">{activeBuilding?.name}</span>
-                </div>
-                <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
-              </button>
-              <button
-                onClick={() => setIsPropertySettingsOpen(true)}
-                className="bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200/80 rounded-xl p-3 shrink-0 flex items-center justify-center transition-colors font-semibold"
-                title="Property Configurations & Lists"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
+          {/* Building Selector Dropdown or SuperAdmin System Control Header */}
+          {isSuperAdminSession && !impersonatedUser ? (
+            <div className="mb-6 p-4 bg-slate-900 text-white rounded-2xl border border-slate-800">
+              <span className="text-[9px] font-mono font-extrabold text-red-400 block tracking-widest uppercase">SYSTEM CONTROL CORE</span>
+              <span className="text-sm font-black block mt-1 tracking-tight">Master Console</span>
             </div>
-
-            {isBuildingMenuOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 shadow-xl rounded-xl z-50 overflow-hidden divide-y divide-slate-50">
-                <div className="max-h-48 overflow-y-auto">
-                  {buildings.map((b) => (
-                    <button
-                      key={b.id}
-                      onClick={() => {
-                        setActiveBuilding(b);
-                        setIsBuildingMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors truncate block ${
-                        b.id === activeBuilding?.id ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {b.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="p-2 bg-slate-50">
-                  <button
-                    onClick={() => {
-                      setIsBuildingMenuOpen(false);
-                      setIsNewBuildingModalOpen(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add New Property
-                  </button>
-                </div>
+          ) : (
+            <div className="relative mb-6">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsBuildingMenuOpen(!isBuildingMenuOpen)}
+                  className="flex-1 flex items-center justify-between gap-2 p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-xl transition-all text-left min-w-0"
+                >
+                  <div className="min-w-0">
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">SELECTED PROPERTY</span>
+                    <span className="text-xs font-bold text-slate-800 block truncate">{activeBuilding?.name}</span>
+                  </div>
+                  <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
+                <button
+                  onClick={() => setIsPropertySettingsOpen(true)}
+                  className="bg-slate-50 hover:bg-slate-100 text-slate-500 border border-slate-200/80 rounded-xl p-3 shrink-0 flex items-center justify-center transition-colors font-semibold"
+                  title="Property Configurations & Lists"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
               </div>
-            )}
-          </div>
+
+              {isBuildingMenuOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 shadow-xl rounded-xl z-50 overflow-hidden divide-y divide-slate-50">
+                  <div className="max-h-48 overflow-y-auto">
+                    {buildings.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          setActiveBuilding(b);
+                          setIsBuildingMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors truncate block ${
+                          b.id === activeBuilding?.id ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-2 bg-slate-50">
+                    <button
+                      onClick={() => {
+                        setIsBuildingMenuOpen(false);
+                        setIsNewBuildingModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add New Property
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <nav className="space-y-1 flex-1">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'overview'
-                  ? 'bg-slate-100 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Overview
-            </button>
+            {!(isSuperAdminSession && !impersonatedUser) && (
+              <>
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'overview'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  Overview
+                </button>
 
-            <button
-              onClick={() => setActiveTab('tenants')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'tenants'
-                  ? 'bg-slate-100 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              id="tab-btn-tenants"
-            >
-              <Users className="w-4 h-4" />
-              Units & Beneficiaries
-            </button>
+                <button
+                  onClick={() => setActiveTab('tenants')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'tenants'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-tenants"
+                >
+                  <Users className="w-4 h-4" />
+                  Units & Beneficiaries
+                </button>
 
             <button
               onClick={() => setActiveTab('payments')}
@@ -1414,6 +1610,38 @@ export default function App() {
               <Shield className="w-4 h-4" />
               Security Audit Trail
             </button>
+              </>
+            )}
+
+            {isSuperAdminSession && (
+              <>
+                <button
+                  onClick={() => setActiveTab('superadmin_analytics')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'superadmin_analytics'
+                      ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-superadmin-analytics"
+                >
+                  <Activity className="w-4 h-4 text-red-600" />
+                  Global Platform Analytics
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('superadmin_directory')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'superadmin_directory'
+                      ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-superadmin-directory"
+                >
+                  <Shield className="w-4 h-4 text-red-600" />
+                  SuperAdmin Directory
+                </button>
+              </>
+            )}
           </nav>
 
           {/* PWA Promotion Card / Installed Badge */}
@@ -1559,6 +1787,9 @@ export default function App() {
               {activeTab === 'expenses' && 'Building Outflow Expenses'}
               {activeTab === 'reminders' && 'Statements & Alerts'}
               {activeTab === 'audit' && 'System Audit Trail Ledger'}
+              {activeTab === 'superadmin_analytics' && '📈 Global Platform Analytics'}
+              {activeTab === 'superadmin_directory' && '🛡️ System SuperAdmin Customer Directory'}
+              {activeTab === 'superadmin' && '🛡️ System SuperAdmin Customer Directory'}
             </h1>
           </div>
           
@@ -1586,6 +1817,16 @@ export default function App() {
                 className="px-3 py-1.5 border border-slate-200 text-xs text-slate-600 rounded bg-white hover:bg-slate-50 transition-colors font-semibold"
               >
                 Send Reminders
+              </button>
+            )}
+            {isSuperAdminSession && (activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory') && (
+              <button
+                onClick={loadSuperAdminDashboard}
+                disabled={superAdminLoading}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 transition-colors text-xs font-bold font-mono text-slate-200 rounded-lg flex items-center gap-2 border border-slate-700 active:scale-95 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${superAdminLoading ? 'animate-spin' : ''}`} />
+                SYNC ENVIRONMENT
               </button>
             )}
           </div>
@@ -1663,49 +1904,102 @@ export default function App() {
                   isDemoMode={isDemoMode}
                 />
               )}
+
+              {(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory') && isSuperAdminSession && (
+                <SuperAdminPanel
+                  customers={allCustomers}
+                  buildings={allBuildings}
+                  tenants={allTenants}
+                  payments={allPayments}
+                  expenses={allExpenses}
+                  loading={superAdminLoading}
+                  impersonatedUser={impersonatedUser}
+                  activeSubTab={activeTab === 'superadmin_directory' ? 'directory' : 'analytics'}
+                  onChangeSubTab={(tab) => setActiveTab(tab === 'directory' ? 'superadmin_directory' : 'superadmin_analytics')}
+                  onImpersonate={(user) => {
+                    setImpersonatedUser(user);
+                    setActiveTab('overview');
+                    showGlobalToast(`⚠️ Impersonation mode active: Viewing as owner ${user.email}`, 'warning');
+                  }}
+                  onEndImpersonation={() => {
+                    setImpersonatedUser(null);
+                    showGlobalToast('Impersonation mode ended. Back to Admin area.', 'success');
+                  }}
+                  onRefresh={loadSuperAdminDashboard}
+                />
+              )}
             </>
           )}
         </main>
       </div>
+    </div>
 
       {/* Mobile Footer Tab Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-5 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'overview' ? 'text-blue-600' : 'text-slate-400'}`}
-        >
-          <LayoutDashboard className="w-4 h-4" />
-          Overview
-        </button>
-        <button
-          onClick={() => setActiveTab('tenants')}
-          className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'tenants' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
-        >
-          <Users className="w-4 h-4" />
-          Units
-        </button>
-        <button
-          onClick={() => setActiveTab('payments')}
-          className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'payments' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
-        >
-          <CreditCard className="w-4 h-4" />
-          Ledger
-        </button>
-        <button
-          onClick={() => setActiveTab('expenses')}
-          className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'expenses' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
-        >
-          <DollarSign className="w-4 h-4" />
-          Expenses
-        </button>
-        <button
-          onClick={() => setActiveTab('reminders')}
-          className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'reminders' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
-        >
-          <FileText className="w-4 h-4" />
-          Alerts
-        </button>
-      </div>
+      {!(isSuperAdminSession && !impersonatedUser) ? (
+        <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid ${isSuperAdminSession ? 'grid-cols-6' : 'grid-cols-5'} p-2 z-40 text-center text-[9px] font-bold text-slate-500`}>
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'overview' ? 'text-blue-600' : 'text-slate-400'}`}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('tenants')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'tenants' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <Users className="w-4 h-4" />
+            Units
+          </button>
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'payments' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <CreditCard className="w-4 h-4" />
+            Ledger
+          </button>
+          <button
+            onClick={() => setActiveTab('expenses')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'expenses' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <DollarSign className="w-4 h-4" />
+            Expenses
+          </button>
+          <button
+            onClick={() => setActiveTab('reminders')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'reminders' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <FileText className="w-4 h-4" />
+            Alerts
+          </button>
+          {isSuperAdminSession && (
+            <button
+              onClick={() => setActiveTab('superadmin_analytics')}
+              className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+            >
+              <Shield className="w-4 h-4 text-red-500" />
+              Admin
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-2 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
+          <button
+            onClick={() => setActiveTab('superadmin_analytics')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_analytics' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <Activity className="w-5 h-5 text-red-500" />
+            Global Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab('superadmin_directory')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_directory' ? 'text-red-650 font-extrabold' : 'text-slate-400'}`}
+          >
+            <Shield className="w-5 h-5 text-red-500" />
+            SuperAdmin Registry
+          </button>
+        </div>
+      )}
 
       {/* POPUP MODAL: Add New Property Building */}
       {isNewBuildingModalOpen && (

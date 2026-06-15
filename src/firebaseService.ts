@@ -12,7 +12,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { Building, Tenant, Payment, Expense, AuditLog } from './types';
+import { Building, Tenant, Payment, Expense, AuditLog, UserRecord } from './types';
 import { clientRateLimiter } from './utils/rateLimiter';
 
 // satisfaction of Layer 9: Rate limiting validation gate before cloud writes
@@ -318,4 +318,155 @@ export function subscribeToAuditLogs(
     onError(error);
   });
 }
+
+// ==========================================
+// SuperAdmin Database Operations
+// ==========================================
+
+export async function registerUser(user: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }): Promise<void> {
+  const path = `users/${user.uid}`;
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    await setDoc(userRef, cleanUndefined({
+      id: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || 'No Name',
+      photoURL: user.photoURL || '',
+      createdAt: new Date().toISOString(),
+    }), { merge: true });
+  } catch (error) {
+    console.error('Failed to sync user profile:', error);
+  }
+}
+
+export async function fetchAllUsers(): Promise<UserRecord[]> {
+  const path = 'users';
+  try {
+    const snapshot = await getDocs(collection(db, path));
+    const users: UserRecord[] = [];
+    snapshot.forEach((docSnap) => {
+      users.push({ id: docSnap.id, ...docSnap.data() } as UserRecord);
+    });
+    return users;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+export async function fetchAllBuildings(): Promise<Building[]> {
+  const path = 'buildings';
+  try {
+    const snapshot = await getDocs(collection(db, path));
+    const buildings: Building[] = [];
+    snapshot.forEach((docSnap) => {
+      buildings.push({ id: docSnap.id, ...docSnap.data() } as Building);
+    });
+    return buildings;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+    return [];
+  }
+}
+
+export async function updateUserProfile(userId: string, data: Partial<UserRecord>): Promise<void> {
+  const path = `users/${userId}`;
+  try {
+    enforceRateLimit('profile_write');
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, cleanUndefined(data));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+    throw error;
+  }
+}
+
+export async function deleteBuildingWithSubcollections(buildingId: string): Promise<void> {
+  const path = `buildings/${buildingId}`;
+  try {
+    enforceRateLimit('building_write');
+
+    // Fetch and delete all subcollection documents
+    const subcollections = ['tenants', 'payments', 'expenses', 'auditLogs'];
+    for (const sub of subcollections) {
+      const q = collection(db, 'buildings', buildingId, sub);
+      const snap = await getDocs(q);
+      const batchPromises: Promise<void>[] = [];
+      snap.forEach((docSnap) => {
+        batchPromises.push(deleteDoc(docSnap.ref));
+      });
+      await Promise.all(batchPromises);
+    }
+
+    // Finally delete the building itself
+    await deleteDoc(doc(db, 'buildings', buildingId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
+  }
+}
+
+export async function fetchAllTenants(buildings: Building[]): Promise<(Tenant & { buildingName: string; ownerId: string })[]> {
+  const tenants: (Tenant & { buildingName: string; ownerId: string })[] = [];
+  try {
+    await Promise.all(buildings.map(async (b) => {
+      const q = collection(db, 'buildings', b.id, 'tenants');
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        tenants.push({
+          id: docSnap.id,
+          buildingName: b.name,
+          ownerId: b.ownerId,
+          ...docSnap.data()
+        } as Tenant & { buildingName: string; ownerId: string });
+      });
+    }));
+  } catch (error) {
+    console.error("Failed to fetch all tenants for superadmin:", error);
+  }
+  return tenants;
+}
+
+export async function fetchAllPayments(buildings: Building[]): Promise<(Payment & { buildingName: string; ownerId: string })[]> {
+  const payments: (Payment & { buildingName: string; ownerId: string })[] = [];
+  try {
+    await Promise.all(buildings.map(async (b) => {
+      const q = collection(db, 'buildings', b.id, 'payments');
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        payments.push({
+          id: docSnap.id,
+          buildingName: b.name,
+          ownerId: b.ownerId,
+          ...docSnap.data()
+        } as Payment & { buildingName: string; ownerId: string });
+      });
+    }));
+  } catch (error) {
+    console.error("Failed to fetch all payments for superadmin:", error);
+  }
+  return payments;
+}
+
+export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense & { buildingName: string; ownerId: string })[]> {
+  const expenses: (Expense & { buildingName: string; ownerId: string })[] = [];
+  try {
+    await Promise.all(buildings.map(async (b) => {
+      const q = collection(db, 'buildings', b.id, 'expenses');
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        expenses.push({
+          id: docSnap.id,
+          buildingName: b.name,
+          ownerId: b.ownerId,
+          ...docSnap.data()
+        } as Expense & { buildingName: string; ownerId: string });
+      });
+    }));
+  } catch (error) {
+    console.error("Failed to fetch all expenses for superadmin:", error);
+  }
+  return expenses;
+}
+
 
