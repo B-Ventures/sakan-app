@@ -69,6 +69,8 @@ export interface Building {
   address?: string;
   ownerId: string;
   createdAt: string;
+  isSandbox?: boolean;
+  isDemo?: boolean;
   currency?: string; // e.g. 'JOD', 'USD' (defaults to 'JOD')
   defaultBaseRent?: number; // e.g. 1000
   defaultGuardFee?: number; // e.g. 50
