@@ -600,7 +600,8 @@ export default function StatementsGenerator({
       .replace(/{RentAmount}/g, formatVal(finalAmount))
       .replace(/{ShareAmount}/g, formatVal(finalAmount))
       .replace(/{DueDay}/g, t.rentDueDateDay.toString())
-      .replace(/{Month}/g, pMonth);
+      .replace(/{Month}/g, pMonth)
+      .replace(/{transfer_ID}/g, building?.bankTransferId || '');
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -1633,7 +1634,8 @@ export default function StatementsGenerator({
                     `Day ${tenant.rentDueDateDay}`,
                     p.monthPaidFor,
                     reminderTemplate,
-                    building?.currency || 'JOD'
+                    building?.currency || 'JOD',
+                    building?.bankTransferId
                   ) : '#';
 
                   return (

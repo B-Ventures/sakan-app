@@ -179,7 +179,7 @@ export default function App() {
   const activeUserEmail = impersonatedUser?.email || currentUser?.email || (isDemoMode ? demoUser?.email : null);
   const activeUserName = impersonatedUser?.displayName || currentUser?.displayName || (isDemoMode ? demoUser?.displayName : null);
 
-  const isSuperAdminSession = currentUser?.email === 'hisham@bosstsc.com' || currentUser?.email === 'hisham.balatiah@gmail.com' || currentUser?.uid === 'superadmin-hisham';
+  const isSuperAdminSession = currentUser?.email === 'hisham@bosstsc.com' || currentUser?.uid === 'superadmin-hisham';
 
   // 1. Firebase Auth Listener
   useEffect(() => {

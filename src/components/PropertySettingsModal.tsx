@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Building, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_PAYMENT_METHODS, DEFAULT_INCOME_CATEGORIES, Tenant, Payment, Expense } from '../types';
-import { Settings, Home, DollarSign, Wallet, FileSpreadsheet, Plus, Edit2, Trash2, Save, X, Activity, Download, Upload, Shield, RefreshCw } from 'lucide-react';
+import { Building, DEFAULT_EXPENSE_CATEGORIES, DEFAULT_PAYMENT_METHODS, DEFAULT_INCOME_CATEGORIES, Tenant, Payment, Expense, CustomPaymentMethod, normalizePaymentMethods } from '../types';
+import { Settings, Home, DollarSign, Wallet, FileSpreadsheet, Plus, Edit2, Trash2, Save, X, Activity, Download, Upload, Shield, RefreshCw, CreditCard, Landmark } from 'lucide-react';
 
 interface PropertySettingsModalProps {
   isOpen: boolean;
@@ -41,17 +41,30 @@ export default function PropertySettingsModal({
   const [defaultBaseRent, setDefaultBaseRent] = useState<number | string>(building.defaultBaseRent ?? 1000);
   const [defaultGuardFee, setDefaultGuardFee] = useState<number | string>(building.defaultGuardFee ?? 50);
   const [defaultMaintenanceFee, setDefaultMaintenanceFee] = useState<number | string>(building.defaultMaintenanceFee ?? 30);
+  const [bankTransferId, setBankTransferId] = useState(building.bankTransferId || '');
 
   // Lists State initialized from building or helper defaults
   const [expenseCategories, setExpenseCategories] = useState<string[]>(
     building.customExpenseCategories || DEFAULT_EXPENSE_CATEGORIES
   );
-  const [paymentMethods, setPaymentMethods] = useState<string[]>(
-    building.customPaymentMethods || DEFAULT_PAYMENT_METHODS
+  const [paymentMethods, setPaymentMethods] = useState<CustomPaymentMethod[]>(() =>
+    normalizePaymentMethods(building.customPaymentMethods, building.bankTransferId)
   );
   const [incomeSplits, setIncomeSplits] = useState<string[]>(
     building.customIncomeCategories || DEFAULT_INCOME_CATEGORIES
   );
+
+  // States for adding a custom payment method
+  const [newMethodName, setNewMethodName] = useState('');
+  const [newMethodType, setNewMethodType] = useState<'Cash' | 'Transfer' | 'Credit Card'>('Cash');
+  const [newMethodTransferId, setNewMethodTransferId] = useState('');
+  const [newMethodPaymentLink, setNewMethodPaymentLink] = useState('');
+
+  // States for editing a custom payment method
+  const [editingMethodName, setEditingMethodName] = useState('');
+  const [editingMethodType, setEditingMethodType] = useState<'Cash' | 'Transfer' | 'Credit Card'>('Cash');
+  const [editingMethodTransferId, setEditingMethodTransferId] = useState('');
+  const [editingMethodPaymentLink, setEditingMethodPaymentLink] = useState('');
 
   const [commonIncomes, setCommonIncomes] = useState<string[]>(
     building.commonAreaIncomeCategories || ['Guard Salary', 'Service Box']
@@ -77,8 +90,9 @@ export default function PropertySettingsModal({
     setDefaultBaseRent(building.defaultBaseRent ?? 1000);
     setDefaultGuardFee(building.defaultGuardFee ?? 50);
     setDefaultMaintenanceFee(building.defaultMaintenanceFee ?? 30);
+    setBankTransferId(building.bankTransferId || '');
     setExpenseCategories(building.customExpenseCategories || DEFAULT_EXPENSE_CATEGORIES);
-    setPaymentMethods(building.customPaymentMethods || DEFAULT_PAYMENT_METHODS);
+    setPaymentMethods(normalizePaymentMethods(building.customPaymentMethods, building.bankTransferId || bankTransferId));
     setIncomeSplits(building.customIncomeCategories || DEFAULT_INCOME_CATEGORIES);
     setCommonIncomes(building.commonAreaIncomeCategories || ['Guard Salary', 'Service Box']);
     setCommonExpenses(building.commonAreaExpenseCategories || ['Staff Salary', 'Cleaning', 'Utilities']);
@@ -128,6 +142,7 @@ export default function PropertySettingsModal({
         defaultBaseRent: Number(defaultBaseRent) || 0,
         defaultGuardFee: Number(defaultGuardFee) || 0,
         defaultMaintenanceFee: Number(defaultMaintenanceFee) || 0,
+        bankTransferId,
       });
       showToast('General property settings saved successfully', 'success');
     } catch (err) {
@@ -139,6 +154,34 @@ export default function PropertySettingsModal({
   };
 
   const handleAddItem = async (tab: SettingsTab) => {
+    if (tab === 'paymentMethods') {
+      const nameVal = newMethodName.trim();
+      if (!nameVal) {
+        showToast('Please enter a payment method name', 'error');
+        return;
+      }
+      if (paymentMethods.some(x => x.name.toLowerCase() === nameVal.toLowerCase())) {
+        showToast('Payment method already exists', 'error');
+        return;
+      }
+      const newMethod: CustomPaymentMethod = {
+        id: `pm-${Date.now()}`,
+        name: nameVal,
+        type: newMethodType,
+        transferId: newMethodType === 'Transfer' ? newMethodTransferId.trim() : undefined,
+        paymentLink: newMethodType === 'Credit Card' ? newMethodPaymentLink.trim() : undefined,
+      };
+      const updatedList = [...paymentMethods, newMethod];
+      setPaymentMethods(updatedList);
+      await onUpdateSettings({ customPaymentMethods: updatedList });
+      showToast(`Added payment method: "${nameVal}"`, 'success');
+      setNewMethodName('');
+      setNewMethodType('Cash');
+      setNewMethodTransferId('');
+      setNewMethodPaymentLink('');
+      return;
+    }
+
     if (!newItemText.trim()) return;
     const item = newItemText.trim();
     let updatedList: string[] = [];
@@ -157,19 +200,10 @@ export default function PropertySettingsModal({
       setCommonExpenses(updatedCommon);
 
       await onUpdateSettings({ 
-        customExpenseCategories: updatedList,
-        commonAreaExpenseCategories: updatedCommon
+          customExpenseCategories: updatedList,
+          commonAreaExpenseCategories: updatedCommon
       });
       showToast(`Added expense category: "${item}"`, 'success');
-    } else if (tab === 'paymentMethods') {
-      if (paymentMethods.includes(item)) {
-        showToast('Payment method already exists', 'error');
-        return;
-      }
-      updatedList = [...paymentMethods, item];
-      setPaymentMethods(updatedList);
-      await onUpdateSettings({ customPaymentMethods: updatedList });
-      showToast(`Added payment method: "${item}"`, 'success');
     } else if (tab === 'incomeSplits') {
       if (incomeSplits.includes(item)) {
         showToast('Income split field already exists', 'error');
@@ -196,9 +230,39 @@ export default function PropertySettingsModal({
   const handleStartEdit = (index: number, currentText: string) => {
     setEditingIndex(index);
     setEditingText(currentText);
+    if (activeTab === 'paymentMethods') {
+      const pm = paymentMethods[index];
+      if (pm) {
+        setEditingMethodName(pm.name);
+        setEditingMethodType(pm.type);
+        setEditingMethodTransferId(pm.transferId || '');
+        setEditingMethodPaymentLink(pm.paymentLink || '');
+      }
+    }
   };
 
   const handleSaveEdit = async (tab: SettingsTab, index: number) => {
+    if (tab === 'paymentMethods') {
+      const nameVal = editingMethodName.trim();
+      if (!nameVal) {
+        showToast('Please enter a name for the payment method', 'error');
+        return;
+      }
+      const updatedList = [...paymentMethods];
+      updatedList[index] = {
+        ...updatedList[index],
+        name: nameVal,
+        type: editingMethodType,
+        transferId: editingMethodType === 'Transfer' ? editingMethodTransferId.trim() : undefined,
+        paymentLink: editingMethodType === 'Credit Card' ? editingMethodPaymentLink.trim() : undefined,
+      };
+      setPaymentMethods(updatedList);
+      await onUpdateSettings({ customPaymentMethods: updatedList });
+      showToast(`Updated payment method config for "${nameVal}"`, 'success');
+      setEditingIndex(null);
+      return;
+    }
+
     if (!editingText.trim()) return;
     const item = editingText.trim();
     let updatedList: string[] = [];
@@ -217,12 +281,6 @@ export default function PropertySettingsModal({
         commonAreaExpenseCategories: updatedCommon
       });
       showToast(`Updated expense category identifier to "${item}"`, 'success');
-    } else if (tab === 'paymentMethods') {
-      updatedList = [...paymentMethods];
-      updatedList[index] = item;
-      setPaymentMethods(updatedList);
-      await onUpdateSettings({ customPaymentMethods: updatedList });
-      showToast(`Updated payment method label to "${item}"`, 'success');
     } else if (tab === 'incomeSplits') {
       const oldItem = incomeSplits[index];
       updatedList = [...incomeSplits];
@@ -268,9 +326,9 @@ export default function PropertySettingsModal({
         commonAreaExpenseCategories: updatedCommon
       });
     } else if (tab === 'paymentMethods') {
-      updatedList = paymentMethods.filter((m) => m !== itemToDelete);
-      setPaymentMethods(updatedList);
-      await onUpdateSettings({ customPaymentMethods: updatedList });
+      const updated = paymentMethods.filter((m) => m.name !== itemToDelete);
+      setPaymentMethods(updated);
+      await onUpdateSettings({ customPaymentMethods: updated });
     } else if (tab === 'incomeSplits') {
       updatedList = incomeSplits.filter((s) => s !== itemToDelete);
       setIncomeSplits(updatedList);
@@ -551,8 +609,8 @@ export default function PropertySettingsModal({
               </form>
             )}
 
-            {/* TAB CONTENT: LIST BASED CATEGORIES (Expenses, Methods, splits) */}
-            {activeTab !== 'general' && (
+            {/* TAB CONTENT: LIST BASED CATEGORIES (Expenses, splits) */}
+            {activeTab !== 'general' && activeTab !== 'paymentMethods' && (
               <div className="space-y-4">
                 {/* Add Box with Classification Selector for Expenses and Income Splits */}
                 <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3 font-sans">
@@ -564,8 +622,6 @@ export default function PropertySettingsModal({
                       placeholder={
                         activeTab === 'expenses' 
                           ? "e.g., Elevators, Guard Salary..." 
-                          : activeTab === 'paymentMethods' 
-                          ? "e.g., Bank Transfer, Cash..." 
                           : "e.g., Rent portion, Service Box..."
                       }
                       className="flex-1 text-xs px-3 py-2.5 bg-white rounded-xl border focus:outline-none focus:border-blue-500 font-sans shadow-xs"
@@ -618,7 +674,7 @@ export default function PropertySettingsModal({
 
                 {/* Items loop */}
                 <div className="border border-slate-100 rounded-2xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-50 shadow-xs font-sans">
-                  {((activeTab === 'expenses' ? expenseCategories : activeTab === 'paymentMethods' ? paymentMethods : incomeSplits) || []).map((item, idx) => (
+                  {((activeTab === 'expenses' ? expenseCategories : incomeSplits) || []).map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-3 hover:bg-slate-50/50 transition-colors text-xs text-slate-700">
                       {editingIndex === idx ? (
                         <div className="flex items-center gap-2 w-full">
@@ -667,7 +723,7 @@ export default function PropertySettingsModal({
                           </div>
                           <div className="flex items-center gap-1.5 font-sans">
                             <button
-                              onClick={() => handleStartEdit(idx, item)}
+                               onClick={() => handleStartEdit(idx, item)}
                               className="text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-100"
                               title="Edit"
                             >
@@ -685,9 +741,255 @@ export default function PropertySettingsModal({
                       )}
                     </div>
                   ))}
-                  {((activeTab === 'expenses' ? expenseCategories : activeTab === 'paymentMethods' ? paymentMethods : incomeSplits) || []).length === 0 && (
+                  {((activeTab === 'expenses' ? expenseCategories : incomeSplits) || []).length === 0 && (
                     <div className="p-8 text-center text-slate-400 font-sans">
                       No configurations found.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: CUSTOM STRUCTURED PAYMENT METHODS */}
+            {activeTab === 'paymentMethods' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Custom Payment Methods Creation Form */}
+                <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl space-y-3 text-xs">
+                  <div className="flex items-center gap-1.5 text-blue-700 font-bold uppercase tracking-wider text-[10px] pb-1 border-b border-slate-200/50">
+                    <Plus className="w-3.5 h-3.5" />
+                    Configure New Payment Option
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 font-sans">Option Behavior Type *</label>
+                      <select
+                        value={newMethodType}
+                        onChange={(e) => setNewMethodType(e.target.value as any)}
+                        className="w-full text-xs p-2 bg-white rounded-xl border focus:outline-none focus:border-blue-500 font-medium"
+                      >
+                        <option value="Cash">Cash Insertion</option>
+                        <option value="Transfer">Bank Transfer / Wire</option>
+                        <option value="Credit Card">Credit Card (Stripe)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 font-sans">Option Display Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Arab Bank IBAN, Office Cash"
+                        value={newMethodName}
+                        onChange={(e) => setNewMethodName(e.target.value)}
+                        className="w-full text-xs p-2 bg-white rounded-xl border focus:outline-none focus:border-blue-500 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {newMethodType === 'Transfer' && (
+                    <div className="space-y-1 p-2 bg-blue-50/50 border border-blue-100/70 rounded-xl">
+                      <label className="block text-[9px] font-extrabold text-blue-700 uppercase tracking-wider">
+                        Predefined IBAN / ALIAS / Transfer ID *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter IBAN, ACCOUNT, ALIAS, or ID"
+                        value={newMethodTransferId}
+                        onChange={(e) => setNewMethodTransferId(e.target.value)}
+                        className="w-full text-xs p-2 bg-white rounded-lg border focus:outline-none focus:border-blue-500 font-mono"
+                      />
+                      <p className="text-[9px] text-slate-400">
+                        This ID will be shared in WhatsApp templates via the <code className="bg-white/70 px-1 py-0.5 rounded font-mono text-[9px] text-indigo-700">{`{transfer_ID}`}</code> placeholder.
+                      </p>
+                    </div>
+                  )}
+
+                  {newMethodType === 'Credit Card' && (
+                    <div className="space-y-1.5 p-2 bg-purple-50/50 border border-purple-100/70 rounded-xl">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[9px] font-extrabold text-purple-700 uppercase tracking-wider">
+                          Stripe Sandbox Payment Link
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const rand = Math.random().toString(36).substring(2, 10).toUpperCase();
+                            setNewMethodPaymentLink(`https://checkout.stripe.com/pay/cs_test_sand_${rand}`);
+                          }}
+                          className="text-[8px] bg-purple-100 text-purple-700 font-extrabold px-1.5 py-0.5 rounded hover:bg-purple-200 transition-colors uppercase cursor-pointer"
+                        >
+                          Autogen
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="e.g., https://checkout.stripe.com/pay/cs_test_..."
+                        value={newMethodPaymentLink}
+                        onChange={(e) => setNewMethodPaymentLink(e.target.value)}
+                        className="w-full text-xs p-2 bg-white rounded-lg border focus:outline-none focus:border-purple-500 font-mono"
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => handleAddItem('paymentMethods')}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1 shadow-xs transition-colors cursor-pointer uppercase tracking-wider"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Save & Create Option
+                  </button>
+                </div>
+
+                {/* Configurations List */}
+                <div className="border border-slate-100 rounded-2xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-50 shadow-xs">
+                  {paymentMethods.map((pm, idx) => {
+                    const isEditingThis = editingIndex === idx;
+                    return (
+                      <div key={pm.id || idx} className="p-3 hover:bg-slate-50/50 transition-colors text-xs text-slate-700">
+                        {isEditingThis ? (
+                          <div className="space-y-3 bg-slate-50/50 p-2.5 rounded-xl border border-slate-200/60">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Edit Name</label>
+                                <input
+                                  type="text"
+                                  value={editingMethodName}
+                                  onChange={(e) => setEditingMethodName(e.target.value)}
+                                  className="w-full text-xs p-1.5 rounded border bg-white focus:outline-none focus:border-blue-500 font-semibold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Edit Behavior</label>
+                                <select
+                                  value={editingMethodType}
+                                  onChange={(e) => setEditingMethodType(e.target.value as any)}
+                                  className="w-full text-xs p-1.5 rounded border bg-white focus:outline-none focus:border-blue-500 font-semibold"
+                                >
+                                  <option value="Cash">Cash Insertion</option>
+                                  <option value="Transfer">Bank Transfer / Wire</option>
+                                  <option value="Credit Card">Credit Card (Stripe)</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {editingMethodType === 'Transfer' && (
+                              <div>
+                                <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Transfer ID / IBAN / ALIAS</label>
+                                <input
+                                  type="text"
+                                  value={editingMethodTransferId}
+                                  onChange={(e) => setEditingMethodTransferId(e.target.value)}
+                                  className="w-full text-xs p-1.5 rounded border bg-white focus:outline-none focus:border-blue-500 font-mono"
+                                />
+                              </div>
+                            )}
+
+                            {editingMethodType === 'Credit Card' && (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Card Link</label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const rand = Math.random().toString(36).substring(2, 10).toUpperCase();
+                                      setEditingMethodPaymentLink(`https://checkout.stripe.com/pay/cs_test_sand_${rand}`);
+                                    }}
+                                    className="text-[8px] text-blue-600 font-bold underline cursor-pointer"
+                                  >
+                                    Autogen
+                                  </button>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={editingMethodPaymentLink}
+                                  onChange={(e) => setEditingMethodPaymentLink(e.target.value)}
+                                  className="w-full text-xs p-1.5 rounded border bg-white focus:outline-none focus:border-blue-500 font-mono"
+                                />
+                              </div>
+                            )}
+
+                            <div className="flex gap-1.5 justify-end">
+                              <button
+                                onClick={() => handleSaveEdit('paymentMethods', idx)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <Save className="w-3 h-3" /> Save
+                              </button>
+                              <button
+                                onClick={() => setEditingIndex(null)}
+                                className="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800 text-sm">{pm.name}</span>
+                                <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                                  pm.type === 'Cash' 
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    : pm.type === 'Transfer'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                    : 'bg-purple-50 text-purple-700 border-purple-100'
+                                }`}>
+                                  {pm.type === 'Cash' ? (
+                                    <>
+                                      <Wallet className="w-2.5 h-2.5 text-emerald-600" />
+                                      Cash
+                                    </>
+                                  ) : pm.type === 'Transfer' ? (
+                                    <>
+                                      <Landmark className="w-2.5 h-2.5 text-blue-600" />
+                                      Transfer
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CreditCard className="w-2.5 h-2.5 text-purple-600" />
+                                      Card
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+                              {pm.type === 'Transfer' && pm.transferId && (
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                  IBAN/ALIAS: <span className="font-bold text-slate-700">{pm.transferId}</span>
+                                </p>
+                              )}
+                              {pm.type === 'Credit Card' && pm.paymentLink && (
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate max-w-[320px]" title={pm.paymentLink}>
+                                  Stripe Link: <span className="font-bold text-slate-700 underline">{pm.paymentLink}</span>
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleStartEdit(idx, pm.name)}
+                                className="text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-100 cursor-pointer"
+                                title="Edit Configuration"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteItemClick('paymentMethods', pm.name)}
+                                className="text-rose-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 cursor-pointer"
+                                title="Delete Option"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {paymentMethods.length === 0 && (
+                    <div className="p-8 text-center text-slate-400 font-medium">
+                      No custom payment options configured. Setup at least one!
                     </div>
                   )}
                 </div>

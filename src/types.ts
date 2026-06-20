@@ -14,7 +14,45 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
   'Marketing',
   'Other'
 ];
-export const DEFAULT_PAYMENT_METHODS = ['Bank Transfer', 'Cash', 'Credit Card', 'Check', 'Other'];
+export const DEFAULT_PAYMENT_METHODS = ['Bank Transfer', 'Cash', 'Credit Card'];
+
+export interface CustomPaymentMethod {
+  id: string;
+  name: string;
+  type: 'Cash' | 'Transfer' | 'Credit Card';
+  transferId?: string; // Predefined Bank Transfer reference ID (IBAN/ALIAS)
+  paymentLink?: string; // Predefined Stripe Link
+}
+
+export function normalizePaymentMethods(methods: (string | CustomPaymentMethod)[] | undefined, buildingDefaultBankId?: string): CustomPaymentMethod[] {
+  if (!methods || methods.length === 0) {
+    return [
+      { id: 'default-transfer', name: 'Bank Transfer', type: 'Transfer', transferId: buildingDefaultBankId || '' },
+      { id: 'default-cash', name: 'Cash', type: 'Cash' },
+      { id: 'default-card', name: 'Credit Card', type: 'Credit Card', paymentLink: '' }
+    ];
+  }
+  return methods.map((m, idx) => {
+    if (typeof m === 'string') {
+      const lower = m.toLowerCase();
+      let type: 'Cash' | 'Transfer' | 'Credit Card' = 'Cash';
+      if (lower.includes('transfer') || lower.includes('wire') || lower.includes('iban')) {
+        type = 'Transfer';
+      } else if (lower.includes('card') || lower.includes('credit') || lower.includes('stripe')) {
+        type = 'Credit Card';
+      }
+      return {
+        id: `pm-${idx}-${Date.now()}`,
+        name: m,
+        type,
+        transferId: type === 'Transfer' ? (buildingDefaultBankId || '') : undefined,
+        paymentLink: ''
+      };
+    }
+    // Return typed CustomPaymentMethod
+    return m;
+  });
+}
 
 export interface Tenant {
   id: string;
@@ -48,6 +86,8 @@ export interface Payment {
   status: 'Paid' | 'Pending' | 'Overdue';
   notes?: string;
   receiptNumber: string;
+  transferId?: string; // Predefined Bank Transfer reference ID (IBAN or ALIAS name or number) for wire payments
+  paymentLink?: string; // Auto-generated or custom Stripe Payment Link for Credit Cards
 }
 
 export type ExpenseCategory = string; // Made dynamic instead of strict union
@@ -77,11 +117,12 @@ export interface Building {
   defaultMaintenanceFee?: number; // e.g. 30
   customIncomeCategories?: string[]; // e.g. ['Rent portion', 'Guard Salary', 'Service Box']
   customExpenseCategories?: string[]; // e.g. ['Maintenance', 'Utilities', 'Insurance', 'Tax', 'Cleaning', 'Staff Salary', 'Marketing', 'Other']
-  customPaymentMethods?: string[]; // e.g. ['Bank Transfer', 'Cash', 'Credit Card', 'Check', 'Other']
+  customPaymentMethods?: (string | CustomPaymentMethod)[]; // Custom payment methods configured by owner
   commonAreaIncomeCategories?: string[]; // Income categories designated for building/common area
   commonAreaExpenseCategories?: string[]; // Expense categories designated for building/common area
   reminderTemplate?: string; // Custom WhatsApp/statement payment reminder template
   receiptTemplate?: string; // Custom WhatsApp payment receipt confirmation template
+  bankTransferId?: string; // Predefined Bank Transfer info (IBAN or ALIAS name/number)
 }
 
 export interface AuditLog {

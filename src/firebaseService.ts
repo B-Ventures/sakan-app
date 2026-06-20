@@ -23,19 +23,32 @@ function enforceRateLimit(actionKey: string = 'cloud_write') {
   }
 }
 
-// Clean helper to strip any field set to undefined so setDoc doesn't fail with "Unsupported field value: undefined"
-function cleanUndefined<T extends Record<string, any>>(obj: T): T {
-  const clean: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        clean[key] = cleanUndefined(value);
-      } else {
-        clean[key] = value;
+// Clean helper to strip any field set to undefined (including inside nested arrays/objects) so Firestore doesn't fail with "Unsupported field value: undefined"
+function cleanUndefined<T>(value: T): T {
+  if (value === undefined) {
+    return undefined as any;
+  }
+  if (value === null) {
+    return null as any;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map(item => cleanUndefined(item))
+      .filter(item => item !== undefined) as any;
+  }
+  if (typeof value === 'object') {
+    const clean: any = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (val !== undefined) {
+        const cleanedVal = cleanUndefined(val);
+        if (cleanedVal !== undefined) {
+          clean[key] = cleanedVal;
+        }
       }
     }
+    return clean as any;
   }
-  return clean as T;
+  return value;
 }
 
 // ==========================================

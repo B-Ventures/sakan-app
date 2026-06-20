@@ -419,7 +419,8 @@ export default function DashboardOverview({
                       `Day ${tenant.rentDueDateDay}`,
                       p.monthPaidFor,
                       activeBuilding?.reminderTemplate,
-                      activeBuilding?.currency || 'JOD'
+                      activeBuilding?.currency || 'JOD',
+                      activeBuilding?.bankTransferId
                     ) : '#';
 
                     return (

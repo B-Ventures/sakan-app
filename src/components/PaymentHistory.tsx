@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Tenant, Payment, formatCurrency, getMonthCount } from '../types';
-import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save, Download, Copy, FileImage } from 'lucide-react';
+import { Tenant, Payment, formatCurrency, getMonthCount, CustomPaymentMethod, normalizePaymentMethods } from '../types';
+import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save, Download, Copy, FileImage, ShieldCheck } from 'lucide-react';
 import { getReceiptWhatsAppLink } from '../utils/whatsapp';
 import html2canvas from 'html2canvas';
 import ConfirmationDialog from './ConfirmationDialog';
@@ -17,7 +17,7 @@ interface PaymentHistoryProps {
   onEditPayment: (payment: Payment) => void;
   onUpdatePaymentStatus: (id: string, status: Payment['status'], datePaid?: string) => void;
   onDeletePayment: (id: string) => void;
-  customPaymentMethods: string[];
+  customPaymentMethods: (string | CustomPaymentMethod)[];
   customIncomeCategories: string[];
   activeBuilding?: any;
 }
@@ -33,6 +33,10 @@ export default function PaymentHistory({
   customIncomeCategories,
   activeBuilding,
 }: PaymentHistoryProps) {
+  const normalizedMethods = React.useMemo(() => {
+    return normalizePaymentMethods(customPaymentMethods, activeBuilding?.bankTransferId);
+  }, [customPaymentMethods, activeBuilding]);
+
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -55,7 +59,8 @@ export default function PaymentHistory({
     viewingReceipt.date || 'TBD',
     viewerPayMethodName,
     activeBuilding?.receiptTemplate,
-    activeBuilding?.currency || 'JOD'
+    activeBuilding?.currency || 'JOD',
+    viewingReceipt.transferId
   ) : '#';
 
   const parseColorParams = (str: string): number[] => {
@@ -364,6 +369,8 @@ export default function PaymentHistory({
   const [status, setStatus] = useState<Payment['status']>('Paid');
   const [date, setDate] = useState('2026-06-08');
   const [notes, setNotes] = useState('');
+  const [transferId, setTransferId] = useState('');
+  const [paymentLink, setPaymentLink] = useState('');
 
   React.useEffect(() => {
     const numMonths = billingMonthType === 'multi' ? getMonthCount(monthPaidFor, monthPaidForEnd) : 1;
@@ -420,10 +427,21 @@ export default function PaymentHistory({
     setBillingMonthType('single');
     setMonthPaidFor(currentMonth);
     setMonthPaidForEnd(currentMonth);
-    setMethod(customPaymentMethods[0] || 'Bank Transfer');
+    
+    const firstMethod = normalizedMethods[0];
+    const firstMethodName = firstMethod ? firstMethod.name : 'Bank Transfer';
+    setMethod(firstMethodName);
     setStatus('Paid');
     setDate(new Date().toISOString().split('T')[0]);
     setNotes('');
+    
+    if (firstMethod) {
+      setTransferId(firstMethod.type === 'Transfer' ? (firstMethod.transferId || activeBuilding?.bankTransferId || '') : '');
+      setPaymentLink(firstMethod.type === 'Credit Card' ? (firstMethod.paymentLink || '') : '');
+    } else {
+      setTransferId('');
+      setPaymentLink('');
+    }
     setIsFormOpen(true);
   };
 
@@ -483,6 +501,8 @@ export default function PaymentHistory({
     setStatus(payment.status);
     setDate(payment.date || '');
     setNotes(payment.notes || '');
+    setTransferId(payment.transferId || '');
+    setPaymentLink(payment.paymentLink || '');
     setIsFormOpen(true);
   };
 
@@ -521,6 +541,14 @@ export default function PaymentHistory({
       method,
       status,
       notes,
+      transferId: (() => {
+        const matched = normalizedMethods.find(m => m.name === method);
+        return matched?.type === 'Transfer' ? (matched.transferId || '') : '';
+      })(),
+      paymentLink: (() => {
+        const matched = normalizedMethods.find(m => m.name === method);
+        return matched?.type === 'Credit Card' ? (matched.paymentLink || '') : '';
+      })(),
     };
 
     if (editingPayment) {
@@ -633,7 +661,8 @@ export default function PaymentHistory({
                   p.date || 'TBD',
                   payMethodName,
                   activeBuilding?.receiptTemplate,
-                  activeBuilding?.currency || 'JOD'
+                  activeBuilding?.currency || 'JOD',
+                  p.transferId
                 ) : '#';
 
                 return (
@@ -929,11 +958,27 @@ export default function PaymentHistory({
                   <label className="block text-xs font-semibold text-slate-500 mb-1">Method</label>
                   <select
                     value={method}
-                    onChange={(e) => setMethod(e.target.value)}
+                    onChange={(e) => {
+                      const selectedVal = e.target.value;
+                      setMethod(selectedVal);
+                      const selectedMethod = normalizedMethods.find(m => m.name === selectedVal);
+                      if (selectedMethod) {
+                        if (selectedMethod.type === 'Transfer') {
+                          setTransferId(selectedMethod.transferId || activeBuilding?.bankTransferId || '');
+                          setPaymentLink('');
+                        } else if (selectedMethod.type === 'Credit Card') {
+                          setPaymentLink(selectedMethod.paymentLink || '');
+                          setTransferId('');
+                        } else {
+                          setTransferId('');
+                          setPaymentLink('');
+                        }
+                      }
+                    }}
                     className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-violet-500 bg-white"
                   >
-                    {customPaymentMethods.map(mode => (
-                      <option key={mode} value={mode}>{mode}</option>
+                    {normalizedMethods.map(pm => (
+                      <option key={pm.id} value={pm.name}>{pm.name}</option>
                     ))}
                   </select>
                 </div>
@@ -1137,6 +1182,32 @@ export default function PaymentHistory({
                   <span className="text-slate-400">Payment Option</span>
                   <span className="font-bold text-slate-800">{viewingReceipt.method}</span>
                 </div>
+
+                {viewingReceipt.method === 'Bank Transfer' && viewingReceipt.transferId && (
+                  <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
+                    <span className="text-slate-400">Transfer ID / ALIAS</span>
+                    <span className="font-bold text-slate-800 font-mono text-xs">{viewingReceipt.transferId}</span>
+                  </div>
+                )}
+
+                {viewingReceipt.method === 'Credit Card' && viewingReceipt.paymentLink && (
+                  <div className="flex flex-col gap-1 border-b border-dashed border-slate-100 pb-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Card Payment Link</span>
+                      <span className="font-bold text-purple-750 text-xs font-mono select-all truncate max-w-[150px]" title={viewingReceipt.paymentLink}>
+                        {viewingReceipt.paymentLink}
+                      </span>
+                    </div>
+                    <a
+                      href={viewingReceipt.paymentLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-center bg-violet-50 hover:bg-violet-100 text-violet-750 font-bold text-[10px] py-1.5 rounded-lg border border-violet-200/50 mt-1 uppercase tracking-wide no-print"
+                    >
+                      💳 Go to Payment Page (Phase 2 Preview)
+                    </a>
+                  </div>
+                )}
                 {viewingReceipt.date && (
                   <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
                     <span className="text-slate-400">Settled Date</span>
