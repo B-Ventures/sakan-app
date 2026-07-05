@@ -4,7 +4,18 @@ import { getFirestore, doc, collection, getDocFromServer, enableMultiTabIndexedD
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
+
+let dbInstance;
+try {
+  dbInstance = firebaseConfig.firestoreDatabaseId
+    ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+    : getFirestore(app);
+} catch (err) {
+  console.warn('Failed to initialize Firestore with custom database ID, falling back to default:', err);
+  dbInstance = getFirestore(app);
+}
+
+export const db = dbInstance; /* CRITICAL: The app will break without this line */
 
 // satisfaction of Layer 3 & 10: Multi-tab offline caching persistence
 if (typeof window !== 'undefined') {
@@ -52,6 +63,19 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function safeStringify(obj: any, indent = 2): string {
+  const cache = new Set();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (cache.has(value)) {
+        return '[Circular]';
+      }
+      cache.add(value);
+    }
+    return value;
+  }, indent);
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -69,8 +93,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error('Firestore Error: ', safeStringify(errInfo));
+  throw new Error(safeStringify(errInfo));
 }
 
 // Perform connection test on boot

@@ -12,7 +12,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { Building, Tenant, Payment, Expense, AuditLog, UserRecord } from './types';
+import { Building, Tenant, Payment, Expense, AuditLog, UserRecord, SaaSPlan, SaaSAddon, SaASCoupon, StripeConfig, MultiPropertyConfig } from './types';
 import { clientRateLimiter } from './utils/rateLimiter';
 
 // satisfaction of Layer 9: Rate limiting validation gate before cloud writes
@@ -37,6 +37,13 @@ function cleanUndefined<T>(value: T): T {
       .filter(item => item !== undefined) as any;
   }
   if (typeof value === 'object') {
+    if (value instanceof Date) {
+      return value.toISOString() as any;
+    }
+    const proto = Object.getPrototypeOf(value);
+    if (proto && proto !== Object.prototype) {
+      return value;
+    }
     const clean: any = {};
     for (const [key, val] of Object.entries(value)) {
       if (val !== undefined) {
@@ -51,6 +58,37 @@ function cleanUndefined<T>(value: T): T {
   return value;
 }
 
+// Deeply sanitize and serialize data retrieved from Firestore to ensure clean serializability
+export function sanitizeFirestoreData(val: any): any {
+  if (val === null || val === undefined) {
+    return val;
+  }
+  if (typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  if (val.path && typeof val.path === 'string' && val.firestore) {
+    return val.path;
+  }
+  if (Array.isArray(val)) {
+    return val.map(sanitizeFirestoreData);
+  }
+  if (typeof val === 'object') {
+    if (val instanceof Date) {
+      return val.toISOString();
+    }
+    const proto = Object.getPrototypeOf(val);
+    if (proto && proto !== Object.prototype) {
+      return String(val);
+    }
+    const sanitized: any = {};
+    for (const [k, v] of Object.entries(val)) {
+      sanitized[k] = sanitizeFirestoreData(v);
+    }
+    return sanitized;
+  }
+  return val;
+}
+
 // ==========================================
 // Building Operations
 // ==========================================
@@ -62,7 +100,7 @@ export async function fetchUserBuildings(userId: string): Promise<Building[]> {
     const snapshot = await getDocs(q);
     const buildings: Building[] = [];
     snapshot.forEach((docSnap) => {
-      buildings.push({ id: docSnap.id, ...docSnap.data() } as Building);
+      buildings.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as Building);
     });
     return buildings;
   } catch (error) {
@@ -79,7 +117,17 @@ export async function createBuilding(building: Omit<Building, 'id' | 'createdAt'
     const newDocRef = building.id ? doc(buildingsRef, building.id) : doc(buildingsRef);
     const id = newDocRef.id;
     const createdAt = new Date().toISOString();
+    
+    const defaultTrialEnd = new Date();
+    defaultTrialEnd.setDate(defaultTrialEnd.getDate() + 30);
+    const defaultTrialEndStr = defaultTrialEnd.toISOString().slice(0, 10);
+
     const newBuilding: Building = {
+      subscriptionStatus: 'trial',
+      subscriptionPlan: 'none',
+      subscriptionStartDate: new Date().toISOString().slice(0, 10),
+      subscriptionEndDate: defaultTrialEndStr,
+      subscriptionAmountPaid: 0,
       ...building,
       id,
       createdAt,
@@ -125,7 +173,7 @@ export function subscribeToTenants(buildingId: string, onUpdate: (tenants: Tenan
   return onSnapshot(q, (snapshot) => {
     const tenants: Tenant[] = [];
     snapshot.forEach((docSnap) => {
-      tenants.push({ id: docSnap.id, ...docSnap.data() } as Tenant);
+      tenants.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as Tenant);
     });
     onUpdate(tenants);
   }, (error) => {
@@ -173,7 +221,7 @@ export function subscribeToPayments(buildingId: string, onUpdate: (payments: Pay
   return onSnapshot(q, (snapshot) => {
     const payments: Payment[] = [];
     snapshot.forEach((docSnap) => {
-      payments.push({ id: docSnap.id, ...docSnap.data() } as Payment);
+      payments.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as Payment);
     });
     onUpdate(payments);
   }, (error) => {
@@ -232,7 +280,7 @@ export function subscribeToExpenses(buildingId: string, onUpdate: (expenses: Exp
   return onSnapshot(q, (snapshot) => {
     const expenses: Expense[] = [];
     snapshot.forEach((docSnap) => {
-      expenses.push({ id: docSnap.id, ...docSnap.data() } as Expense);
+      expenses.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as Expense);
     });
     onUpdate(expenses);
   }, (error) => {
@@ -317,7 +365,7 @@ export function subscribeToAuditLogs(
   return onSnapshot(q, (snapshot) => {
     const logs: AuditLog[] = [];
     snapshot.forEach((docSnap) => {
-      logs.push({ id: docSnap.id, ...docSnap.data() } as AuditLog);
+      logs.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as AuditLog);
     });
     // Sort client-side descending by timestamp to ensure consistent chronological order
     const sortedLogs = [...logs].sort((a, b) => {
@@ -358,7 +406,7 @@ export async function fetchAllUsers(): Promise<UserRecord[]> {
     const snapshot = await getDocs(collection(db, path));
     const users: UserRecord[] = [];
     snapshot.forEach((docSnap) => {
-      users.push({ id: docSnap.id, ...docSnap.data() } as UserRecord);
+      users.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as UserRecord);
     });
     return users;
   } catch (error) {
@@ -373,7 +421,7 @@ export async function fetchAllBuildings(): Promise<Building[]> {
     const snapshot = await getDocs(collection(db, path));
     const buildings: Building[] = [];
     snapshot.forEach((docSnap) => {
-      buildings.push({ id: docSnap.id, ...docSnap.data() } as Building);
+      buildings.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as Building);
     });
     return buildings;
   } catch (error) {
@@ -430,7 +478,7 @@ export async function fetchAllTenants(buildings: Building[]): Promise<(Tenant & 
           id: docSnap.id,
           buildingName: b.name,
           ownerId: b.ownerId,
-          ...docSnap.data()
+          ...sanitizeFirestoreData(docSnap.data())
         } as Tenant & { buildingName: string; ownerId: string });
       });
     }));
@@ -451,7 +499,7 @@ export async function fetchAllPayments(buildings: Building[]): Promise<(Payment 
           id: docSnap.id,
           buildingName: b.name,
           ownerId: b.ownerId,
-          ...docSnap.data()
+          ...sanitizeFirestoreData(docSnap.data())
         } as Payment & { buildingName: string; ownerId: string });
       });
     }));
@@ -472,7 +520,7 @@ export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense 
           id: docSnap.id,
           buildingName: b.name,
           ownerId: b.ownerId,
-          ...docSnap.data()
+          ...sanitizeFirestoreData(docSnap.data())
         } as Expense & { buildingName: string; ownerId: string });
       });
     }));
@@ -481,5 +529,250 @@ export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense 
   }
   return expenses;
 }
+
+// ==========================================
+// SaaS Packages & Billing Config Operations
+// ==========================================
+
+export async function fetchSaaSPlans(): Promise<SaaSPlan[]> {
+  try {
+    const q = collection(db, 'system_configs', 'billing', 'saas_plans');
+    const snap = await getDocs(q);
+    const plans: SaaSPlan[] = [];
+    snap.forEach((docSnap) => {
+      plans.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as SaaSPlan);
+    });
+    
+    if (plans.length === 0) {
+      // Seed default plans
+      const defaults: SaaSPlan[] = [
+        {
+          id: 'monthly',
+          name: 'Premium Monthly Plan',
+          price: 10,
+          currency: 'JOD',
+          interval: 'month',
+          description: 'Best for small committees starting off with single-building accounting.',
+          features: ['Unlimited Tenants', 'Standard Analytics', 'WhatsApp Reminders', 'Basic Reports', 'Common Area Expenses'],
+          stripePriceId: 'price_123_monthly_test',
+          isActive: true
+        },
+        {
+          id: 'annually',
+          name: 'Premium Annual Plan',
+          price: 96,
+          currency: 'JOD',
+          interval: 'year',
+          description: 'Equivalent to 8 JOD/month. Perfect for long-term committee property boards.',
+          features: ['All Premium Monthly Features', 'Save 20% on Cumulative Cost', 'Priority Cloud Support', 'Unlimited Statements Export', 'Advanced Data Importer'],
+          stripePriceId: 'price_123_annually_test',
+          isActive: true
+        }
+      ];
+      for (const p of defaults) {
+        await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', p.id), p);
+        plans.push(p);
+      }
+    }
+    return plans;
+  } catch (error) {
+    console.error("Failed to fetch saas plans:", error);
+    return [];
+  }
+}
+
+export async function saveSaaSPlan(plan: SaaSPlan): Promise<void> {
+  enforceRateLimit();
+  const path = `system_configs/billing/saas_plans/${plan.id}`;
+  try {
+    await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', plan.id), plan);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteSaaSPlan(id: string): Promise<void> {
+  enforceRateLimit();
+  const path = `system_configs/billing/saas_plans/${id}`;
+  try {
+    await deleteDoc(doc(db, 'system_configs', 'billing', 'saas_plans', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function fetchSaaSCoupons(): Promise<SaASCoupon[]> {
+  try {
+    const q = collection(db, 'system_configs', 'billing', 'saas_coupons');
+    const snap = await getDocs(q);
+    const coupons: SaASCoupon[] = [];
+    snap.forEach((docSnap) => {
+      coupons.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as SaASCoupon);
+    });
+    
+    if (coupons.length === 0) {
+      // Seed default coupons
+      const defaults: SaASCoupon[] = [
+        { id: 'BOSSTSC26', code: 'BOSSTSC26', discountPercent: 50, description: 'Exclusive Partner Launch discount coupon.', isActive: true },
+        { id: 'WELCOME50', code: 'WELCOME50', discountPercent: 50, description: 'Standard 50% discount for first-time premium upgraders.', isActive: true },
+        { id: 'SAASFREE', code: 'SAASFREE', discountPercent: 100, description: '100% discount sandbox trial pass.', isActive: true },
+        { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off full premium pass.', isActive: true }
+      ];
+      for (const c of defaults) {
+        await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', c.id), c);
+        coupons.push(c);
+      }
+    }
+    return coupons;
+  } catch (error) {
+    console.error("Failed to fetch saas coupons:", error);
+    return [];
+  }
+}
+
+export async function saveSaaSCoupon(coupon: SaASCoupon): Promise<void> {
+  enforceRateLimit();
+  const path = `system_configs/billing/saas_coupons/${coupon.id}`;
+  try {
+    await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', coupon.id), coupon);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteSaaSCoupon(id: string): Promise<void> {
+  enforceRateLimit();
+  const path = `system_configs/billing/saas_coupons/${id}`;
+  try {
+    await deleteDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function fetchSaaSAddons(): Promise<SaaSAddon[]> {
+  try {
+    const q = collection(db, 'system_configs', 'billing', 'saas_addons');
+    const snap = await getDocs(q);
+    const addons: SaaSAddon[] = [];
+    snap.forEach((docSnap) => {
+      addons.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as SaaSAddon);
+    });
+    
+    if (addons.length === 0) {
+      // Seed default addons
+      const defaults: SaaSAddon[] = [
+        { id: 'whatsapp_premium', name: 'Automated WhatsApp API Hub', price: 5, currency: 'JOD', interval: 'month', description: 'Direct headless SMS & WhatsApp API gateway integration to auto-deliver receipts & reminders.', stripePriceId: 'price_addon_wa_test', isActive: true },
+        { id: 'extended_analytics', name: 'AI Financial Forecaster', price: 3, currency: 'JOD', interval: 'month', description: 'Predictive tenant payment trends, dynamic rent collections risk dashboard, and smart budgeting.', stripePriceId: 'price_addon_ai_test', isActive: true },
+        { id: 'extra_storage_pack', name: '10GB Document Storage Vault', price: 15, currency: 'JOD', interval: 'one_time', description: 'Expand your cloud bucket to host up to 10GB of tenant identity files, contracts, and expense receipt scans.', stripePriceId: 'price_addon_storage_test', isActive: true }
+      ];
+      for (const a of defaults) {
+        await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', a.id), a);
+        addons.push(a);
+      }
+    }
+    return addons;
+  } catch (error) {
+    console.error("Failed to fetch saas addons:", error);
+    return [];
+  }
+}
+
+export async function saveSaaSAddon(addon: SaaSAddon): Promise<void> {
+  enforceRateLimit();
+  const path = `system_configs/billing/saas_addons/${addon.id}`;
+  try {
+    await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', addon.id), addon);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteSaaSAddon(id: string): Promise<void> {
+  enforceRateLimit();
+  const path = `system_configs/billing/saas_addons/${id}`;
+  try {
+    await deleteDoc(doc(db, 'system_configs', 'billing', 'saas_addons', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function fetchStripeConfig(): Promise<StripeConfig> {
+  try {
+    const docRef = doc(db, 'system_configs', 'stripe_config');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return sanitizeFirestoreData(docSnap.data()) as StripeConfig;
+    } else {
+      const defaultConfig: StripeConfig = {
+        isEnabled: true,
+        publicKey: 'pk_test_51Pxabc123xyzStripePublicKeyPlaceholderForDemoMode',
+        secretKey: 'sk_test_51Pxabc123xyzStripeSecretKeyPlaceholderForDemoMode',
+        mode: 'test',
+        checkoutRedirectType: 'simulated'
+      };
+      await setDoc(docRef, defaultConfig);
+      return defaultConfig;
+    }
+  } catch (error) {
+    console.error("Failed to fetch Stripe config, falling back:", error);
+    return {
+      isEnabled: true,
+      publicKey: 'pk_test_51Pxabc123xyzStripePublicKeyPlaceholderForDemoMode',
+      secretKey: 'sk_test_51Pxabc123xyzStripeSecretKeyPlaceholderForDemoMode',
+      mode: 'test',
+      checkoutRedirectType: 'simulated'
+    };
+  }
+}
+
+export async function saveStripeConfig(config: StripeConfig): Promise<void> {
+  enforceRateLimit();
+  const path = 'system_configs/stripe_config';
+  try {
+    await setDoc(doc(db, 'system_configs', 'stripe_config'), config);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchMultiPropertyConfig(): Promise<MultiPropertyConfig> {
+  try {
+    const docRef = doc(db, 'system_configs', 'multi_property_config');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return sanitizeFirestoreData(docSnap.data()) as MultiPropertyConfig;
+    } else {
+      const defaultConfig: MultiPropertyConfig = {
+        isEnabled: true,
+        firstPropertyRatePremium: 20,
+        additionalPropertyRate: 5,
+        currency: 'JOD'
+      };
+      await setDoc(docRef, defaultConfig);
+      return defaultConfig;
+    }
+  } catch (error) {
+    console.error("Failed to fetch multi-property config, falling back:", error);
+    return {
+      isEnabled: true,
+      firstPropertyRatePremium: 20,
+      additionalPropertyRate: 5,
+      currency: 'JOD'
+    };
+  }
+}
+
+export async function saveMultiPropertyConfig(config: MultiPropertyConfig): Promise<void> {
+  enforceRateLimit();
+  const path = 'system_configs/multi_property_config';
+  try {
+    await setDoc(doc(db, 'system_configs', 'multi_property_config'), config);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
 
 

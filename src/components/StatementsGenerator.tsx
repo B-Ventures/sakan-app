@@ -5,8 +5,9 @@
 
 import React, { useState } from 'react';
 import { Tenant, Payment, Expense, Building, isMonthCovered, formatCurrency, getMonthCount, getYearMonthFromDateStr } from '../types';
-import { FileText, Calendar, Send, Mail, CheckCircle, RefreshCw, Eye, Printer, Bot, AlertTriangle, MessageSquare, Copy, ShieldAlert, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { FileText, Calendar, Send, Mail, CheckCircle, RefreshCw, Eye, Printer, Bot, AlertTriangle, MessageSquare, Copy, ShieldAlert, ArrowDownCircle, ArrowUpCircle, AlertCircle, Edit2 } from 'lucide-react';
 import { getReminderWhatsAppLink } from '../utils/whatsapp';
+import { checkAndSyncPayments } from '../utils/billingSync';
 
 interface StatementsGeneratorProps {
   tenants: Tenant[];
@@ -19,6 +20,9 @@ interface StatementsGeneratorProps {
     paymentsToCreate: Omit<Payment, 'id'>[],
     paymentsToUpdate: { id: string; status: Payment['status'] }[]
   ) => Promise<void>;
+  onAddPayment?: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Promise<void> | void;
+  onEditPayment?: (payment: Payment) => Promise<void> | void;
+  onEditExpense?: (expense: Expense) => Promise<void> | void;
 }
 
 export default function StatementsGenerator({
@@ -28,6 +32,9 @@ export default function StatementsGenerator({
   building,
   onUpdateBuildingSettings,
   onAutopilotSync,
+  onAddPayment,
+  onEditPayment,
+  onEditExpense,
 }: StatementsGeneratorProps) {
   const [activeSubTab, setActiveSubTab] = useState<'statement' | 'automation'>('statement');
   
@@ -44,15 +51,97 @@ export default function StatementsGenerator({
   const [copiedSuccess, setCopiedSuccess] = useState<string | null>(null);
   const [monthViewRange, setMonthViewRange] = useState<'all' | 'q1' | 'q2' | 'q3' | 'q4'>('all');
 
+  // REMINDER GROUPING & LOGGING PAYMENT MODAL STATES
+  const [logPaymentModalOpen, setLogPaymentModalOpen] = useState(false);
+  const [loggingUnitGroup, setLoggingUnitGroup] = useState<{
+    unit: string;
+    tenant: Tenant | undefined;
+    payments: Payment[];
+    totalDueAmount: number;
+  } | null>(null);
+  
+  const [selectedPaymentToLog, setSelectedPaymentToLog] = useState<Payment | null>(null);
+  const [logAmount, setLogAmount] = useState<number>(0);
+  const [logDate, setLogDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [logMethod, setLogMethod] = useState<string>('Bank Transfer');
+  const [logNotes, setLogNotes] = useState<string>('Logged via Statements & Alerts Tab');
+  const [isLoggingPayment, setIsLoggingPayment] = useState(false);
+  const [logSuccessMessage, setLogSuccessMessage] = useState<string | null>(null);
+
   // AUTOMATION STATE & SAVE STATUS
   const [reminderTemplate, setReminderTemplate] = useState(
-    building?.reminderTemplate || "Hello {BeneficiaryName} 👋,\n\nFriendly reminder that monthly share dues for Unit {Unit} of {ShareAmount} is due by Day {DueDay} for the month of {Month}.\n\nPlease remit via bank wire and send us a confirmation receipt. Thank you!"
+    building?.reminderTemplate || "Hello {BeneficiaryName} 👋,\n\nFriendly reminder that monthly share dues for Unit {Unit} of {DueAmount} is due by Day {DueDay} for the month of {Month}.\n\nPlease remit via bank wire and send us a confirmation receipt. Thank you!"
   );
   const [receiptTemplate, setReceiptTemplate] = useState(
     building?.receiptTemplate || "Hello {BeneficiaryName} 👋,\n\nThank you for your rent payment! Here is your official payment receipt:\n\n🏢 *Unit:* {Unit}\n🛢️ *Amount Paid:* {AmountPaid}\n📅 *Billing Month:* {BillingMonth}\n💳 *Payment Method:* {PaymentMethod}\n📅 *Date Paid:* {DatePaid}\n🧾 *Receipt No:* {ReceiptNo}\n\n*Status:* ✅ Fully Paid & Settled\n\nIf you have any questions, please feel free to reach out. Thank you for being a wonderful tenant!"
   );
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // EXPENSE EDITING & ATTACHMENT ZOOM STATES
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [expenseTitle, setExpenseTitle] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState<number>(0);
+  const [expenseDate, setExpenseDate] = useState('');
+  const [expenseStatus, setExpenseStatus] = useState<'Paid' | 'Pending' | 'Overdue'>('Paid');
+  const [expenseDueDate, setExpenseDueDate] = useState('');
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [expenseAttachmentName, setExpenseAttachmentName] = useState('');
+  const [expenseAttachmentUrl, setExpenseAttachmentUrl] = useState('');
+  const [zoomedAttachment, setZoomedAttachment] = useState<{ url: string; title: string } | null>(null);
+  const [dragOverExpense, setDragOverExpense] = useState(false);
+  const fileInputExpenseRef = React.useRef<HTMLInputElement>(null);
+
+  const handleExpenseFileChange = (file: File) => {
+    if (!file) return;
+    setExpenseAttachmentName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setExpenseAttachmentUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openEditExpense = (exp: Expense) => {
+    setEditingExpense(exp);
+    setExpenseTitle(exp.title);
+    setExpenseCategory(exp.category);
+    setExpenseAmount(exp.amount);
+    setExpenseDate(exp.date);
+    setExpenseStatus(exp.status || 'Paid');
+    setExpenseDueDate(exp.dueDate || '');
+    setExpenseNotes(exp.notes || '');
+    setExpenseAttachmentName(exp.attachmentName || '');
+    setExpenseAttachmentUrl(exp.attachmentUrl || '');
+  };
+
+  const handleSaveExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExpense || !onEditExpense) return;
+    
+    await onEditExpense({
+      ...editingExpense,
+      title: expenseTitle,
+      category: expenseCategory as any,
+      amount: Number(expenseAmount),
+      date: expenseDate,
+      status: expenseStatus,
+      dueDate: expenseDueDate || undefined,
+      notes: expenseNotes,
+      attachmentName: expenseAttachmentUrl ? (expenseAttachmentName || 'Invoice_Attachment') : '',
+      attachmentUrl: expenseAttachmentUrl || '',
+    });
+    setEditingExpense(null);
+  };
+
+  const handleQuickMarkPaid = async (exp: Expense) => {
+    if (!onEditExpense) return;
+    await onEditExpense({
+      ...exp,
+      status: 'Paid',
+    });
+  };
 
   React.useEffect(() => {
     if (building?.reminderTemplate) {
@@ -86,11 +175,98 @@ export default function StatementsGenerator({
   const tenantPaymentsForMonth = payments.filter(p => p.tenantId === selectedTenantId && isMonthCovered(p.monthPaidFor, statementMonth));
   const tenantAllPayments = payments.filter(p => p.tenantId === selectedTenantId);
 
+  // Group outstanding payments across all cycles by unit (matching the dashboard's Reminders Center)
+  const outstandingPayments = React.useMemo(() => {
+    return payments.filter(p => {
+      if (p.status === 'Paid') return false;
+      
+      // Exclude if there is any 'Paid' payment for this tenant covering this specific month (direct or range-covered)
+      const isAlreadyPaid = payments.some(other => 
+        other.status === 'Paid' && 
+        other.tenantId === p.tenantId && 
+        isMonthCovered(other.monthPaidFor, p.monthPaidFor)
+      );
+      return !isAlreadyPaid;
+    });
+  }, [payments]);
+
+  const outstandingExpenses = React.useMemo(() => {
+    return expenses.filter(e => e.status === 'Pending' || e.status === 'Overdue');
+  }, [expenses]);
+
+  interface UnitReminderGroup {
+    unit: string;
+    tenant: Tenant | undefined;
+    payments: Payment[];
+    totalDueAmount: number;
+  }
+
+  const groupedReminders = React.useMemo(() => {
+    const groupsMap = new Map<string, Payment[]>();
+    outstandingPayments.forEach(p => {
+      const key = p.unit || 'Unknown';
+      if (!groupsMap.has(key)) {
+        groupsMap.set(key, []);
+      }
+      groupsMap.get(key)!.push(p);
+    });
+
+    const list: UnitReminderGroup[] = [];
+    groupsMap.forEach((pList, unit) => {
+      const firstP = pList[0];
+      const tenant = tenants.find(t => t.id === firstP.tenantId) || tenants.find(t => t.unit === unit);
+      
+      const totalDueAmount = pList.reduce((sum, p) => {
+        const pAmount = p.amount > 0
+          ? p.amount
+          : (tenant
+              ? (tenant.monthlyRent + (tenant.guardFee ?? building?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0))
+              : 0
+            );
+        return sum + pAmount;
+      }, 0);
+
+      list.push({
+        unit,
+        tenant,
+        payments: pList,
+        totalDueAmount
+      });
+    });
+
+    // Sort by unit number/name
+    return list.sort((a, b) => a.unit.localeCompare(b.unit, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [outstandingPayments, tenants, building]);
+
   // Calculate Statements totals
   const tenantRent = activeTenant ? Number(activeTenant.monthlyRent || 0) : 0;
   const tenantGuard = activeTenant ? Number(activeTenant.guardFee ?? 50) : 0;
   const tenantMaint = activeTenant ? Number(activeTenant.maintenanceFee ?? 30) : 0;
-  const totalAmountDue = tenantRent + tenantGuard + tenantMaint;
+  
+  // Current month's dues
+  const currentMonthDue = tenantRent + tenantGuard + tenantMaint;
+
+  // Unpaid balance from all prior months (prior to statementMonth)
+  const previousOutstandingBalance = React.useMemo(() => {
+    if (!selectedTenantId) return 0;
+    return payments
+      .filter(p => 
+        p.tenantId === selectedTenantId && 
+        p.status !== 'Paid' && 
+        p.monthPaidFor < statementMonth
+      )
+      .reduce((sum, p) => {
+        const pAmount = p.amount > 0 
+          ? p.amount 
+          : (activeTenant 
+              ? (activeTenant.monthlyRent + (activeTenant.guardFee ?? building?.defaultGuardFee ?? 50) + (activeTenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 30))
+              : 0
+            );
+        return sum + pAmount;
+      }, 0);
+  }, [payments, selectedTenantId, statementMonth, activeTenant, building]);
+
+  const totalAmountDue = currentMonthDue + previousOutstandingBalance;
   const totalAmountPaid = tenantPaymentsForMonth
     .filter(p => p.status === 'Paid')
     .reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -599,6 +775,7 @@ export default function StatementsGenerator({
       .replace(/{Unit}/g, t.unit)
       .replace(/{RentAmount}/g, formatVal(finalAmount))
       .replace(/{ShareAmount}/g, formatVal(finalAmount))
+      .replace(/{DueAmount}/g, formatVal(finalAmount))
       .replace(/{DueDay}/g, t.rentDueDateDay.toString())
       .replace(/{Month}/g, pMonth)
       .replace(/{transfer_ID}/g, building?.bankTransferId || '');
@@ -610,17 +787,57 @@ export default function StatementsGenerator({
     setTimeout(() => setCopiedSuccess(null), 2000);
   };
 
+  const handleOpenLogPayment = (group: any) => {
+    setLoggingUnitGroup(group);
+    if (group.payments.length > 0) {
+      const p = group.payments[0];
+      setSelectedPaymentToLog(p);
+      setLogAmount(p.amount);
+    } else {
+      setSelectedPaymentToLog(null);
+      setLogAmount(group.totalDueAmount);
+    }
+    setLogDate(new Date().toISOString().split('T')[0]);
+    setLogMethod('Bank Transfer');
+    setLogNotes('Logged via Statements & Alerts Tab');
+    setLogSuccessMessage(null);
+    setLogPaymentModalOpen(true);
+  };
+
+  const handleConfirmLogPayment = async () => {
+    if (!selectedPaymentToLog || !onEditPayment) return;
+    setIsLoggingPayment(true);
+    setLogSuccessMessage(null);
+    try {
+      const updated: Payment = {
+        ...selectedPaymentToLog,
+        status: 'Paid',
+        date: logDate,
+        method: logMethod,
+        amount: logAmount,
+        notes: logNotes,
+      };
+      await onEditPayment(updated);
+      setLogSuccessMessage('Payment logged successfully as PAID!');
+      setTimeout(() => {
+        setLogPaymentModalOpen(false);
+        setLogSuccessMessage(null);
+      }, 1500);
+    } catch (err) {
+      console.error('Error logging payment:', err);
+    } finally {
+      setIsLoggingPayment(false);
+    }
+  };
+
   const runAutopilotScan = async () => {
     const timestamp = new Date().toLocaleTimeString();
-    const targetMonth = '2026-06';
-    const currentDay = 9; // System active cycle reference date (June 9th, 2026)
+    const referenceDate = new Date();
+    const currentMonthStr = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}`;
 
     let logsToAdd: Array<{ id: string; time: string; msg: string; type: 'info' | 'success' | 'warn' }> = [
-      { id: Date.now().toString() + '-start', time: timestamp, msg: `Billing scan initiated for current cycle (${targetMonth}).`, type: 'info' },
+      { id: Date.now().toString() + '-start', time: timestamp, msg: `Billing integrity audit initiated. Current month: ${currentMonthStr}.`, type: 'info' },
     ];
-
-    const paymentsToCreate: Omit<Payment, 'id'>[] = [];
-    const paymentsToUpdate: { id: string; status: Payment['status'] }[] = [];
 
     // Filter active tenants
     const activeTenants = tenants.filter(t => t.status === 'active');
@@ -631,53 +848,29 @@ export default function StatementsGenerator({
       type: 'info'
     });
 
-    activeTenants.forEach(tenant => {
-      // Find June 2026 payment reference
-      const existingPayment = payments.find(
-        p => p.tenantId === tenant.id && isMonthCovered(p.monthPaidFor, targetMonth)
-      );
+    const { paymentsToCreate, paymentsToUpdate } = checkAndSyncPayments(
+      tenants,
+      payments,
+      building,
+      referenceDate
+    );
 
-      const isPastDueDate = tenant.rentDueDateDay <= currentDay;
-      const expectedStatus: Payment['status'] = isPastDueDate ? 'Overdue' : 'Pending';
+    paymentsToCreate.forEach(c => {
+      logsToAdd.push({
+        id: Date.now().toString() + `-create-log-${c.tenantId}-${c.monthPaidFor}`,
+        time: timestamp,
+        msg: `Unit ${c.unit} (${c.tenantName}) is missing billing for ${c.monthPaidFor}. Auto-generating new ${c.status} invoice (${formatVal(c.amount)}).`,
+        type: c.status === 'Overdue' ? 'warn' : 'info'
+      });
+    });
 
-      if (!existingPayment) {
-        // Missing billing cycle
-        const receiptCode = `REC-${targetMonth.replace('-', '')}-${tenant.unit.replace(/\s+/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
-        const guardFee = tenant.guardFee ?? building?.defaultGuardFee ?? 0;
-        const maintenanceFee = tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0;
-        const totalAmount = tenant.monthlyRent + guardFee + maintenanceFee;
-
-        const rec: Omit<Payment, 'id'> & { rentPaid: number; guardPaid: number; maintenancePaid: number } = {
-          tenantId: tenant.id,
-          tenantName: tenant.name,
-          unit: tenant.unit,
-          amount: totalAmount,
-          rentPaid: tenant.monthlyRent,
-          guardPaid: guardFee,
-          maintenancePaid: maintenanceFee,
-          date: '',
-          monthPaidFor: targetMonth,
-          method: 'Bank Transfer',
-          status: expectedStatus,
-          notes: 'Auto-posted by Autopilot Scheduler',
-          receiptNumber: receiptCode
-        };
-        paymentsToCreate.push(rec as any);
-
+    paymentsToUpdate.forEach(u => {
+      const p = payments.find(x => x.id === u.id);
+      if (p) {
         logsToAdd.push({
-          id: Date.now().toString() + `-create-${tenant.id}`,
+          id: Date.now().toString() + `-promote-log-${u.id}`,
           time: timestamp,
-          msg: `Unit ${tenant.unit} (${tenant.name}) has no billing registry. Auto-generated new ${expectedStatus} invoice (${formatVal(totalAmount)}).`,
-          type: isPastDueDate ? 'warn' : 'info'
-        });
-      } else if (existingPayment.status === 'Pending' && isPastDueDate) {
-        // Exceeded configured due date
-        paymentsToUpdate.push({ id: existingPayment.id, status: 'Overdue' });
-
-        logsToAdd.push({
-          id: Date.now().toString() + `-promote-${tenant.id}`,
-          time: timestamp,
-          msg: `Unit ${tenant.unit} (${tenant.name}) is past its due date (Day ${tenant.rentDueDateDay}). Status updated to OVERDUE.`,
+          msg: `Unit ${p.unit} (${p.tenantName}) for month ${p.monthPaidFor} has exceeded due day. Status updated to ${u.status}.`,
           type: 'warn'
         });
       }
@@ -690,7 +883,7 @@ export default function StatementsGenerator({
           logsToAdd.push({
             id: Date.now().toString() + '-sync-success',
             time: timestamp,
-            msg: `Billing audit complete. Saved ${paymentsToCreate.length} new invoices and marked ${paymentsToUpdate.length} accounts as overdue.`,
+            msg: `Billing audit complete. Created ${paymentsToCreate.length} new invoices and marked ${paymentsToUpdate.length} accounts as overdue.`,
             type: 'success'
           });
         } catch (err) {
@@ -718,25 +911,34 @@ export default function StatementsGenerator({
       });
     }
 
-    // Load prepared reminders for unpaid ones
-    const updatedUnpaid = payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, targetMonth));
+    // Load prepared reminders for remaining unpaid ones matching statementMonth
+    const updatedUnpaid = payments.filter(p => {
+      if (p.status === 'Paid') return false;
+      if (!isMonthCovered(p.monthPaidFor, statementMonth)) return false;
+      const isAlreadyPaid = payments.some(other => 
+        other.status === 'Paid' && 
+        other.tenantId === p.tenantId && 
+        isMonthCovered(other.monthPaidFor, statementMonth)
+      );
+      return !isAlreadyPaid;
+    });
     
-    paymentsToCreate.forEach(c => {
+    paymentsToCreate.filter(c => isMonthCovered(c.monthPaidFor, statementMonth)).forEach(c => {
       logsToAdd.push({
         id: Date.now().toString() + `-remind-${c.tenantId}`,
         time: timestamp,
-        msg: `Notification draft ready for ${c.tenantName} (Unit ${c.unit}) — Balance: ${formatVal(c.amount)}`,
+        msg: `Notification draft ready for ${c.tenantName} (Unit ${c.unit}) for ${statementMonth} — Balance: ${formatVal(c.amount)}`,
         type: 'warn'
       });
     });
 
     updatedUnpaid.forEach((p, idx) => {
-      const isAlreadyLogged = paymentsToCreate.some(c => c.tenantId === p.tenantId) || paymentsToUpdate.some(u => u.id === p.id);
+      const isAlreadyLogged = paymentsToCreate.some(c => c.tenantId === p.tenantId && isMonthCovered(c.monthPaidFor, statementMonth)) || paymentsToUpdate.some(u => u.id === p.id);
       if (!isAlreadyLogged) {
         logsToAdd.push({
           id: Date.now().toString() + `-exist-remind-${idx}`,
           time: timestamp,
-          msg: `Active dues reminder for ${p.tenantName} (Unit ${p.unit}) — Balance: ${formatVal(p.amount)} [Status: ${p.status}]`,
+          msg: `Active dues reminder for ${p.tenantName} (Unit ${p.unit}) for ${statementMonth} — Balance: ${formatVal(p.amount)} [Status: ${p.status}]`,
           type: 'warn'
         });
       }
@@ -1521,6 +1723,22 @@ export default function StatementsGenerator({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
+                        {/* Balance Brought Forward Debit entry */}
+                        {previousOutstandingBalance > 0 && (
+                          <tr className="bg-amber-50/25">
+                            <td className="p-3 pl-4 font-mono text-amber-700 font-semibold whitespace-nowrap">—</td>
+                            <td className="p-3 font-bold text-amber-800 whitespace-nowrap">
+                              Balance Brought Forward (Prior Unpaid Months)
+                              <div className="text-[10px] text-amber-600 font-mono mt-0.5">
+                                Accumulation of unpaid cycles before {statementMonth}
+                              </div>
+                            </td>
+                            <td className="p-3 text-slate-400 whitespace-nowrap">—</td>
+                            <td className="p-3 text-right font-mono font-bold text-amber-800 whitespace-nowrap">{formatVal(previousOutstandingBalance)}</td>
+                            <td className="p-3 text-right font-mono text-slate-400 whitespace-nowrap">—</td>
+                          </tr>
+                        )}
+
                         {/* Monthly Base Invoice Debit entry */}
                         <tr>
                           <td className="p-3 pl-4 font-mono text-slate-400 whitespace-nowrap">{statementMonth}-01</td>
@@ -1613,75 +1831,88 @@ export default function StatementsGenerator({
             </div>
 
             <div className="divide-y divide-slate-100">
-              {payments
-                .filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth))
-                .map(p => {
-                  const tenant = tenants.find(t => t.id === p.tenantId);
-                  
-                  const dueAmount = p.amount > 0
-                    ? p.amount
-                    : (tenant
-                        ? (tenant.monthlyRent + (tenant.guardFee ?? building?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? building?.defaultMaintenanceFee ?? 0))
-                        : 0
-                      );
+              {groupedReminders.map(group => {
+                const tenant = group.tenant;
+                const combinedMonths = group.payments.map(x => x.monthPaidFor).join(', ');
+                const dueAmount = group.totalDueAmount;
 
-                  const parsedMsg = tenant ? getParsedTemplate(tenant, p.monthPaidFor, dueAmount) : '';
-                  const customWaLink = tenant ? getReminderWhatsAppLink(
-                    tenant.phone,
-                    tenant.name,
-                    tenant.unit,
-                    dueAmount,
-                    `Day ${tenant.rentDueDateDay}`,
-                    p.monthPaidFor,
-                    reminderTemplate,
-                    building?.currency || 'JOD',
-                    building?.bankTransferId
-                  ) : '#';
+                const parsedMsg = tenant ? getParsedTemplate(tenant, combinedMonths, dueAmount) : '';
+                const customWaLink = tenant ? getReminderWhatsAppLink(
+                  tenant.phone,
+                  tenant.name,
+                  tenant.unit,
+                  dueAmount,
+                  `Day ${tenant.rentDueDateDay}`,
+                  combinedMonths,
+                  reminderTemplate,
+                  building?.currency || 'JOD',
+                  building?.bankTransferId
+                ) : '#';
 
-                  return (
-                    <div key={p.id} className="py-4 first:pt-0 last:pb-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-800 text-sm">{p.tenantName}</span>
-                          <span className="bg-blue-50 text-blue-700 text-[10px] font-bold font-mono px-2 py-0.5 rounded">
-                            Unit {p.unit}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                          <span>Balance Outstanding:</span>
-                          <span className="font-semibold text-slate-700 font-mono">{formatVal(dueAmount)}</span>
-                          <span>• Due Day: Day {tenant?.rentDueDateDay}</span>
-                        </div>
+                return (
+                  <div key={group.unit} className="py-5 first:pt-0 last:pb-0 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                    <div className="space-y-1 flex-1 min-w-0 w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-blue-600 text-white text-[11px] font-bold font-mono px-2.5 py-1 rounded-lg shadow-sm">
+                          Unit {group.unit}
+                        </span>
+                        <span className="font-bold text-slate-800 text-sm">
+                          {tenant ? tenant.name : (group.payments[0]?.tenantName || 'Unknown Occupant')}
+                        </span>
                       </div>
-
-                      <div className="flex items-center gap-2 w-full md:w-auto">
-                        <button
-                          onClick={() => copyToClipboard(parsedMsg, p.id)}
-                          className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 transition-colors animate-none"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          {copiedSuccess === p.id ? 'Copied!' : 'Copy Template'}
-                        </button>
-                        
-                        {tenant?.phone ? (
-                          <a
-                            href={customWaLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl px-3 py-2 transition-colors animate-none"
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                            Send Reminder
-                          </a>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">No phone attached</span>
-                        )}
+                      
+                      <div className="text-xs text-slate-500 grid grid-cols-1 md:grid-cols-[190px_1fr_120px] gap-x-4 gap-y-1 mt-1.5 items-baseline">
+                        <span className="flex items-center gap-1 font-sans whitespace-nowrap">
+                          Balance Outstanding: 
+                          <span className="font-bold text-slate-800 font-mono text-xs">{formatVal(dueAmount)}</span>
+                        </span>
+                        <span className="text-slate-500 font-sans break-words">
+                          Unpaid Month(s): <span className="font-semibold text-slate-700 font-mono text-[11px]">{group.payments.map(p => p.monthPaidFor).join(', ')}</span>
+                        </span>
+                        <span className="whitespace-nowrap text-slate-500 font-sans">
+                          {tenant ? `Due Day: Day ${tenant.rentDueDateDay}` : ''}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
 
-              {payments.filter(p => p.status !== 'Paid' && isMonthCovered(p.monthPaidFor, statementMonth)).length === 0 && (
+                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                      {/* Log Payment Button */}
+                      <button
+                        onClick={() => handleOpenLogPayment(group)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 hover:border-blue-300 rounded-xl px-3.5 py-2 transition-colors duration-150"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 text-blue-500" />
+                        Log Payment
+                      </button>
+
+                      {/* Copy Template Button */}
+                      <button
+                        onClick={() => copyToClipboard(parsedMsg, group.unit)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3 py-2 transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        {copiedSuccess === group.unit ? 'Copied!' : 'Copy Template'}
+                      </button>
+                      
+                      {tenant?.phone ? (
+                        <a
+                          href={customWaLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 md:flex-none flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl px-3 py-2 transition-colors"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          Send Reminder
+                        </a>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic shrink-0 px-2 py-1 bg-slate-50 rounded-lg">No phone attached</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {groupedReminders.length === 0 && (
                 <div className="text-center py-10 text-slate-400">
                   <CheckCircle className="w-9 h-9 text-emerald-400 mx-auto mb-2" />
                   <p className="text-xs font-semibold text-slate-700">All balances are currently clear</p>
@@ -1690,6 +1921,236 @@ export default function StatementsGenerator({
               )}
             </div>
           </div>
+
+          {/* 2. Outstanding Expenses & Maintenance Bills */}
+          <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+            <div>
+              <h3 className="font-bold text-slate-800 text-md">Outstanding Expenses & Maintenance Bills</h3>
+              <p className="text-xs text-slate-400">Costs or structural repair items currently unpaid, requiring log updates or payment settlement</p>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {outstandingExpenses.map(exp => {
+                const isOverdue = exp.status === 'Overdue' || (exp.dueDate && new Date(exp.dueDate) < new Date() && exp.status !== 'Paid');
+                
+                return (
+                  <div key={exp.id} className="py-5 first:pt-0 last:pb-0 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                    <div className="space-y-1 flex-1 min-w-0 w-full font-sans">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="bg-orange-50 text-orange-600 font-extrabold px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-mono">
+                          {exp.category}
+                        </span>
+                        <span className="font-bold text-slate-800 text-sm">
+                          {exp.title}
+                        </span>
+                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          exp.status === 'Overdue' || isOverdue
+                            ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                            : 'bg-amber-50 text-amber-700 border border-amber-100'
+                        }`}>
+                          {isOverdue ? 'Overdue' : (exp.status || 'Pending')}
+                        </span>
+                      </div>
+                      
+                      <div className="text-xs text-slate-500 grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 mt-1.5 items-baseline font-sans">
+                        <span className="flex items-center gap-1">
+                          Cost: <span className="font-bold text-slate-800 font-mono text-xs">{formatVal(exp.amount)}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          Log Date: <span className="font-semibold text-slate-700 font-mono text-xs">{exp.date}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          {exp.dueDate ? (
+                            <>
+                              Due Date: <span className={`font-semibold font-mono text-xs ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>{exp.dueDate}</span>
+                            </>
+                          ) : (
+                            <span className="text-slate-400 italic font-sans">No deadline set</span>
+                          )}
+                        </span>
+                      </div>
+
+                      {exp.notes && (
+                        <p className="text-xs text-slate-400 mt-1 truncate max-w-2xl font-sans" title={exp.notes}>
+                          Memo: {exp.notes}
+                        </p>
+                      )}
+
+                      {/* Attached Invoice preview indicator if existed */}
+                      {exp.attachmentUrl && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => setZoomedAttachment({ url: exp.attachmentUrl!, title: exp.title })}
+                            className="text-[10px] text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded font-bold uppercase tracking-wide flex items-center gap-1 font-sans"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View Attached Invoice: {exp.attachmentName || 'Invoice_File'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                      {/* Mark as Paid Button */}
+                      <button
+                        onClick={() => handleQuickMarkPaid(exp)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-[11px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 border border-emerald-200 hover:border-emerald-300 rounded-xl px-3.5 py-2 transition-colors duration-150 cursor-pointer"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                        Mark as Paid
+                      </button>
+
+                      {/* Edit Expense Button */}
+                      <button
+                        onClick={() => openEditExpense(exp)}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-600 hover:text-slate-800 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2 transition-colors cursor-pointer"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Log Maintenance/Expense
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {outstandingExpenses.length === 0 && (
+                <div className="text-center py-10 text-slate-400">
+                  <CheckCircle className="w-9 h-9 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-700 font-sans">No outstanding expenses</p>
+                  <p className="text-[11px] text-slate-400 mt-1 font-sans">All recorded maintenance and vendor costs are settled!</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Log Payment Modal Overlay */}
+          {logPaymentModalOpen && loggingUnitGroup && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-md w-full border shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in-50 duration-200">
+                <div className="bg-slate-50 border-b p-5 flex items-center justify-between shrink-0">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                    Log Payment — Unit {loggingUnitGroup.unit}
+                  </h3>
+                  <button
+                    onClick={() => setLogPaymentModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 font-bold text-sm animate-none"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                  {logSuccessMessage ? (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-2">
+                      <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto" />
+                      <p className="text-sm font-bold text-emerald-800">{logSuccessMessage}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Unit & Resident</label>
+                        <div className="w-full text-xs p-2.5 rounded-xl border bg-slate-50 text-slate-700 font-medium">
+                          Unit {loggingUnitGroup.unit} — {loggingUnitGroup.tenant?.name || loggingUnitGroup.payments[0]?.tenantName}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Select Outstanding Month to Log *</label>
+                        <select
+                          required
+                          value={selectedPaymentToLog?.id || ''}
+                          onChange={(e) => {
+                            const p = loggingUnitGroup.payments.find(x => x.id === e.target.value);
+                            if (p) {
+                              setSelectedPaymentToLog(p);
+                              setLogAmount(p.amount);
+                            }
+                          }}
+                          className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                        >
+                          {loggingUnitGroup.payments.map(p => (
+                            <option key={p.id} value={p.id}>
+                              Month: {p.monthPaidFor} — Outstanding Balance: {formatVal(p.amount)} ({p.status})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">Date Paid *</label>
+                          <input
+                            type="date"
+                            required
+                            value={logDate}
+                            onChange={(e) => setLogDate(e.target.value)}
+                            className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">Payment Method *</label>
+                          <select
+                            required
+                            value={logMethod}
+                            onChange={(e) => setLogMethod(e.target.value)}
+                            className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                          >
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Check">Check</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Log Amount *</label>
+                        <input
+                          type="number"
+                          required
+                          min={0.01}
+                          step={0.01}
+                          value={logAmount}
+                          onChange={(e) => setLogAmount(Number(e.target.value))}
+                          className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 font-mono font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Notes</label>
+                        <textarea
+                          value={logNotes}
+                          onChange={(e) => setLogNotes(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 h-20 font-sans"
+                          placeholder="Optional notes about this transaction..."
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setLogPaymentModalOpen(false)}
+                          className="flex-1 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl border transition-colors animate-none"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isLoggingPayment || !selectedPaymentToLog}
+                          onClick={handleConfirmLogPayment}
+                          className="flex-1 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 rounded-xl transition-colors shadow-sm animate-none"
+                        >
+                          {isLoggingPayment ? 'Logging...' : 'Confirm Paid'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 2. Middle Row: Two message template widgets side-by-side inside a 2-column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1716,7 +2177,7 @@ export default function StatementsGenerator({
                   <div className="flex flex-wrap gap-1.5 text-[10.5px]">
                     <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold" title="Injected as Resident name">{'{BeneficiaryName}'}</span>
                     <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold" title="Injected as Resident Unit number">{'{Unit}'}</span>
-                    <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold" title="Injected as Rent/Shares balance amount due">{'{ShareAmount}'}</span>
+                    <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold" title="Injected as Rent/Shares balance amount due">{'{DueAmount}'}</span>
                     <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold" title="Injected as Rent due day in the month">{'{DueDay}'}</span>
                     <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold" title="Injected as billing month (e.g. June 2026)">{'{Month}'}</span>
                   </div>
@@ -1867,6 +2328,204 @@ export default function StatementsGenerator({
               </div>
             </div>
           </div>
+
+          {/* Zoomed Attachment Viewer Modal */}
+          {zoomedAttachment && (
+            <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-lg w-full border shadow-2xl overflow-hidden animate-zoom-in font-sans">
+                <div className="p-4 bg-slate-50 border-b flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-800 truncate max-w-sm">Attached Invoice: {zoomedAttachment.title}</span>
+                  <button onClick={() => setZoomedAttachment(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                </div>
+                
+                <div className="p-4 bg-white flex items-center justify-center min-h-[300px]">
+                  {zoomedAttachment.url.startsWith('data:application/pdf') ? (
+                    <iframe src={zoomedAttachment.url} className="w-full h-[400px] border rounded" title="Attached Invoice PDF Preview" />
+                  ) : (
+                    <img referrerPolicy="no-referrer" src={zoomedAttachment.url} alt="Expanded preview attached invoice" className="max-w-full max-h-[450px] object-contain rounded-xl border" />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Expense Modal */}
+          {editingExpense && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+              <div className="bg-white rounded-2xl max-w-md w-full border shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-zoom-in font-sans">
+                <div className="bg-slate-50 border-b p-5 flex items-center justify-between shrink-0">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                    <Edit2 className="w-4 h-4 text-blue-600" />
+                    Log Maintenance/Expense
+                  </h3>
+                  <button
+                    onClick={() => setEditingExpense(null)}
+                    className="text-slate-400 hover:text-slate-600 font-bold text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveExpense} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Expense Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={expenseTitle}
+                      onChange={(e) => setExpenseTitle(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. Clean elevator pits or water pump"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Category *</label>
+                      <select
+                        value={expenseCategory}
+                        onChange={(e) => setExpenseCategory(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                      >
+                        {(building?.customExpenseCategories || ['Repairs & Spares', 'Contractors & Services', 'Utilities & Water', 'Salaries & Wages', 'Taxes & Levies', 'Cleanouts & Gardening', 'Insurance Pool', 'Other']).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Cost Amount ({building?.currency || 'JOD'}) *</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        value={expenseAmount}
+                        onChange={(e) => setExpenseAmount(Number(e.target.value))}
+                        className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Log Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={expenseDate}
+                        onChange={(e) => setExpenseDate(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Due Date (Optional)</label>
+                      <input
+                        type="date"
+                        value={expenseDueDate}
+                        onChange={(e) => setExpenseDueDate(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Payment Status *</label>
+                    <select
+                      value={expenseStatus}
+                      onChange={(e) => setExpenseStatus(e.target.value as any)}
+                      className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                    >
+                      <option value="Paid">Paid</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Overdue">Overdue</option>
+                    </select>
+                  </div>
+
+                  {/* Attachment */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Attach Original Invoice / Receipt (Optional)</label>
+                    {expenseAttachmentUrl ? (
+                      <div className="border border-slate-100 rounded-xl p-3 bg-slate-50 flex items-center justify-between">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div className="w-10 h-10 rounded border bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs uppercase text-slate-500 font-mono">
+                            {expenseAttachmentUrl.startsWith('data:application/pdf') ? 'PDF' : <img referrerPolicy="no-referrer" src={expenseAttachmentUrl} className="w-full h-full object-cover" />}
+                          </div>
+                          <div className="overflow-hidden">
+                            <span className="text-xs font-semibold text-slate-700 block truncate">{expenseAttachmentName || 'invoice_file.png'}</span>
+                            <span className="text-[10px] text-emerald-600 font-bold block">✓ Invoice Loaded</span>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => { setExpenseAttachmentName(''); setExpenseAttachmentUrl(''); }} 
+                          className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-white border px-2.5 py-1.5 rounded-lg hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div 
+                        onDragOver={(e) => { e.preventDefault(); setDragOverExpense(true); }}
+                        onDragLeave={() => setDragOverExpense(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOverExpense(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            handleExpenseFileChange(e.dataTransfer.files[0]);
+                          }
+                        }}
+                        onClick={() => fileInputExpenseRef.current?.click()}
+                        className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors ${
+                          dragOverExpense ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="text-xs font-semibold text-slate-600">Drag & drop invoice, or <span className="text-blue-500 font-bold">browse</span></p>
+                        <p className="text-[10px] text-slate-400 mt-1">Supports image or PDF files</p>
+                        <input 
+                          type="file" 
+                          ref={fileInputExpenseRef}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              handleExpenseFileChange(e.target.files[0]);
+                            }
+                          }}
+                          accept="image/*,application/pdf"
+                          className="hidden" 
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Notes</label>
+                    <textarea
+                      placeholder="Enter optional description..."
+                      value={expenseNotes}
+                      onChange={(e) => setExpenseNotes(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 h-16 resize-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setEditingExpense(null)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
+                    >
+                      Save Expense Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
         </div>
       )}

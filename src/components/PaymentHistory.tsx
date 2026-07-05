@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Tenant, Payment, formatCurrency, getMonthCount, CustomPaymentMethod, normalizePaymentMethods } from '../types';
-import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save, Download, Copy, FileImage, ShieldCheck } from 'lucide-react';
+import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Trash2, Edit2, Save, Download, Copy, FileImage, ShieldCheck, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { getReceiptWhatsAppLink } from '../utils/whatsapp';
 import html2canvas from 'html2canvas';
 import ConfirmationDialog from './ConfirmationDialog';
@@ -39,9 +39,20 @@ export default function PaymentHistory({
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [sortField, setSortField] = useState<'receiptNumber' | 'tenantName' | 'unit' | 'monthPaidFor' | 'amount' | 'date'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Reset page when filters or sorting change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterStatus, filterStartDate, filterEndDate, sortField, sortOrder, itemsPerPage]);
   
   // Selected Payment for Receipt Viewer
   const [viewingReceipt, setViewingReceipt] = useState<Payment | null>(null);
@@ -563,22 +574,109 @@ export default function PaymentHistory({
     closeForm();
   };
 
-  // Filter Payments
-  const filteredPayments = payments.filter(p => {
-    // filter status
-    if (filterStatus !== 'all' && p.status !== filterStatus) return false;
+  // 1. Filter Payments
+  const filteredPayments = React.useMemo(() => {
+    return payments.filter(p => {
+      // filter status
+      if (filterStatus !== 'all' && p.status !== filterStatus) return false;
 
-    // filter search
-    if (search.trim() !== '') {
-      const q = search.toLowerCase();
-      const matchName = p.tenantName.toLowerCase().includes(q);
-      const matchUnit = p.unit.toLowerCase().includes(q);
-      const matchReceipt = p.receiptNumber.toLowerCase().includes(q);
-      const matchNotes = p.notes?.toLowerCase().includes(q);
-      return matchName || matchUnit || matchReceipt || matchNotes;
+      // proper date filter (p.date is in YYYY-MM-DD format)
+      if (filterStartDate && p.date && p.date < filterStartDate) return false;
+      if (filterEndDate && p.date && p.date > filterEndDate) return false;
+
+      // filter search
+      if (search.trim() !== '') {
+        const q = search.toLowerCase();
+        const matchName = p.tenantName.toLowerCase().includes(q);
+        const matchUnit = p.unit.toLowerCase().includes(q);
+        const matchReceipt = p.receiptNumber.toLowerCase().includes(q);
+        const matchNotes = p.notes?.toLowerCase().includes(q);
+        return matchName || matchUnit || matchReceipt || matchNotes;
+      }
+      return true;
+    });
+  }, [payments, filterStatus, filterStartDate, filterEndDate, search]);
+
+  // 2. Sort Payments
+  const sortedPayments = React.useMemo(() => {
+    // Safe parser for dates in multiple formats to sort chronologically
+    const parseDateToTime = (dStr: string) => {
+      if (!dStr) return 0;
+      if (dStr.includes('/')) {
+        const parts = dStr.split('/');
+        if (parts.length === 3) {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          const p2 = parseInt(parts[2], 10);
+          if (p0 > 12) {
+            return new Date(p2, p1 - 1, p0).getTime();
+          } else {
+            return new Date(p2, p0 - 1, p1).getTime();
+          }
+        }
+      }
+      if (dStr.includes('-')) {
+        const parts = dStr.split('-');
+        if (parts.length === 3) {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          const p2 = parseInt(parts[2], 10);
+          if (p0 > 1000) {
+            return new Date(p0, p1 - 1, p2).getTime();
+          } else if (p2 > 1000) {
+            if (p0 > 12) {
+              return new Date(p2, p1 - 1, p0).getTime();
+            } else {
+              return new Date(p2, p0 - 1, p1).getTime();
+            }
+          }
+        }
+      }
+      const t = Date.parse(dStr);
+      return isNaN(t) ? 0 : t;
+    };
+
+    return [...filteredPayments].sort((a, b) => {
+      if (sortField === 'date') {
+        const timeA = parseDateToTime(a.date || '');
+        const timeB = parseDateToTime(b.date || '');
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+
+      let valA: any = a[sortField] || '';
+      let valB: any = b[sortField] || '';
+
+      if (sortField === 'amount') {
+        valA = Number(valA);
+        valB = Number(valB);
+      } else {
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredPayments, sortField, sortOrder]);
+
+  // 3. Paginate Payments
+  const paginatedPayments = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return sortedPayments.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedPayments, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(sortedPayments.length / itemsPerPage);
+
+  // Helper to toggle sorting
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc'); // Default to descending when changing sort field
     }
-    return true;
-  });
+  };
 
   return (
     <div className="space-y-6" id="payment-history-module">
@@ -598,24 +696,62 @@ export default function PaymentHistory({
       </div>
 
       {/* Controls panel: Search & Filters */}
-      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
-        {/* Toggle selectors */}
-        <div className="flex gap-2 bg-slate-50 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
-          {['all', 'Paid', 'Pending', 'Overdue'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setFilterStatus(st)}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-lg font-bold text-xs transition-colors ${
-                filterStatus === st ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              {st === 'all' ? 'All Statements' : st}
-            </button>
-          ))}
+      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center" id="payment-history-filters-container">
+        {/* Toggle selectors & dropdowns */}
+        <div className="flex flex-col md:flex-row gap-4 items-center w-full xl:w-auto">
+          {/* Toggle status selectors */}
+          <div className="flex gap-1.5 bg-slate-50 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
+            {['all', 'Paid', 'Pending', 'Overdue'].map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`whitespace-nowrap px-4 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                  filterStatus === st ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {st === 'all' ? 'All Statuses' : st}
+              </button>
+            ))}
+          </div>
+
+          {/* Proper Date Filter Inputs */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">From:</span>
+              <input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => setFilterStartDate(e.target.value)}
+                className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">To:</span>
+              <input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => setFilterEndDate(e.target.value)}
+                className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
+              />
+            </div>
+
+            {(filterStartDate || filterEndDate) && (
+              <button
+                onClick={() => {
+                  setFilterStartDate('');
+                  setFilterEndDate('');
+                }}
+                className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider cursor-pointer"
+              >
+                Clear Dates
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search */}
-        <div className="relative w-full md:w-80">
+        <div className="relative w-full xl:w-80">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">
             <Search className="w-4 h-4" />
           </span>
@@ -634,18 +770,43 @@ export default function PaymentHistory({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50">
-                <th className="py-3 px-4">Receipt No & Beneficiary</th>
-                <th className="py-3 px-4 text-center">Unit</th>
-                <th className="py-3 px-4">Period</th>
-                <th className="py-3 px-4">Financial Amount</th>
-                <th className="py-3 px-4">Method & Date</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+              <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50 select-none">
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('tenantName')}>
+                  <div className="flex items-center gap-1">
+                    Receipt No & Beneficiary
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'tenantName' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('unit')}>
+                  <div className="flex items-center justify-center gap-1">
+                    Unit
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'unit' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('monthPaidFor')}>
+                  <div className="flex items-center gap-1">
+                    Period
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'monthPaidFor' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('amount')}>
+                  <div className="flex items-center gap-1">
+                    Financial Amount
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'amount' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('date')}>
+                  <div className="flex items-center gap-1">
+                    Method & Date
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'date' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 text-center">Status</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/50">
-              {filteredPayments.map(p => {
+              {paginatedPayments.map(p => {
                 // Determine WhatsApp send link
                 const tenant = tenants.find(t => t.id === p.tenantId);
                 const hasPhone = tenant && tenant.phone;
@@ -796,7 +957,7 @@ export default function PaymentHistory({
                 );
               })}
 
-              {filteredPayments.length === 0 && (
+              {sortedPayments.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center py-16 text-slate-400 bg-white">
                     <Receipt className="w-12 h-12 text-slate-200 mx-auto mb-3" />
@@ -809,6 +970,102 @@ export default function PaymentHistory({
           </table>
         </div>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs text-slate-500 font-sans" id="payment-history-pagination">
+          <div className="flex items-center gap-2">
+            <span>Show</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold focus:outline-none cursor-pointer"
+            >
+              {[5, 10, 15, 25, 50, 100].map(sz => (
+                <option key={sz} value={sz}>{sz} rows</option>
+              ))}
+            </select>
+            <span>
+              Showing <strong className="text-slate-700">{sortedPayments.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
+              <strong className="text-slate-700">{Math.min(sortedPayments.length, currentPage * itemsPerPage)}</strong> of{" "}
+              <strong className="text-slate-700">{sortedPayments.length}</strong> statements
+            </span>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="First Page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 -mr-1 inline-block" />
+                <ChevronLeft className="w-3.5 h-3.5 inline-block" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-center gap-1 font-sans">
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pageNum = idx + 1;
+                  // Show current page, and up to 1 page before/after, plus first/last page if needed
+                  const isNear = Math.abs(currentPage - pageNum) <= 1;
+                  const isEnds = pageNum === 1 || pageNum === totalPages;
+                  
+                  if (!isNear && !isEnds) {
+                    if (pageNum === 2 || pageNum === totalPages - 1) {
+                      return <span key={pageNum} className="px-1 text-slate-300">...</span>;
+                    }
+                    return null;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        currentPage === pageNum
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "border border-slate-100 hover:bg-slate-50 text-slate-600"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Next Page"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Last Page"
+              >
+                <ChevronRight className="w-3.5 h-3.5 inline-block" />
+                <ChevronRight className="w-3.5 h-3.5 -ml-1 inline-block" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Manual log form dialog */}
       {isFormOpen && (

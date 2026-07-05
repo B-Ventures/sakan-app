@@ -28,6 +28,7 @@ import {
   Lock,
   ArrowRight,
   Settings,
+  Sliders,
   Upload,
   Shield,
   Smartphone,
@@ -69,7 +70,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
-  DEFAULT_PAYMENT_METHODS
+  DEFAULT_PAYMENT_METHODS,
+  isMonthCovered
 } from './types';
 
 export default function App() {
@@ -384,9 +386,24 @@ export default function App() {
       const sortedPayments = [...loadedPayments].sort((a,b) => b.date.localeCompare(a.date));
       const sortedExpenses = [...loadedExpenses].sort((a,b) => b.date.localeCompare(a.date));
 
+      // Filter out duplicate unpaid payments if there is a 'Paid' record for same tenant and month
+      const demoPaidKeys = new Set(
+        sortedPayments
+          .filter(p => p.status === 'Paid' && p.tenantId && p.monthPaidFor)
+          .map(p => `${p.tenantId}_${p.monthPaidFor}`)
+      );
+      const filteredDemoPayments = sortedPayments.filter(p => 
+        !(p.status !== 'Paid' && p.tenantId && p.monthPaidFor && demoPaidKeys.has(`${p.tenantId}_${p.monthPaidFor}`))
+      );
+
       setTenants(loadedTenants);
-      setPayments(sortedPayments);
+      setPayments(filteredDemoPayments);
       setExpenses(sortedExpenses);
+
+      // Persist the cleaned payments list in demo mode if duplicates were cleaned up
+      if (filteredDemoPayments.length < sortedPayments.length) {
+        localStorage.setItem(paymentsKey, JSON.stringify(filteredDemoPayments));
+      }
       setLoadingData(false);
 
       if (activeUserId) {
@@ -411,9 +428,48 @@ export default function App() {
 
     const unsubPayments = subscribeToPayments(
       activeBuilding.id,
-      (list) => {
-        // Sort payments by date descending
-        const sorted = [...list].sort((a,b) => b.date.localeCompare(a.date));
+      async (list) => {
+        // Identify duplicates/stale unpaid records where a Paid record exists (direct or range-covered)
+        const duplicatesToDelete = list.filter(p => {
+          if (p.status === 'Paid') return false;
+          return list.some(other => 
+            other.status === 'Paid' && 
+            other.tenantId === p.tenantId && 
+            isMonthCovered(other.monthPaidFor, p.monthPaidFor)
+          );
+        });
+
+        if (duplicatesToDelete.length > 0) {
+          console.log(`Found ${duplicatesToDelete.length} duplicate/stale unpaid payments. Cleaning up...`);
+          for (const dup of duplicatesToDelete) {
+            try {
+              await removePayment(activeBuilding.id, dup.id);
+            } catch (err) {
+              console.error('Failed to remove duplicate payment:', err);
+            }
+          }
+        }
+
+        // Filter out duplicates so they immediately disappear from UI
+        const filteredList = list.filter(p => {
+          if (p.status === 'Paid') return true;
+          const isAlreadyPaid = list.some(other => 
+            other.status === 'Paid' && 
+            other.tenantId === p.tenantId && 
+            isMonthCovered(other.monthPaidFor, p.monthPaidFor)
+          );
+          return !isAlreadyPaid;
+        });
+
+        // Sort payments by date descending (or fallback to receipt number/ID if date is blank)
+        const sorted = [...filteredList].sort((a,b) => {
+          const dateA = a.date || '';
+          const dateB = b.date || '';
+          if (dateA !== dateB) {
+            return dateB.localeCompare(dateA);
+          }
+          return b.id.localeCompare(a.id);
+        });
         setPayments(sorted);
       },
       (err) => console.error(err)
@@ -438,6 +494,98 @@ export default function App() {
       unsubExpenses();
     };
   }, [activeBuilding, activeUserId, isDemoMode, triggerRefresh]);
+
+  // Automated Daily/Login/Transaction billing integrity check
+  const [isIntegrityCheckRunning, setIsIntegrityCheckRunning] = useState(false);
+
+  useEffect(() => {
+    if (!activeBuilding || tenants.length === 0 || payments.length === 0 || isIntegrityCheckRunning) {
+      return;
+    }
+
+    // Safeguard: Prevent syncing real database with a demo building ID during transition
+    if (!isDemoMode && activeBuilding.id.startsWith('demo-')) {
+      return;
+    }
+
+    const runCheck = async () => {
+      setIsIntegrityCheckRunning(true);
+      try {
+        const { checkAndSyncPayments } = await import('./utils/billingSync');
+        const { paymentsToCreate, paymentsToUpdate, paymentsToDelete } = checkAndSyncPayments(
+          tenants,
+          payments,
+          activeBuilding,
+          new Date()
+        );
+
+        if (paymentsToCreate.length === 0 && paymentsToUpdate.length === 0 && paymentsToDelete.length === 0) {
+          setIsIntegrityCheckRunning(false);
+          return;
+        }
+
+        console.log(`[Billing Sync] Detected ${paymentsToCreate.length} missing payments, ${paymentsToUpdate.length} updates, and ${paymentsToDelete.length} deletions required.`);
+
+        if (isDemoMode) {
+          let updatedPayments = [...payments];
+
+          // Process deletions
+          updatedPayments = updatedPayments.filter(p => !paymentsToDelete.includes(p.id));
+
+          // Process updates
+          updatedPayments = updatedPayments.map(p => {
+            const update = paymentsToUpdate.find(u => u.id === p.id);
+            return update ? { ...p, status: update.status } : p;
+          });
+
+          // Process creations
+          const created: Payment[] = paymentsToCreate.map((newP, idx) => ({
+            ...newP,
+            id: `demo-p-auto-${Date.now()}-${idx}`
+          }));
+
+          const finalPayments = [...created, ...updatedPayments];
+          setPayments(finalPayments);
+          localStorage.setItem(`demo_payments_${activeBuilding.id}`, JSON.stringify(finalPayments));
+        } else {
+          // Sync with Firestore
+          const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+          
+          // Delete duplicates/stale unpaid records
+          for (const id of paymentsToDelete) {
+            await removePayment(activeBuilding.id, id);
+            await delay(100);
+          }
+
+          // Update outdated statuses
+          for (const update of paymentsToUpdate) {
+            const p = payments.find(x => x.id === update.id);
+            if (p) {
+              await savePayment(activeBuilding.id, { ...p, status: update.status });
+              await delay(100);
+            }
+          }
+
+          // Create missing records
+          for (const newP of paymentsToCreate) {
+            await savePayment(activeBuilding.id, newP);
+            await delay(100);
+          }
+        }
+      } catch (err) {
+        console.error('[Billing Sync] Error during synchronization:', err);
+      } finally {
+        setIsIntegrityCheckRunning(false);
+      }
+    };
+
+    // Run the check after a short debounce to let other states settle
+    const timer = setTimeout(() => {
+      runCheck();
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [activeBuilding, tenants, payments, isDemoMode]);
 
   // Google Authentication Trigger
   const handleGoogleSignIn = async () => {
@@ -1120,35 +1268,74 @@ export default function App() {
     if (!activeBuilding) return;
 
     if (isDemoMode) {
-      const receiptCode = `REC-${newPaymentArgs.monthPaidFor.replace('-', '')}-${newPaymentArgs.unit.replace(/\s+/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
-      const payload: Payment = {
-        ...newPaymentArgs,
-        id: `demo-p-${Date.now()}`,
-        receiptNumber: receiptCode,
-      };
-      const updatedPayments = [payload, ...payments];
+      const existingIdx = payments.findIndex(p => 
+        p.tenantId === newPaymentArgs.tenantId && 
+        p.monthPaidFor === newPaymentArgs.monthPaidFor && 
+        p.status !== 'Paid'
+      );
+      let updatedPayments: Payment[];
+      if (existingIdx !== -1) {
+        const updatedPayment: Payment = {
+          ...payments[existingIdx],
+          ...newPaymentArgs,
+        };
+        updatedPayments = payments.map((p, idx) => idx === existingIdx ? updatedPayment : p);
+      } else {
+        const receiptCode = `REC-${newPaymentArgs.monthPaidFor.replace('-', '')}-${newPaymentArgs.unit.replace(/\s+/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
+        const payload: Payment = {
+          ...newPaymentArgs,
+          id: `demo-p-${Date.now()}`,
+          receiptNumber: receiptCode,
+        };
+        updatedPayments = [payload, ...payments];
+      }
       setPayments(updatedPayments);
       localStorage.setItem(`demo_payments_${activeBuilding.id}`, JSON.stringify(updatedPayments));
       return;
     }
 
     try {
-      const receiptCode = `REC-${newPaymentArgs.monthPaidFor.replace('-', '')}-${newPaymentArgs.unit.replace(/\s+/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
-      const payload = {
-        ...newPaymentArgs,
-        receiptNumber: receiptCode,
-      };
-      await savePayment(activeBuilding.id, payload);
-
-      await logAction(
-        activeBuilding.id,
-        activeUserId || '',
-        activeUserEmail || '',
-        'CREATE_PAYMENT',
-        `Rent payment manually logged for "${newPaymentArgs.tenantName}" (Unit "${newPaymentArgs.unit}") for Month ${newPaymentArgs.monthPaidFor} of amount ${newPaymentArgs.amount} ${activeBuilding.currency || 'JOD'}.`,
-        undefined,
-        'payment'
+      const existingUnpaid = payments.find(p => 
+        p.tenantId === newPaymentArgs.tenantId && 
+        p.monthPaidFor === newPaymentArgs.monthPaidFor && 
+        p.status !== 'Paid'
       );
+
+      if (existingUnpaid) {
+        const payload: Payment = {
+          ...existingUnpaid,
+          ...newPaymentArgs,
+        };
+        await savePayment(activeBuilding.id, payload);
+
+        await logAction(
+          activeBuilding.id,
+          activeUserId || '',
+          activeUserEmail || '',
+          'UPDATE_PAYMENT',
+          `Rent payment status updated to "Paid" via logging for "${newPaymentArgs.tenantName}" (Unit "${newPaymentArgs.unit}") for Month ${newPaymentArgs.monthPaidFor} of amount ${newPaymentArgs.amount} ${activeBuilding.currency || 'JOD'}.`,
+          payload.id,
+          'payment',
+          { payment: payload }
+        );
+      } else {
+        const receiptCode = `REC-${newPaymentArgs.monthPaidFor.replace('-', '')}-${newPaymentArgs.unit.replace(/\s+/g, '')}-${Math.floor(100 + Math.random() * 900)}`;
+        const payload = {
+          ...newPaymentArgs,
+          receiptNumber: receiptCode,
+        };
+        await savePayment(activeBuilding.id, payload);
+
+        await logAction(
+          activeBuilding.id,
+          activeUserId || '',
+          activeUserEmail || '',
+          'CREATE_PAYMENT',
+          `Rent payment manually logged for "${newPaymentArgs.tenantName}" (Unit "${newPaymentArgs.unit}") for Month ${newPaymentArgs.monthPaidFor} of amount ${newPaymentArgs.amount} ${activeBuilding.currency || 'JOD'}.`,
+          undefined,
+          'payment'
+        );
+      }
     } catch (e) {
       console.error(e);
     }
@@ -1857,6 +2044,32 @@ export default function App() {
                   <Shield className="w-4 h-4 text-red-600" />
                   SuperAdmin Directory
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('superadmin_subscriptions')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'superadmin_subscriptions'
+                      ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-superadmin-subscriptions"
+                >
+                  <CreditCard className="w-4 h-4 text-red-600" />
+                  SaaS Billing & Subscriptions
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('superadmin_packages')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'superadmin_packages'
+                      ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-superadmin-packages"
+                >
+                  <Sliders className="w-4 h-4 text-red-600" />
+                  SaaS Packages & Stripe Settings
+                </button>
               </>
             )}
           </nav>
@@ -2006,6 +2219,8 @@ export default function App() {
               {activeTab === 'audit' && 'System Audit Trail Ledger'}
               {activeTab === 'superadmin_analytics' && '📈 Global Platform Analytics'}
               {activeTab === 'superadmin_directory' && '🛡️ System SuperAdmin Customer Directory'}
+              {activeTab === 'superadmin_subscriptions' && '💳 Platform SaaS Subscriptions & Plans Console'}
+              {activeTab === 'superadmin_packages' && '⚙️ SaaS Packages & Stripe Integration'}
               {activeTab === 'superadmin' && '🛡️ System SuperAdmin Customer Directory'}
             </h1>
           </div>
@@ -2036,7 +2251,7 @@ export default function App() {
                 Send Reminders
               </button>
             )}
-            {isSuperAdminSession && (activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory') && (
+            {isSuperAdminSession && (activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') && (
               <button
                 onClick={loadSuperAdminDashboard}
                 disabled={superAdminLoading}
@@ -2112,6 +2327,9 @@ export default function App() {
                   building={activeBuilding}
                   onUpdateBuildingSettings={handleUpdateBuildingSettings}
                   onAutopilotSync={handleAutopilotSync}
+                  onAddPayment={handleAddPayment}
+                  onEditPayment={handleEditPayment}
+                  onEditExpense={handleEditExpense}
                 />
               )}
 
@@ -2122,7 +2340,7 @@ export default function App() {
                 />
               )}
 
-              {(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory') && isSuperAdminSession && (
+              {(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') && isSuperAdminSession && (
                 <SuperAdminPanel
                   customers={allCustomers}
                   buildings={allBuildings}
@@ -2131,8 +2349,26 @@ export default function App() {
                   expenses={allExpenses}
                   loading={superAdminLoading}
                   impersonatedUser={impersonatedUser}
-                  activeSubTab={activeTab === 'superadmin_directory' ? 'directory' : 'analytics'}
-                  onChangeSubTab={(tab) => setActiveTab(tab === 'directory' ? 'superadmin_directory' : 'superadmin_analytics')}
+                  activeSubTab={
+                    activeTab === 'superadmin_directory'
+                      ? 'directory'
+                      : activeTab === 'superadmin_subscriptions'
+                      ? 'subscriptions'
+                      : activeTab === 'superadmin_packages'
+                      ? 'packages'
+                      : 'analytics'
+                  }
+                  onChangeSubTab={(tab) => {
+                    if (tab === 'directory') {
+                      setActiveTab('superadmin_directory');
+                    } else if (tab === 'subscriptions') {
+                      setActiveTab('superadmin_subscriptions');
+                    } else if (tab === 'packages') {
+                      setActiveTab('superadmin_packages');
+                    } else {
+                      setActiveTab('superadmin_analytics');
+                    }
+                  }}
                   onImpersonate={(user) => {
                     setImpersonatedUser(user);
                     setActiveTab('overview');
@@ -2191,8 +2427,8 @@ export default function App() {
           </button>
           {isSuperAdminSession && (
             <button
-              onClick={() => setActiveTab('superadmin_analytics')}
-              className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+              onClick={() => setActiveTab('superadmin_subscriptions')}
+              className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
             >
               <Shield className="w-4 h-4 text-red-500" />
               Admin
@@ -2200,7 +2436,7 @@ export default function App() {
           )}
         </div>
       ) : (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-2 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-3 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
           <button
             onClick={() => setActiveTab('superadmin_analytics')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_analytics' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
@@ -2214,6 +2450,13 @@ export default function App() {
           >
             <Shield className="w-5 h-5 text-red-500" />
             SuperAdmin Registry
+          </button>
+          <button
+            onClick={() => setActiveTab('superadmin_subscriptions')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_subscriptions' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <CreditCard className="w-5 h-5 text-red-500" />
+            SaaS Billing
           </button>
         </div>
       )}
@@ -2297,6 +2540,7 @@ export default function App() {
           expenses={expenses}
           isDemoMode={isDemoMode}
           onRestoreBackup={handleRestoreBackup}
+          buildings={buildings}
         />
       )}
 

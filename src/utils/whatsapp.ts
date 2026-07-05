@@ -90,6 +90,7 @@ export function parseReminderTemplate(
     .replace(/{Unit}/g, unit)
     .replace(/{RentAmount}/g, formattedAmount)
     .replace(/{ShareAmount}/g, formattedAmount)
+    .replace(/{DueAmount}/g, formattedAmount)
     .replace(/{DueDay}/g, displayDueDay)
     .replace(/{Month}/g, monthName)
     .replace(/{transfer_ID}/g, transferId || '');

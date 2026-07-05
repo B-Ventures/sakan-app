@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Tenant, Payment, Expense, ExpenseCategory, formatCurrency } from '../types';
+import { Tenant, Payment, Expense, ExpenseCategory, formatCurrency, isMonthCovered } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, Building, Percent, AlertCircle, Calendar, ArrowUpRight, ArrowDownRight, Send, Upload, Search } from 'lucide-react';
 import { getReminderWhatsAppLink } from '../utils/whatsapp';
 
@@ -27,6 +27,7 @@ export default function DashboardOverview({
   activeBuilding,
 }: DashboardOverviewProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [reminderTab, setReminderTab] = React.useState<'rent' | 'expenses'>('rent');
 
   // Calculations
   const occupiedUnits = tenants.filter(t => t.status === 'active').length;
@@ -71,7 +72,80 @@ export default function DashboardOverview({
   const netProfit = totalIncomePaid - totalExpenses;
 
   // Unpaid Rent Accounts (Pending & Overdue for current month or overall)
-  const unpaidRentPayments = payments.filter(p => p.status !== 'Paid');
+  // We exclude any unpaid payment if there exists a 'Paid' payment covering the same month for this unit/tenant
+  const unpaidRentPayments = payments.filter(p => {
+    if (p.status === 'Paid') return false;
+    const isAlreadyPaid = payments.some(other => 
+      other.status === 'Paid' && 
+      other.tenantId === p.tenantId && 
+      isMonthCovered(other.monthPaidFor, p.monthPaidFor)
+    );
+    return !isAlreadyPaid;
+  });
+
+  // Group unpaid payments by unit at the component level
+  const groupedUnpaidDues = React.useMemo(() => {
+    const groupsMap = new Map<string, Payment[]>();
+    unpaidRentPayments.forEach(p => {
+      const key = p.unit || 'Unknown';
+      if (!groupsMap.has(key)) {
+        groupsMap.set(key, []);
+      }
+      groupsMap.get(key)!.push(p);
+    });
+
+    const list: {
+      unit: string;
+      tenantName: string;
+      tenantId: string;
+      payments: Payment[];
+      totalDueAmount: number;
+    }[] = [];
+
+    groupsMap.forEach((pList, unit) => {
+      const firstP = pList[0];
+      const tenant = tenants.find(t => t.id === firstP.tenantId) || tenants.find(t => t.unit === unit);
+      
+      const totalDueAmount = pList.reduce((sum, p) => {
+        const pAmount = p.amount > 0
+          ? p.amount
+          : (tenant
+              ? (tenant.monthlyRent + (tenant.guardFee ?? activeBuilding?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0))
+              : 0
+            );
+        return sum + pAmount;
+      }, 0);
+
+      list.push({
+        unit,
+        tenantName: tenant ? tenant.name : (firstP.tenantName || 'Unknown Occupant'),
+        tenantId: firstP.tenantId,
+        payments: pList,
+        totalDueAmount
+      });
+    });
+
+    return list.sort((a, b) => a.unit.localeCompare(b.unit, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [unpaidRentPayments, tenants, activeBuilding]);
+
+  const totalDueIncome = React.useMemo(() => {
+    return unpaidRentPayments.reduce((sum, p) => {
+      const tenant = tenants.find(t => t.id === p.tenantId) || tenants.find(t => t.unit === p.unit);
+      const pAmount = p.amount > 0
+        ? p.amount
+        : (tenant
+            ? (tenant.monthlyRent + (tenant.guardFee ?? activeBuilding?.defaultGuardFee ?? 0) + (tenant.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0))
+            : 0
+          );
+      return sum + pAmount;
+    }, 0);
+  }, [unpaidRentPayments, tenants, activeBuilding]);
+
+  const totalDueExpenses = React.useMemo(() => {
+    return expenses
+      .filter(e => e.status === 'Pending' || e.status === 'Overdue')
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  }, [expenses]);
 
   // Breakdown of active expenses by Category
   const expenseByCategory: Record<string, number> = {};
@@ -83,6 +157,43 @@ export default function DashboardOverview({
 
   const categoriesList = Object.keys(expenseByCategory);
   const maxCategoryExpense = Math.max(...Object.values(expenseByCategory), 1);
+
+  // Safe parser for dates in multiple formats (YYYY-MM-DD, D/M/YYYY, etc.) to sort chronologically
+  const parseDateToTime = (dStr: string) => {
+    if (!dStr) return 0;
+    if (dStr.includes('/')) {
+      const parts = dStr.split('/');
+      if (parts.length === 3) {
+        const p0 = parseInt(parts[0], 10);
+        const p1 = parseInt(parts[1], 10);
+        const p2 = parseInt(parts[2], 10);
+        if (p0 > 12) {
+          return new Date(p2, p1 - 1, p0).getTime();
+        } else {
+          return new Date(p2, p0 - 1, p1).getTime();
+        }
+      }
+    }
+    if (dStr.includes('-')) {
+      const parts = dStr.split('-');
+      if (parts.length === 3) {
+        const p0 = parseInt(parts[0], 10);
+        const p1 = parseInt(parts[1], 10);
+        const p2 = parseInt(parts[2], 10);
+        if (p0 > 1000) {
+          return new Date(p0, p1 - 1, p2).getTime();
+        } else if (p2 > 1000) {
+          if (p0 > 12) {
+            return new Date(p2, p1 - 1, p0).getTime();
+          } else {
+            return new Date(p2, p0 - 1, p1).getTime();
+          }
+        }
+      }
+    }
+    const t = Date.parse(dStr);
+    return isNaN(t) ? 0 : t;
+  };
 
   // Recent Transactions combining both
   const recentTransactions = [
@@ -102,7 +213,11 @@ export default function DashboardOverview({
       date: e.date,
       category: e.category,
     })),
-  ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
+  ].sort((a, b) => {
+    const timeA = parseDateToTime(a.date);
+    const timeB = parseDateToTime(b.date);
+    return timeB - timeA;
+  }).slice(0, 10);
 
   return (
     <div className="space-y-6" id="dashboard-tab">
@@ -118,28 +233,39 @@ export default function DashboardOverview({
           </div>
           <div className="mt-4">
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}</h3>
-            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-              <span>Income minus operational cost</span>
-            </p>
+            <div className="text-xs text-slate-400 mt-2.5 space-y-1">
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Realized In:</span>
+                <span className="text-emerald-600 font-semibold">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Operational Out:</span>
+                <span className="text-orange-600 font-semibold">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Total Rent Income Received */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-income">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Collected Income (Paid)</span>
+            <span className="text-sm font-medium text-slate-500">Collected Income</span>
             <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</h3>
-            <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-              <span className="text-blue-600 font-semibold text-[11px]">
-                {formatCurrency(totalProjectedIncome, activeBuilding?.currency || 'JOD')}
-              </span>
-              <span>projectation</span>
-            </p>
+            <div className="text-xs text-slate-400 mt-2.5 space-y-1">
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Projectation:</span>
+                <span className="text-blue-600 font-semibold">{formatCurrency(totalProjectedIncome, activeBuilding?.currency || 'JOD')}</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Uncollected (Due):</span>
+                <span className="text-rose-600 font-semibold">{formatCurrency(totalDueIncome, activeBuilding?.currency || 'JOD')}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -153,9 +279,16 @@ export default function DashboardOverview({
           </div>
           <div className="mt-4">
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</h3>
-            <p className="text-xs text-slate-400 mt-2">
-              Across {expenses.length} recorded items
-            </p>
+            <div className="text-xs text-slate-400 mt-2.5 space-y-1">
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Total Items:</span>
+                <span className="text-slate-700 font-semibold">{expenses.length} items</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Unpaid (Due):</span>
+                <span className="text-orange-600 font-semibold">{formatCurrency(totalDueExpenses, activeBuilding?.currency || 'JOD')}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -168,10 +301,17 @@ export default function DashboardOverview({
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-3xl font-bold text-slate-900">{occupancyRate}%</h3>
-            <p className="text-xs text-slate-400 mt-2">
-              {occupiedUnits} occupied / {totalUnits} total units
-            </p>
+            <h3 className="text-2xl font-bold text-slate-900">{occupancyRate}%</h3>
+            <div className="text-xs text-slate-400 mt-2.5 space-y-1">
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Occupied Units:</span>
+                <span className="text-slate-700 font-semibold">{occupiedUnits} units</span>
+              </div>
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Total Units:</span>
+                <span className="text-slate-700 font-semibold">{totalUnits} units</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -342,15 +482,42 @@ export default function DashboardOverview({
         {/* Left Side: Spacious, Fully Detailed Reminders Center (2/3 width) */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col hover:shadow-md transition-shadow">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100">
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
                 <h3 className="font-bold text-slate-800 text-base">Reminders Center</h3>
-                <span className="bg-rose-50 text-rose-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
-                  <AlertCircle className="w-3 h-3" />
-                  {unpaidRentPayments.length} Active Dues
-                </span>
+                
+                {/* Rent vs Expenses Toggle Buttons */}
+                <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
+                  <button
+                    type="button"
+                    onClick={() => setReminderTab('rent')}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      reminderTab === 'rent'
+                        ? 'bg-white text-blue-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Tenant Dues ({groupedUnpaidDues.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReminderTab('expenses')}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                      reminderTab === 'expenses'
+                        ? 'bg-white text-blue-600 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Expense Bills ({expenses.filter(e => e.status === 'Pending' || e.status === 'Overdue').length})
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Contact outstanding rent accounts & send customized billing statements</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {reminderTab === 'rent' 
+                  ? 'Contact outstanding rent accounts & send customized billing statements'
+                  : 'Track and update payment status for pending contractor or maintenance vendor costs'
+                }
+              </p>
             </div>
             
             {/* Search Input Bar */}
@@ -360,7 +527,7 @@ export default function DashboardOverview({
               </span>
               <input
                 type="text"
-                placeholder="Search unit or tenant..."
+                placeholder={reminderTab === 'rent' ? 'Search unit or tenant...' : 'Search category or cost...'}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 text-xs pl-9 pr-3 py-2 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-150 rounded-xl transition-all font-medium outline-hidden"
@@ -379,10 +546,89 @@ export default function DashboardOverview({
           {/* Dues Cards Grid inside the spacious panel */}
           <div className="space-y-4 overflow-y-auto max-h-[480px] pr-1.5 scrollbar-thin">
             {(() => {
-              const filteredList = unpaidRentPayments.filter(p => {
+              if (reminderTab === 'expenses') {
+                const unpaidExpenses = expenses.filter(e => e.status === 'Pending' || e.status === 'Overdue');
+                const filteredExpensesList = unpaidExpenses.filter(e => {
+                  const query = searchQuery.trim().toLowerCase();
+                  if (!query) return true;
+                  return e.title.toLowerCase().includes(query) || e.category.toLowerCase().includes(query);
+                });
+
+                if (filteredExpensesList.length === 0) {
+                  return (
+                    <div className="text-center py-20 text-slate-350 bg-slate-50/50 rounded-2xl border border-dashed border-slate-150">
+                      <div className="w-12 h-12 bg-white shadow-xs rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Search className="w-5 h-5 text-slate-350" />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-500 font-sans">No outstanding expenses match your filter</p>
+                      <p className="text-xs text-slate-400 mt-1 font-sans">All recorded costs are settled!</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filteredExpensesList.map(exp => {
+                      const isOverdue = exp.status === 'Overdue' || (exp.dueDate && new Date(exp.dueDate) < new Date());
+
+                      return (
+                        <div key={exp.id} className="p-4 border border-slate-100 bg-white rounded-xl hover:bg-slate-50/75 transition-all duration-200 flex flex-col justify-between gap-3 relative overflow-hidden group">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-9 h-9 bg-orange-50 group-hover:bg-orange-100/50 text-orange-600 font-extrabold text-[10px] uppercase flex items-center justify-center rounded-lg transition-colors border border-orange-100/30 font-mono shrink-0">
+                                OUT
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-bold text-slate-800 text-xs block tracking-tight truncate max-w-[150px]" title={exp.title}>{exp.title}</span>
+                                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider font-sans">{exp.category}</span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="font-mono font-extrabold text-xs text-slate-900 block">{formatCurrency(exp.amount, activeBuilding?.currency || 'JOD')}</span>
+                              <span className={`inline-block text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded mt-0.5 ${
+                                isOverdue ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                              }`}>
+                                {isOverdue ? 'Overdue' : (exp.status || 'Pending')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 p-2 rounded-lg text-xs space-y-1 text-slate-600 border border-slate-100/50 font-sans">
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="text-slate-400 font-semibold">Log Date:</span>
+                              <span className="font-mono font-medium text-slate-700">{exp.date}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px]">
+                              <span className="text-slate-400 font-semibold">Due Date:</span>
+                              <span className={`font-mono font-medium ${isOverdue ? 'text-rose-600 font-bold' : 'text-slate-700'}`}>
+                                {exp.dueDate || 'No deadline'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 mt-0.5 shrink-0 font-sans">
+                            <span className="text-[10px] text-slate-400 font-medium truncate flex-1" title={exp.notes}>
+                              {exp.notes ? `Memo: ${exp.notes}` : 'No notes'}
+                            </span>
+                            <button
+                              onClick={() => onNavigateToTab('reminders')}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shrink-0 active:scale-95"
+                            >
+                              Update Status
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              // Filter by search query from the precomputed groupedUnpaidDues
+              const filteredList = groupedUnpaidDues.filter(g => {
                 const query = searchQuery.trim().toLowerCase();
                 if (!query) return true;
-                return p.tenantName.toLowerCase().includes(query) || p.unit.toLowerCase().includes(query);
+                return g.tenantName.toLowerCase().includes(query) || g.unit.toLowerCase().includes(query);
               });
 
               if (filteredList.length === 0) {
@@ -399,17 +645,28 @@ export default function DashboardOverview({
 
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredList.map(p => {
-                    const tenant = tenants.find(t => t.id === p.tenantId);
+                  {filteredList.map(group => {
+                    const tenant = tenants.find(t => t.id === group.tenantId);
                     const hasPhone = tenant && tenant.phone;
 
-                    // Calculate due amounts and detailed splits
-                    const baseRent = Number(tenant?.monthlyRent ?? 0);
-                    const guardFee = Number(tenant?.guardFee ?? activeBuilding?.defaultGuardFee ?? 0);
-                    const maintenanceFee = Number(tenant?.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0);
-                    const totalDuesCalculated = baseRent + guardFee + maintenanceFee;
+                    // Calculate consolidated splits for all unpaid months in group
+                    const baseRentTotal = group.payments.reduce((sum, p) => {
+                      const base = p.rentPaid !== undefined ? p.rentPaid : (tenant?.monthlyRent ?? 0);
+                      return sum + Number(base);
+                    }, 0);
 
-                    const dueAmount = p.amount > 0 ? p.amount : totalDuesCalculated;
+                    const guardFeeTotal = group.payments.reduce((sum, p) => {
+                      const guard = p.guardPaid !== undefined ? p.guardPaid : (tenant?.guardFee ?? activeBuilding?.defaultGuardFee ?? 0);
+                      return sum + Number(guard);
+                    }, 0);
+
+                    const maintenanceFeeTotal = group.payments.reduce((sum, p) => {
+                      const maint = p.maintenancePaid !== undefined ? p.maintenancePaid : (tenant?.maintenanceFee ?? activeBuilding?.defaultMaintenanceFee ?? 0);
+                      return sum + Number(maint);
+                    }, 0);
+
+                    const combinedMonths = group.payments.map(x => x.monthPaidFor).join(', ');
+                    const dueAmount = group.totalDueAmount;
 
                     const waLink = tenant ? getReminderWhatsAppLink(
                       tenant.phone,
@@ -417,31 +674,33 @@ export default function DashboardOverview({
                       tenant.unit,
                       dueAmount,
                       `Day ${tenant.rentDueDateDay}`,
-                      p.monthPaidFor,
+                      combinedMonths,
                       activeBuilding?.reminderTemplate,
                       activeBuilding?.currency || 'JOD',
                       activeBuilding?.bankTransferId
                     ) : '#';
 
+                    const isOverdue = group.payments.some(p => p.status === 'Overdue');
+
                     return (
-                      <div key={p.id} className="p-4 border border-slate-100 bg-white rounded-xl hover:bg-slate-50/75 transition-all duration-205 flex flex-col justify-between gap-3.5 relative overflow-hidden group">
+                      <div key={group.unit} className="p-4 border border-slate-100 bg-white rounded-xl hover:bg-slate-50/75 transition-all duration-205 flex flex-col justify-between gap-3.5 relative overflow-hidden group">
                         {/* Unit Badge and Tenant details */}
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-2.5">
                             <div className="w-10 h-10 bg-slate-50 group-hover:bg-blue-50/50 text-slate-700 group-hover:text-blue-600 font-extrabold text-xs flex items-center justify-center rounded-xl transition-colors border border-slate-100/80">
-                              U {p.unit}
+                              U {group.unit}
                             </div>
                             <div>
-                              <span className="font-bold text-slate-800 text-sm block tracking-tight line-clamp-1">{p.tenantName}</span>
-                              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Month: {p.monthPaidFor}</span>
+                              <span className="font-bold text-slate-800 text-sm block tracking-tight line-clamp-1">{group.tenantName}</span>
+                              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Unpaid: {combinedMonths}</span>
                             </div>
                           </div>
                           <div className="text-right">
                             <span className="font-mono font-extrabold text-sm text-slate-900 block">{formatCurrency(dueAmount, activeBuilding?.currency || 'JOD')}</span>
                             <span className={`inline-block text-[9px] uppercase font-bold px-1.5 py-0.5 rounded mt-1 ${
-                              p.status === 'Overdue' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                              isOverdue ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
                             }`}>
-                              {p.status}
+                              {isOverdue ? 'Overdue' : 'Pending'}
                             </span>
                           </div>
                         </div>
@@ -449,16 +708,16 @@ export default function DashboardOverview({
                         {/* Detailed Split Breakdown Box */}
                         <div className="grid grid-cols-3 gap-1 bg-slate-50 p-2.5 rounded-lg text-center border border-slate-100/50">
                           <div>
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Base rent</span>
-                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(baseRent, activeBuilding?.currency || 'JOD')}</span>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">Base rent</span>
+                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(baseRentTotal, activeBuilding?.currency || 'JOD')}</span>
                           </div>
                           <div className="border-x border-slate-150">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Guard</span>
-                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(guardFee, activeBuilding?.currency || 'JOD')}</span>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">Guard</span>
+                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(guardFeeTotal, activeBuilding?.currency || 'JOD')}</span>
                           </div>
                           <div>
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Svc Box</span>
-                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(maintenanceFee, activeBuilding?.currency || 'JOD')}</span>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">Svc Box</span>
+                            <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(maintenanceFeeTotal, activeBuilding?.currency || 'JOD')}</span>
                           </div>
                         </div>
 
@@ -516,7 +775,7 @@ export default function DashboardOverview({
             </div>
 
             {/* List Activity Items */}
-            <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-0.5">
+            <div className="space-y-3.5 max-h-[640px] overflow-y-auto pr-0.5">
               {recentTransactions.map(tx => (
                 <div 
                   key={tx.id} 

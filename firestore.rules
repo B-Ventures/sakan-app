@@ -48,5 +48,10 @@ service cloud.firestore {
     match /buildings/{buildingId}/auditLogs/{logId} {
       allow read, write: if true;
     }
+
+    // System configurations & Billing collections
+    match /system_configs/{document=**} {
+      allow read, write: if true;
+    }
   }
 }

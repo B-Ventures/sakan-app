@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserRecord, Building, Tenant, Payment, Expense } from '../types';
+import { UserRecord, Building, Tenant, Payment, Expense, SaaSPlan, SaaSAddon, SaASCoupon, StripeConfig, MultiPropertyConfig } from '../types';
 import { 
   Users, 
   Building2, 
@@ -20,6 +20,7 @@ import {
   Upload,
   Activity,
   CheckCircle,
+  CreditCard,
   FileText,
   Landmark,
   ChevronDown,
@@ -32,7 +33,21 @@ import {
   createBuilding, 
   saveTenant, 
   savePayment, 
-  saveExpense 
+  saveExpense,
+  saveBuilding,
+  fetchSaaSPlans,
+  saveSaaSPlan,
+  deleteSaaSPlan,
+  fetchSaaSCoupons,
+  saveSaaSCoupon,
+  deleteSaaSCoupon,
+  fetchSaaSAddons,
+  saveSaaSAddon,
+  deleteSaaSAddon,
+  fetchStripeConfig,
+  saveStripeConfig,
+  fetchMultiPropertyConfig,
+  saveMultiPropertyConfig
 } from '../firebaseService';
 import ConfirmationDialog from './ConfirmationDialog';
 
@@ -47,8 +62,8 @@ interface SuperAdminPanelProps {
   onImpersonate: (user: { uid: string; email: string; displayName?: string }) => void;
   onEndImpersonation: () => void;
   onRefresh: () => void;
-  activeSubTab?: 'directory' | 'analytics';
-  onChangeSubTab?: (tab: 'directory' | 'analytics') => void;
+  activeSubTab?: 'directory' | 'analytics' | 'subscriptions' | 'packages';
+  onChangeSubTab?: (tab: 'directory' | 'analytics' | 'subscriptions' | 'packages') => void;
 }
 
 export default function SuperAdminPanel({
@@ -65,10 +80,10 @@ export default function SuperAdminPanel({
   activeSubTab: propActiveSubTab,
   onChangeSubTab
 }: SuperAdminPanelProps) {
-  const [localSubTab, setLocalSubTab] = useState<'directory' | 'analytics'>('analytics');
+  const [localSubTab, setLocalSubTab] = useState<'directory' | 'analytics' | 'subscriptions' | 'packages'>('analytics');
   
   const activeSubTab = propActiveSubTab !== undefined ? propActiveSubTab : localSubTab;
-  const setActiveSubTab = (tab: 'directory' | 'analytics') => {
+  const setActiveSubTab = (tab: 'directory' | 'analytics' | 'subscriptions' | 'packages') => {
     setLocalSubTab(tab);
     if (onChangeSubTab) {
       onChangeSubTab(tab);
@@ -80,6 +95,26 @@ export default function SuperAdminPanel({
   // Custom non-blocking dialogs & notification states
   const [deleteBldConfig, setDeleteBldConfig] = useState<{ id: string; name: string } | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // States for subscription and plan management
+  const [editingSubscriptionBld, setEditingSubscriptionBld] = useState<Building | null>(null);
+  const [subEditPlan, setSubEditPlan] = useState<string>('monthly');
+  const [subEditStatus, setSubEditStatus] = useState<'active' | 'expired' | 'trial' | 'none'>('active');
+  const [subEditEndDate, setSubEditEndDate] = useState('');
+  const [subEditAmount, setSubEditAmount] = useState<number>(0);
+
+  // Manual Offline Payment logging state
+  const [manualPaymentBld, setManualPaymentBld] = useState<Building | null>(null);
+  const [manualAmount, setManualAmount] = useState<string>('20');
+  const [manualMethod, setManualMethod] = useState<string>('Bank Transfer');
+  const [manualRef, setManualRef] = useState<string>('');
+  const [manualPeriod, setManualPeriod] = useState<'1_month' | '12_months'>('1_month');
+  const [manualDate, setManualDate] = useState<string>(new Date().toISOString().substring(0, 10));
+
+  // Subscriptions Tab Filtering States
+  const [subSearch, setSubSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState<'all' | 'trial' | 'monthly' | 'annually' | 'none'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired' | 'trial' | 'near_expiry'>('all');
 
   const triggerNotification = (message: string, type: 'success' | 'error') => {
     setNotification({ message, type });
@@ -104,6 +139,89 @@ export default function SuperAdminPanel({
   
   // Backup / Restore statuses
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
+
+  // SaaS and Stripe configurations states
+  const [saasPlans, setSaasPlans] = useState<SaaSPlan[]>([]);
+  const [saasCoupons, setSaasCoupons] = useState<SaASCoupon[]>([]);
+  const [saasAddons, setSaaSAddons] = useState<SaaSAddon[]>([]);
+  const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(null);
+
+  // Editing items
+  const [editingPlanItem, setEditingPlanItem] = useState<SaaSPlan | null>(null);
+  const [editingCouponItem, setEditingCouponItem] = useState<SaASCoupon | null>(null);
+  const [editingAddonItem, setEditingAddonItem] = useState<SaaSAddon | null>(null);
+
+  // New item creators
+  const [showAddPlan, setShowAddPlan] = useState(false);
+  const [showAddCoupon, setShowAddCoupon] = useState(false);
+  const [showAddAddon, setShowAddAddon] = useState(false);
+
+  // Form states
+  const [newPlanId, setNewPlanId] = useState('');
+  const [newPlanName, setNewPlanName] = useState('');
+  const [newPlanPrice, setNewPlanPrice] = useState(0);
+  const [newPlanInterval, setNewPlanInterval] = useState<'month' | 'year'>('month');
+  const [newPlanDescription, setNewPlanDescription] = useState('');
+  const [newPlanFeatures, setNewPlanFeatures] = useState('');
+  const [newPlanStripePriceId, setNewPlanStripePriceId] = useState('');
+
+  const [newCouponId, setNewCouponId] = useState('');
+  const [newCouponDiscount, setNewCouponDiscount] = useState(10);
+  const [newCouponDescription, setNewCouponDescription] = useState('');
+
+  const [newAddonId, setNewAddonId] = useState('');
+  const [newAddonName, setNewAddonName] = useState('');
+  const [newAddonPrice, setNewAddonPrice] = useState(0);
+  const [newAddonInterval, setNewAddonInterval] = useState<'one_time' | 'month' | 'year'>('month');
+  const [newAddonDescription, setNewAddonDescription] = useState('');
+  const [newAddonStripePriceId, setNewAddonStripePriceId] = useState('');
+
+  // Stripe form state
+  const [stripeEnabled, setStripeEnabled] = useState(true);
+  const [stripePublicKey, setStripePublicKey] = useState('');
+  const [stripeSecretKey, setStripeSecretKey] = useState('');
+  const [stripeMode, setStripeMode] = useState<'test' | 'live'>('test');
+  const [stripeRedirectType, setStripeRedirectType] = useState<'simulated' | 'hosted_checkout'>('simulated');
+
+  // Multi-Property Policy Config State
+  const [multiPropEnabled, setMultiPropEnabled] = useState(true);
+  const [multiPropFirstRate, setMultiPropFirstRate] = useState(20);
+  const [multiPropAdditionalRate, setMultiPropAdditionalRate] = useState(5);
+  const [multiPropCurrency, setMultiPropCurrency] = useState('JOD');
+
+  const loadSaaSConfigData = async () => {
+    try {
+      const fetchedPlans = await fetchSaaSPlans();
+      const fetchedCoupons = await fetchSaaSCoupons();
+      const fetchedAddons = await fetchSaaSAddons();
+      const fetchedStripe = await fetchStripeConfig();
+      const fetchedMultiProp = await fetchMultiPropertyConfig();
+
+      setSaasPlans(fetchedPlans);
+      setSaasCoupons(fetchedCoupons);
+      setSaaSAddons(fetchedAddons);
+      setStripeConfig(fetchedStripe);
+
+      setStripeEnabled(fetchedStripe.isEnabled);
+      setStripePublicKey(fetchedStripe.publicKey || '');
+      setStripeSecretKey(fetchedStripe.secretKey || '');
+      setStripeMode(fetchedStripe.mode || 'test');
+      setStripeRedirectType(fetchedStripe.checkoutRedirectType || 'simulated');
+
+      setMultiPropEnabled(fetchedMultiProp.isEnabled);
+      setMultiPropFirstRate(fetchedMultiProp.firstPropertyRatePremium);
+      setMultiPropAdditionalRate(fetchedMultiProp.additionalPropertyRate);
+      setMultiPropCurrency(fetchedMultiProp.currency || 'JOD');
+    } catch (err) {
+      console.error("Error loading SaaS config:", err);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeSubTab === 'packages') {
+      loadSaaSConfigData();
+    }
+  }, [activeSubTab]);
 
   // Computations
   const totalCustomers = customers.length;
@@ -201,7 +319,15 @@ export default function SuperAdminPanel({
         };
       });
 
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+      const cache = new Set();
+      const safePayloadStr = JSON.stringify(payload, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (cache.has(value)) return '[Circular]';
+          cache.add(value);
+        }
+        return value;
+      }, 2);
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(safePayloadStr);
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
       downloadAnchor.setAttribute("download", `bprop_export_${email.replace(/[@.]/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`);
@@ -313,6 +439,24 @@ export default function SuperAdminPanel({
     reader.readAsText(file);
   };
 
+  const handleSaveMultiPropConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setBusyMessage('Saving multi-property policy...');
+      await saveMultiPropertyConfig({
+        isEnabled: multiPropEnabled,
+        firstPropertyRatePremium: Number(multiPropFirstRate),
+        additionalPropertyRate: Number(multiPropAdditionalRate),
+        currency: multiPropCurrency
+      });
+      triggerNotification('Multi-property policy saved successfully!', 'success');
+    } catch (err: any) {
+      triggerNotification('Failed to save policy: ' + err.message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
   const handleExpandCustomer = (customer: UserRecord) => {
     if (expandedCustomerId === customer.id) {
       setExpandedCustomerId(null);
@@ -322,6 +466,276 @@ export default function SuperAdminPanel({
       setEditingEmail(customer.email || '');
       setUpdatingProfileId(null);
       setAddingBuildingForId(null);
+    }
+  };
+
+  const getDaysRemaining = (endDateStr?: string) => {
+    if (!endDateStr) return null;
+    const end = new Date(endDateStr);
+    const today = new Date();
+    end.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    const diffTime = end.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const isPortfolioAddon = (building: Building) => {
+    const ownerBldgs = buildings
+      .filter(b => b.ownerId === building.ownerId)
+      .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
+    
+    if (ownerBldgs.length <= 1) return false;
+    return ownerBldgs[0].id !== building.id;
+  };
+
+  const handleOpenSubscriptionEdit = (bld: Building) => {
+    setEditingSubscriptionBld(bld);
+    setSubEditPlan(bld.subscriptionPlan || 'none');
+    setSubEditStatus(bld.subscriptionStatus || 'trial');
+    setSubEditEndDate(bld.subscriptionEndDate || '');
+    setSubEditAmount(bld.subscriptionAmountPaid || 0);
+  };
+
+  const handleOpenManualPayment = (bld: Building) => {
+    setManualPaymentBld(bld);
+    const isAddon = isPortfolioAddon(bld);
+    if (isAddon && multiPropEnabled) {
+      setManualAmount(String(multiPropAdditionalRate));
+    } else {
+      setManualAmount(bld.subscriptionPlan === 'annually' ? '150' : String(multiPropFirstRate));
+    }
+    setManualMethod('Bank Transfer');
+    setManualRef('');
+    setManualPeriod('1_month');
+    setManualDate(new Date().toISOString().substring(0, 10));
+  };
+
+  const handleSaveSubscriptionOverride = async () => {
+    if (!editingSubscriptionBld) return;
+    try {
+      setBusyMessage('Saving subscription overrides...');
+      const updatedBld: Building = {
+        ...editingSubscriptionBld,
+        subscriptionPlan: subEditPlan,
+        subscriptionStatus: subEditStatus,
+        subscriptionEndDate: subEditEndDate || undefined,
+        subscriptionAmountPaid: Number(subEditAmount) || 0
+      };
+      await saveBuilding(updatedBld);
+      setEditingSubscriptionBld(null);
+      triggerNotification('Subscription overridden successfully!', 'success');
+      onRefresh();
+    } catch (err) {
+      triggerNotification('Failed to update subscription: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  // CRUD actions for SaaS Plans
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setBusyMessage('Saving plan configurations...');
+      const targetId = editingPlanItem ? editingPlanItem.id : (newPlanId.trim().toLowerCase() || Date.now().toString());
+      const payload: SaaSPlan = {
+        id: targetId,
+        name: newPlanName,
+        price: Number(newPlanPrice),
+        currency: 'JOD',
+        interval: newPlanInterval,
+        description: newPlanDescription,
+        features: newPlanFeatures.split(',').map(f => f.trim()).filter(Boolean),
+        stripePriceId: newPlanStripePriceId,
+        isActive: true
+      };
+      await saveSaaSPlan(payload);
+      triggerNotification(`SaaS plan "${payload.name}" saved successfully!`, 'success');
+      setEditingPlanItem(null);
+      setShowAddPlan(false);
+      
+      // Clear forms
+      setNewPlanId('');
+      setNewPlanName('');
+      setNewPlanPrice(0);
+      setNewPlanDescription('');
+      setNewPlanFeatures('');
+      setNewPlanStripePriceId('');
+
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to save plan: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  const handleDeletePlanItem = async (id: string) => {
+    try {
+      setBusyMessage('Purging SaaS Plan...');
+      await deleteSaaSPlan(id);
+      triggerNotification('SaaS Plan purged successfully!', 'success');
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to delete plan: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  // CRUD actions for Coupons
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setBusyMessage('Saving promo coupon...');
+      const code = editingCouponItem ? editingCouponItem.code : newCouponId.trim().toUpperCase();
+      const payload: SaASCoupon = {
+        id: code,
+        code,
+        discountPercent: Number(newCouponDiscount),
+        description: newCouponDescription,
+        isActive: true
+      };
+      await saveSaaSCoupon(payload);
+      triggerNotification(`Coupon "${payload.code}" saved!`, 'success');
+      setEditingCouponItem(null);
+      setShowAddCoupon(false);
+      
+      setNewCouponId('');
+      setNewCouponDiscount(10);
+      setNewCouponDescription('');
+
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to save coupon: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  const handleDeleteCouponItem = async (id: string) => {
+    try {
+      setBusyMessage('Deleting coupon...');
+      await deleteSaaSCoupon(id);
+      triggerNotification('Coupon deleted.', 'success');
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to delete coupon: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  // CRUD actions for Addons
+  const handleSaveAddon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setBusyMessage('Saving system addon...');
+      const targetId = editingAddonItem ? editingAddonItem.id : (newAddonId.trim().toLowerCase() || Date.now().toString());
+      const payload: SaaSAddon = {
+        id: targetId,
+        name: newAddonName,
+        price: Number(newAddonPrice),
+        currency: 'JOD',
+        interval: newAddonInterval,
+        description: newAddonDescription,
+        stripePriceId: newAddonStripePriceId,
+        isActive: true
+      };
+      await saveSaaSAddon(payload);
+      triggerNotification(`SaaS addon "${payload.name}" saved!`, 'success');
+      setEditingAddonItem(null);
+      setShowAddAddon(false);
+
+      setNewAddonId('');
+      setNewAddonName('');
+      setNewAddonPrice(0);
+      setNewAddonDescription('');
+      setNewAddonStripePriceId('');
+
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to save addon: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  const handleDeleteAddonItem = async (id: string) => {
+    try {
+      setBusyMessage('Wiping addon config...');
+      await deleteSaaSAddon(id);
+      triggerNotification('Addon wiped.', 'success');
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to delete addon: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  // Save Stripe configurations
+  const handleSaveStripeConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setBusyMessage('Applying Stripe Merchant configs...');
+      const payload: StripeConfig = {
+        isEnabled: stripeEnabled,
+        publicKey: stripePublicKey,
+        secretKey: stripeSecretKey,
+        mode: stripeMode,
+        checkoutRedirectType: stripeRedirectType
+      };
+      await saveStripeConfig(payload);
+      triggerNotification('Stripe Integration configuration applied!', 'success');
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to save Stripe config: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  const handleLogManualPayment = async () => {
+    if (!manualPaymentBld) return;
+    try {
+      setBusyMessage('Logging offline payment & renewing license...');
+      const amountPaidNum = parseFloat(manualAmount) || 0;
+      
+      let baseDate = new Date();
+      if (manualPaymentBld.subscriptionEndDate && manualPaymentBld.subscriptionStatus === 'active') {
+        const currentEnd = new Date(manualPaymentBld.subscriptionEndDate);
+        if (currentEnd > baseDate) {
+          baseDate = currentEnd;
+        }
+      }
+      
+      if (manualPeriod === '1_month') {
+        baseDate.setDate(baseDate.getDate() + 30);
+      } else {
+        baseDate.setDate(baseDate.getDate() + 365);
+      }
+      
+      const newEndDateStr = baseDate.toISOString().substring(0, 10);
+      const currentPaid = manualPaymentBld.subscriptionAmountPaid || 0;
+      const updatedBld: Building = {
+        ...manualPaymentBld,
+        subscriptionPlan: manualPeriod === '1_month' ? 'monthly' : 'annually',
+        subscriptionStatus: 'active',
+        subscriptionStartDate: manualDate,
+        subscriptionEndDate: newEndDateStr,
+        subscriptionAmountPaid: currentPaid + amountPaidNum
+      };
+      
+      await saveBuilding(updatedBld);
+      setManualPaymentBld(null);
+      triggerNotification(`Manual payment of JOD ${amountPaidNum} logged! License extended to ${newEndDateStr}.`, 'success');
+      onRefresh();
+    } catch (err) {
+      triggerNotification('Failed to log payment: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
     }
   };
 
@@ -337,6 +751,14 @@ export default function SuperAdminPanel({
   const activeTenants = tenants.filter(t => t.status === 'active').length;
   const vacantTenants = tenants.filter(t => t.status === 'vacant').length;
   const inactiveTenants = tenants.filter(t => t.status === 'inactive').length;
+
+  // SaaS subscription accumulators
+  const activeSubscriptionsCount = buildings.filter(b => b.subscriptionStatus === 'active').length;
+  const trialSubscriptionsCount = buildings.filter(b => b.subscriptionStatus === 'trial' || !b.subscriptionStatus).length;
+  const expiredSubscriptionsCount = buildings.filter(b => b.subscriptionStatus === 'expired').length;
+  const totalSaaSPaidRevenue = buildings.reduce((sum, b) => sum + (b.subscriptionAmountPaid || 0), 0);
+  const mrrEstimate = buildings.filter(b => b.subscriptionStatus === 'active' && b.subscriptionPlan === 'monthly').length * 10 + 
+                     buildings.filter(b => b.subscriptionStatus === 'active' && b.subscriptionPlan === 'annually').length * 8;
 
   return (
     <div className="space-y-6" id="superadmin-panel">
@@ -575,7 +997,18 @@ export default function SuperAdminPanel({
                                   {customerBuildings.map(b => (
                                     <div key={b.id} className="py-2.5 flex items-center justify-between gap-4">
                                       <div className="min-w-0">
-                                        <span className="font-extrabold text-slate-800 text-[11px] block truncate">{b.name}</span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-extrabold text-slate-800 text-[11px] block truncate max-w-[120px]">{b.name}</span>
+                                          <span className={`inline-flex items-center text-[7px] font-black uppercase px-1.5 py-0.2 rounded-full border tracking-wider scale-90 ${
+                                            b.subscriptionStatus === 'active'
+                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                              : b.subscriptionStatus === 'expired'
+                                              ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                              : 'bg-amber-50 text-amber-700 border-amber-100'
+                                          }`}>
+                                            {b.subscriptionStatus || 'trial'}
+                                          </span>
+                                        </div>
                                         <span className="text-[9px] font-medium text-slate-400 block truncate mt-0.5">{b.address || 'Address unassigned'}</span>
                                       </div>
                                       <button 
@@ -683,6 +1116,55 @@ export default function SuperAdminPanel({
             </div>
           </div>
 
+          {/* SaaS Subscriptions & Recurring Revenue Dashboard */}
+          <div className="bg-white border border-slate-200 text-slate-800 rounded-3xl p-5 shadow-xs space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-150 pb-4">
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-600" />
+                  SaaS Revenue & Billing Subscriptions Hub
+                </h4>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Global SaaS metrics computed from property owner subscriptions.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-3 py-1 rounded-xl border border-emerald-100 font-extrabold">
+                  Active MRR: JOD {mrrEstimate.toLocaleString()}
+                </span>
+                <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-3 py-1 rounded-xl border border-blue-100 font-extrabold">
+                  Total Rec: JOD {totalSaaSPaidRevenue.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
+              <div className="bg-slate-50/40 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between hover:bg-slate-50/80 transition-all">
+                <span className="text-[8px] font-mono font-extrabold text-slate-400 block uppercase tracking-wider">ACTIVE PREMIUM SUBSCRIPTIONS</span>
+                <span className="text-xl font-black font-mono tracking-tight text-emerald-600 block mt-1">{activeSubscriptionsCount} Properties</span>
+                <span className="text-[10px] text-slate-400 mt-2 block font-medium">Billed monthly or annually.</span>
+              </div>
+
+              <div className="bg-slate-50/40 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between hover:bg-slate-50/80 transition-all">
+                <span className="text-[8px] font-mono font-extrabold text-slate-400 block uppercase tracking-wider">ACTIVE TRIAL BUILDINGS</span>
+                <span className="text-xl font-black font-mono tracking-tight text-amber-600 block mt-1">{trialSubscriptionsCount} Properties</span>
+                <span className="text-[10px] text-slate-400 mt-2 block font-medium">Within 30-day trial period.</span>
+              </div>
+
+              <div className="bg-slate-50/40 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between hover:bg-slate-50/80 transition-all">
+                <span className="text-[8px] font-mono font-extrabold text-slate-400 block uppercase tracking-wider">EXPIRED OR NONE LICENSE</span>
+                <span className="text-xl font-black font-mono tracking-tight text-rose-600 block mt-1">{expiredSubscriptionsCount} Properties</span>
+                <span className="text-[10px] text-slate-400 mt-2 block font-medium">Restricted billing snapshot access.</span>
+              </div>
+
+              <div className="bg-slate-50/40 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between hover:bg-slate-50/80 transition-all">
+                <span className="text-[8px] font-mono font-extrabold text-slate-400 block uppercase tracking-wider">CONVERSION PREMIUM RATIO</span>
+                <span className="text-xl font-black font-mono tracking-tight text-blue-600 block mt-1">
+                  {buildings.length > 0 ? Math.round((activeSubscriptionsCount / buildings.length) * 100) : 0}% Premium
+                </span>
+                <span className="text-[10px] text-slate-400 mt-2 block font-medium">Platform-wide premium subscription rate.</span>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* Left Side: platform units and occupy metrics index */}
@@ -713,6 +1195,7 @@ export default function SuperAdminPanel({
                         <th className="px-4 py-3 text-center">Total Units</th>
                         <th className="px-4 py-3 text-center">Occupied (Active)</th>
                         <th className="px-4 py-3 text-center">Vacant</th>
+                        <th className="px-4 py-3 text-center">SaaS License</th>
                         <th className="px-4 py-3 text-right">Avg Rent (JOD)</th>
                       </tr>
                     </thead>
@@ -746,6 +1229,17 @@ export default function SuperAdminPanel({
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-700 font-semibold">
                                 <span className="w-1 h-1 rounded-full bg-amber-500"></span>
                                 {vacant}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${
+                                b.subscriptionStatus === 'active'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : b.subscriptionStatus === 'expired'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                  : 'bg-amber-50 text-amber-700 border-amber-100'
+                              }`}>
+                                {b.subscriptionStatus || 'trial'}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">
@@ -880,6 +1374,301 @@ export default function SuperAdminPanel({
         </div>
       )}
 
+      {activeSubTab === 'subscriptions' && (
+        <div className="space-y-6 animate-fade-in" id="superadmin-subscriptions-console">
+          {/* Subscription Metrics Overview */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 hover:shadow-md transition-all duration-200" id="sub-metrics-active-card">
+              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">ACTIVE CONTRACTS</span>
+                <span className="text-xl font-black text-slate-800 block mt-1">{activeSubscriptionsCount} Premium</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 hover:shadow-md transition-all duration-200" id="sub-metrics-trial-card">
+              <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">FREE TRIALS</span>
+                <span className="text-xl font-black text-slate-800 block mt-1">{trialSubscriptionsCount} Properties</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 hover:shadow-md transition-all duration-200" id="sub-metrics-expired-card">
+              <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center shrink-0">
+                <BadgeAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">EXPIRED LICENSES</span>
+                <span className="text-xl font-black text-slate-800 block mt-1">{expiredSubscriptionsCount} Out of Service</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 hover:shadow-md transition-all duration-200" id="sub-metrics-mrr-card">
+              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                <DollarSign className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">PLATFORM MRR (EST)</span>
+                <span className="text-xl font-black text-slate-800 block mt-1">JOD {mrrEstimate.toLocaleString()} / mo</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing Policy Card (Multi-Property Portfolio Discount is ACTIVE/INACTIVE) */}
+          <div className="bg-gradient-to-br from-emerald-50/40 via-white to-blue-50/20 border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-1.5 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                  multiPropEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  {multiPropEnabled ? 'ACTIVE POLICY' : 'INACTIVE POLICY'}
+                </span>
+                <h4 className="font-extrabold text-slate-800 text-sm font-sans">Multi-Property Portfolio Add-on Pricing Discount</h4>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {multiPropEnabled ? (
+                  <>
+                    To encourage owners to register their entire portfolio, our SaaS subscription policy automatically discounts subsequent properties.
+                    The <strong>first building</strong> pays standard package rates ({multiPropCurrency} {multiPropFirstRate}/mo Premium). 
+                    Any <strong>additional buildings</strong> added by the same owner only pay a heavily discounted fee of <strong>{multiPropCurrency} {multiPropAdditionalRate}/month</strong>.
+                  </>
+                ) : (
+                  <>
+                    The portfolio pricing discount policy is currently disabled. Each property registers and pays the standard package rate independently.
+                  </>
+                )}
+              </p>
+            </div>
+            {multiPropEnabled && (
+              <div className="flex gap-4 shrink-0 font-mono text-center">
+                <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs">
+                  <span className="text-[9px] text-slate-400 block font-semibold">1ST PROPERTY</span>
+                  <span className="text-md font-black text-slate-800 block mt-0.5">{multiPropCurrency} {multiPropFirstRate}<span className="text-[10px] text-slate-400 font-medium">/mo</span></span>
+                </div>
+                <div className="bg-white border border-emerald-200 rounded-2xl p-3 shadow-xs ring-2 ring-emerald-500/10">
+                  <span className="text-[9px] text-emerald-600 block font-extrabold">ADDITIONAL</span>
+                  <span className="text-md font-black text-emerald-600 block mt-0.5">{multiPropCurrency} {multiPropAdditionalRate}<span className="text-[10px] text-slate-400 font-medium">/mo</span></span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Filter & Subscriptions Table Card */}
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden">
+            {/* Header and Controls */}
+            <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-800">SaaS License Directory</h3>
+                <p className="text-xs text-slate-400 mt-0.5">List of all registered properties, their subscription plans, expiration counts, and cumulative fees collected.</p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                <div className="relative w-full sm:w-60">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search building or owner..."
+                    value={subSearch}
+                    onChange={(e) => setSubSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-red-500 focus:bg-white transition-all text-slate-800 placeholder-slate-400"
+                    id="saas-sub-search-input"
+                  />
+                </div>
+
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <select
+                    value={planFilter}
+                    onChange={(e) => setPlanFilter(e.target.value as any)}
+                    className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white transition-colors font-semibold text-slate-700 min-w-[100px]"
+                  >
+                    <option value="all">All Plans</option>
+                    <option value="trial">Free Trial</option>
+                    <option value="monthly">Monthly Plan</option>
+                    <option value="annually">Annual Plan</option>
+                  </select>
+
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white transition-colors font-semibold text-slate-700 min-w-[120px]"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="near_expiry">Near Expiry</option>
+                    <option value="trial">Trial</option>
+                    <option value="expired">Expired</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Subscriptions Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-sans" id="saas-subscriptions-table">
+                <thead className="bg-slate-50 border-b border-slate-100 uppercase tracking-widest text-[9px] text-slate-400 font-semibold">
+                  <tr>
+                    <th className="px-5 py-3">Property / Owner Details</th>
+                    <th className="px-5 py-3 text-center">Plan Tier</th>
+                    <th className="px-5 py-3 text-center">Discount Level</th>
+                    <th className="px-5 py-3 text-center">Status</th>
+                    <th className="px-5 py-3">License Expiration</th>
+                    <th className="px-5 py-3 text-right">Cumulative JOD</th>
+                    <th className="px-5 py-3 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                  {(() => {
+                    const filteredSubBuildings = buildings.filter(b => {
+                      const term = subSearch.toLowerCase();
+                      const nameMatch = b.name?.toLowerCase().includes(term);
+                      const ownerEmail = bNameById(b.ownerId).toLowerCase();
+                      const ownerMatch = ownerEmail.includes(term);
+                      
+                      let planMatch = true;
+                      if (planFilter !== 'all') {
+                        if (planFilter === 'trial') planMatch = b.subscriptionPlan === 'none' || !b.subscriptionPlan;
+                        else planMatch = b.subscriptionPlan === planFilter;
+                      }
+                      
+                      let statusMatch = true;
+                      if (statusFilter !== 'all') {
+                        if (statusFilter === 'trial') {
+                          statusMatch = b.subscriptionStatus === 'trial' || !b.subscriptionStatus;
+                        } else if (statusFilter === 'near_expiry') {
+                          const remaining = getDaysRemaining(b.subscriptionEndDate);
+                          statusMatch = b.subscriptionStatus === 'active' && remaining !== null && remaining <= 7 && remaining >= 0;
+                        } else {
+                          statusMatch = b.subscriptionStatus === statusFilter;
+                        }
+                      }
+                      
+                      return (nameMatch || ownerMatch) && planMatch && statusMatch;
+                    });
+
+                    if (filteredSubBuildings.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={7} className="text-center py-12 text-slate-400 text-xs italic">
+                            No property subscriptions match the selected filters.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filteredSubBuildings.map((b) => {
+                      const ownerName = bNameById(b.ownerId);
+                      const isAddon = isPortfolioAddon(b);
+                      const daysRemaining = getDaysRemaining(b.subscriptionEndDate);
+                      
+                      let planLabel = 'Trial License';
+                      if (b.subscriptionPlan === 'monthly') planLabel = 'Premium Monthly';
+                      else if (b.subscriptionPlan === 'annually') planLabel = 'Premium Annual';
+
+                      return (
+                        <tr key={b.id} className="hover:bg-slate-50/50 transition-all">
+                          <td className="px-5 py-3.5">
+                            <span className="font-extrabold text-slate-800 block text-xs">{b.name}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">{b.address || 'No Address'}</span>
+                            <span className="inline-block mt-1 text-[9px] font-mono font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md">
+                              Owner: {ownerName}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              b.subscriptionPlan === 'annually'
+                                ? 'bg-indigo-50 text-indigo-700'
+                                : b.subscriptionPlan === 'monthly'
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {planLabel}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {isAddon ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 border border-emerald-100 text-emerald-700">
+                                Portfolio Discount (JOD 5)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-400">
+                                Primary Building Rate
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
+                              b.subscriptionStatus === 'active'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : b.subscriptionStatus === 'expired'
+                                ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                : 'bg-amber-50 text-amber-700 border-amber-100'
+                            }`}>
+                              {b.subscriptionStatus || 'trial'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            {b.subscriptionEndDate ? (
+                              <div className="space-y-0.5">
+                                <span className="font-mono font-bold text-slate-700 block text-[11px]">
+                                  {b.subscriptionEndDate}
+                                </span>
+                                {daysRemaining !== null && (
+                                  <span className={`text-[9px] font-bold block ${
+                                    daysRemaining < 0
+                                      ? 'text-rose-600'
+                                      : daysRemaining <= 7
+                                      ? 'text-amber-650 font-extrabold animate-pulse'
+                                      : 'text-emerald-600'
+                                  }`}>
+                                    {daysRemaining < 0
+                                      ? `Expired ${Math.abs(daysRemaining)} days ago`
+                                      : daysRemaining === 0
+                                      ? 'Expires today!'
+                                      : `${daysRemaining} days remaining`}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">No expiration recorded</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-800">
+                            JOD { (b.subscriptionAmountPaid || 0).toLocaleString() }
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenSubscriptionEdit(b)}
+                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                                title="Manage Package Override"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenManualPayment(b)}
+                                className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all cursor-pointer"
+                                title="Record Offline Cash/Bank Payment"
+                              >
+                                <CreditCard className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Non-blocking Portal Elements */}
       {notification && (
         <div id="super-admin-toast-portal" className="fixed top-5 right-5 z-50 animate-in slide-in-from-top-4 duration-300">
@@ -912,6 +1701,925 @@ export default function SuperAdminPanel({
         onConfirm={executeDeleteBuilding}
         onCancel={() => setDeleteBldConfig(null)}
       />
+
+      {/* MODAL: Manage Subscription Override */}
+      {editingSubscriptionBld && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in" id="manage-sub-modal">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl p-6 relative animate-in zoom-in-95 duration-150">
+            <h3 className="font-extrabold text-slate-800 text-lg mb-1">Override Subscription Profile</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Direct administrative database override for <strong>{editingSubscriptionBld.name}</strong>.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Subscription Plan</label>
+                <select
+                  value={subEditPlan}
+                  onChange={(e) => setSubEditPlan(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                >
+                  <option value="none">Free Trial (Default)</option>
+                  <option value="monthly">Premium Monthly</option>
+                  <option value="annually">Premium Annual</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">License Status</label>
+                <select
+                  value={subEditStatus}
+                  onChange={(e) => setSubEditStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                >
+                  <option value="trial">Free Trial</option>
+                  <option value="active">Active Premium</option>
+                  <option value="expired">Expired</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Expiration Date</label>
+                <input
+                  type="date"
+                  value={subEditEndDate}
+                  onChange={(e) => setSubEditEndDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Cumulative Amount Paid (JOD)</label>
+                <input
+                  type="number"
+                  value={subEditAmount}
+                  onChange={(e) => setSubEditAmount(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-mono"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 border-t border-slate-50 pt-4">
+              <button
+                type="button"
+                onClick={() => setEditingSubscriptionBld(null)}
+                className="px-4 py-2 text-xs border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors font-semibold"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSubscriptionOverride}
+                className="px-4 py-2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold flex items-center gap-1"
+              >
+                Save Overrides
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Record SaaS Offline Payment */}
+      {manualPaymentBld && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in" id="log-offline-payment-modal">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl p-6 relative animate-in zoom-in-95 duration-150">
+            <h3 className="font-extrabold text-slate-800 text-lg mb-1">Record SaaS Offline Payment</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Log a manual wire transfer, cash transaction, or check payment for <strong>{manualPaymentBld.name}</strong>.
+            </p>
+
+            {isPortfolioAddon(manualPaymentBld) && (
+              <div className="mb-4 bg-emerald-50 border border-emerald-100 text-emerald-800 p-3 rounded-xl text-xs space-y-1">
+                <p className="font-bold">✨ Multi-Property Portfolio Discount Eligible!</p>
+                <p className="text-[11px] text-emerald-700">
+                  This building is owned by an owner with multiple property assets. The suggested monthly payment is discounted to only JOD 5/month!
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Amount Paid (JOD)</label>
+                  <input
+                    type="number"
+                    required
+                    value={manualAmount}
+                    onChange={(e) => setManualAmount(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-emerald-500 text-slate-800 font-mono font-bold text-lg"
+                    placeholder="e.g. 20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Method</label>
+                  <select
+                    value={manualMethod}
+                    onChange={(e) => setManualMethod(e.target.value)}
+                    className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-emerald-500 text-slate-800 font-semibold"
+                  >
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cash">Cash Payment</option>
+                    <option value="Check">Check</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">License Renewal Period</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualPeriod('1_month');
+                      const discount = isPortfolioAddon(manualPaymentBld) && multiPropEnabled;
+                      setManualAmount(discount ? String(multiPropAdditionalRate) : String(multiPropFirstRate));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                      manualPeriod === '1_month'
+                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-800 ring-2 ring-emerald-500/10'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    +30 Days (Monthly)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualPeriod('12_months');
+                      const discount = isPortfolioAddon(manualPaymentBld) && multiPropEnabled;
+                      setManualAmount(discount ? String(multiPropAdditionalRate * 12) : '150');
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                      manualPeriod === '12_months'
+                        ? 'border-emerald-600 bg-emerald-50/50 text-emerald-800 ring-2 ring-emerald-500/10'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    +365 Days (Annual)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Transaction Ref ID / IBAN / Receipt</label>
+                <input
+                  type="text"
+                  value={manualRef}
+                  onChange={(e) => setManualRef(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-emerald-500 text-slate-800"
+                  placeholder="e.g. Bank Transfer Ref / Receipt #"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Payment Logging Date</label>
+                <input
+                  type="date"
+                  required
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-emerald-500 text-slate-800 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 border-t border-slate-50 pt-4">
+              <button
+                type="button"
+                onClick={() => setManualPaymentBld(null)}
+                className="px-4 py-2 text-xs border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 transition-colors font-semibold"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={handleLogManualPayment}
+                className="px-4 py-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors font-semibold flex items-center gap-1"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Record & Renew
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'packages' && (
+        <div className="space-y-6">
+          {/* Main Top Intro */}
+          <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+              <Settings className="w-40 h-40" />
+            </div>
+            <span className="text-[9px] font-mono font-extrabold text-red-400 uppercase tracking-widest block mb-1">STRIPE & SAAS ARCHITECTURE CONSOLE</span>
+            <h2 className="text-xl font-extrabold tracking-tight">SaaS Subscription Plans & Gateways Control Panel</h2>
+            <p className="text-xs text-slate-300 mt-2 max-w-2xl leading-relaxed">
+              Super-administrators can dynamically adjust the billing rates, launch discount promo codes, release value-added modular addons, and modify private Stripe credentials in real-time. This bypasses hard-coded configurations.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* COLUMN 1: Stripe Configuration & Webhook Documentation (5 spans) */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Stripe Configuration Form Card */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-800">Stripe Checkout Integration</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">Gateway configurations and API key vault</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveStripeConfig} className="space-y-4">
+                  {/* Enabled Toggle */}
+                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">Stripe Gateway Core</span>
+                      <span className="text-[10px] text-slate-400">Process credit card payments in-app</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={stripeEnabled} 
+                        onChange={(e) => setStripeEnabled(e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 font-bold"></div>
+                    </label>
+                  </div>
+
+                  {/* Mode & Redirect Type */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">Environment Mode</label>
+                      <select
+                        value={stripeMode}
+                        onChange={(e) => setStripeMode(e.target.value as any)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-semibold"
+                      >
+                        <option value="test">Test Mode (Sandbox)</option>
+                        <option value="live">Live Mode (Production)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">Checkout Flow</label>
+                      <select
+                        value={stripeRedirectType}
+                        onChange={(e) => setStripeRedirectType(e.target.value as any)}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-semibold"
+                      >
+                        <option value="simulated">Simulated UI (No Iframe Bugs)</option>
+                        <option value="hosted_checkout">Hosted Checkout URL (Real Stripe)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Keys */}
+                  <div>
+                    <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">Stripe Public Key</label>
+                    <input 
+                      type="text" 
+                      value={stripePublicKey}
+                      onChange={(e) => setStripePublicKey(e.target.value)}
+                      placeholder="pk_test_..."
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">Stripe Secret Key</label>
+                    <input 
+                      type="password" 
+                      value={stripeSecretKey}
+                      onChange={(e) => setStripeSecretKey(e.target.value)}
+                      placeholder="sk_test_..."
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-mono"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Credentials
+                  </button>
+                </form>
+              </div>
+
+              {/* Multi-Property Portfolio Discount Policy Configuration Form */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-800">Multi-Property Discount Policy</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">Configure portfolio discount rules for owners</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveMultiPropConfig} className="space-y-4">
+                  {/* Toggle */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="space-y-0.5">
+                      <span className="text-[11px] font-extrabold text-slate-700 block">Enable Policy</span>
+                      <p className="text-[9px] text-slate-400">Discount subsequent properties automatically</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMultiPropEnabled(!multiPropEnabled)}
+                      className={`w-11 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none ${
+                        multiPropEnabled ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <div
+                        className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ${
+                          multiPropEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Rates */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">1st Property Rate</label>
+                      <input 
+                        type="number" 
+                        value={multiPropFirstRate}
+                        onChange={(e) => setMultiPropFirstRate(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">Additional Property Rate</label>
+                      <input 
+                        type="number" 
+                        value={multiPropAdditionalRate}
+                        onChange={(e) => setMultiPropAdditionalRate(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase">Currency Code</label>
+                      <input 
+                        type="text" 
+                        value={multiPropCurrency}
+                        onChange={(e) => setMultiPropCurrency(e.target.value)}
+                        placeholder="e.g. JOD"
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:bg-white text-slate-800 font-mono uppercase font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Policy Configuration
+                  </button>
+                </form>
+              </div>
+
+              {/* Webhook & stripe instructions block */}
+              <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-3.5">
+                <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest block">INTEGRATION MAPS GUIDE</span>
+                <h4 className="text-xs font-extrabold text-slate-800">Dynamic Stripe Binding Strategy</h4>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  When a property board purchases or upgrades their account inside their property dashboard settings panel, the application queries these custom firestore collections. If <strong>Hosted Checkout URL</strong> is selected, the application calls Stripe API using your secret key and redirects the board safely. 
+                </p>
+                <div className="bg-slate-900 text-slate-200 font-mono text-[9px] p-3.5 rounded-xl space-y-1 overflow-x-auto">
+                  <div className="text-emerald-400">// Checkout redirect parameters payload</div>
+                  <div>Collection Path: <span className="text-amber-400">/system_configs/billing</span></div>
+                  <div>Plan Document ID: <span className="text-amber-400">monthly / annually</span></div>
+                  <div>Addon Document ID: <span className="text-amber-400">whatsapp_premium</span></div>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 2: Plans, Coupons, Addons (7 spans) */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              {/* SECTION A: Subscription Packages */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-emerald-600" />
+                    <h3 className="text-sm font-extrabold text-slate-800">1. SaaS Pricing Tiers / Packages</h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingPlanItem(null);
+                      setShowAddPlan(!showAddPlan);
+                    }}
+                    className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 cursor-pointer hover:underline bg-emerald-50 px-2.5 py-1 rounded-lg"
+                  >
+                    <Plus className="w-3 h-3" />
+                    {showAddPlan ? 'Collapse Form' : 'New Plan'}
+                  </button>
+                </div>
+
+                {showAddPlan && (
+                  <form onSubmit={handleSavePlan} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-3.5 animate-in slide-in-from-top-2 duration-200">
+                    <span className="text-[9px] font-mono font-extrabold text-emerald-600 uppercase tracking-wider block">
+                      {editingPlanItem ? `Edit Package Tier: ${editingPlanItem.id}` : 'Add / Configure Package Tier'}
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Document ID / Unique key</label>
+                        <input 
+                          type="text" 
+                          required 
+                          disabled={!!editingPlanItem}
+                          value={newPlanId} 
+                          onChange={(e) => setNewPlanId(e.target.value)}
+                          placeholder="e.g. basic_monthly" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Plan Display Name</label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={newPlanName} 
+                          onChange={(e) => setNewPlanName(e.target.value)}
+                          placeholder="e.g. Standard Business" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Price (JOD)</label>
+                        <input 
+                          type="number" 
+                          required 
+                          value={newPlanPrice} 
+                          onChange={(e) => setNewPlanPrice(Number(e.target.value))}
+                          placeholder="15" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Interval</label>
+                        <select 
+                          value={newPlanInterval} 
+                          onChange={(e) => setNewPlanInterval(e.target.value as any)}
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                        >
+                          <option value="month">Monthly</option>
+                          <option value="year">Annually</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Stripe Price ID</label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={newPlanStripePriceId} 
+                          onChange={(e) => setNewPlanStripePriceId(e.target.value)}
+                          placeholder="price_1Px..." 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500">Plan Description</label>
+                      <input 
+                        type="text" 
+                        value={newPlanDescription} 
+                        onChange={(e) => setNewPlanDescription(e.target.value)}
+                        placeholder="Best for active committees needing high-tier document archives..." 
+                        className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500">Features List (Comma separated)</label>
+                      <input 
+                        type="text" 
+                        value={newPlanFeatures} 
+                        onChange={(e) => setNewPlanFeatures(e.target.value)}
+                        placeholder="Unlimited Tenants, Full Backup Engine, WhatsApp alerts" 
+                        className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setEditingPlanItem(null);
+                          setNewPlanId('');
+                          setNewPlanName('');
+                          setNewPlanPrice(0);
+                          setNewPlanDescription('');
+                          setNewPlanFeatures('');
+                          setNewPlanStripePriceId('');
+                          setShowAddPlan(false);
+                        }} 
+                        className="px-3 py-1.5 text-xs text-slate-600 font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                      >
+                        {editingPlanItem ? 'Save Changes' : 'Register SaaS Package'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Plan list */}
+                <div className="space-y-3">
+                  {saasPlans.map((plan) => (
+                    <div key={plan.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-start justify-between gap-4 relative">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-xs text-slate-800">{plan.name}</span>
+                          <span className="bg-emerald-50 text-emerald-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full font-mono">{plan.id}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">{plan.description}</p>
+                        
+                        {/* Features chips */}
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {plan.features.map((f, idx) => (
+                            <span key={idx} className="bg-white border border-slate-200 text-slate-600 text-[9px] font-medium px-2 py-0.5 rounded-md">✓ {f}</span>
+                          ))}
+                        </div>
+
+                        <div className="text-[10px] text-slate-400 font-mono pt-1">
+                          Stripe ID: <span className="text-slate-600 font-bold">{plan.stripePriceId || 'unassigned'}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 space-y-2">
+                        <div>
+                          <span className="text-sm font-black text-slate-800 font-mono">{plan.price} {plan.currency}</span>
+                          <span className="text-[10px] text-slate-400 block font-semibold">/ {plan.interval}</span>
+                        </div>
+                        <div className="flex gap-1.5 justify-end">
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setEditingPlanItem(plan);
+                              setNewPlanId(plan.id);
+                              setNewPlanName(plan.name);
+                              setNewPlanPrice(plan.price);
+                              setNewPlanInterval(plan.interval as any);
+                              setNewPlanDescription(plan.description || '');
+                              setNewPlanFeatures((plan.features || []).join(', '));
+                              setNewPlanStripePriceId(plan.stripePriceId || '');
+                              setShowAddPlan(true);
+                            }}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 font-bold px-2 py-1 rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleDeletePlanItem(plan.id)}
+                            className="text-[10px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 font-bold px-2 py-1 rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION B: Discount Promo Coupons */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-sm font-extrabold text-slate-800">2. Discount Promo Coupons</h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingCouponItem(null);
+                      setShowAddCoupon(!showAddCoupon);
+                    }}
+                    className="text-xs font-bold text-indigo-600 flex items-center gap-1.5 cursor-pointer hover:underline bg-indigo-50 px-2.5 py-1 rounded-lg"
+                  >
+                    <Plus className="w-3 h-3" />
+                    {showAddCoupon ? 'Collapse Form' : 'New Coupon'}
+                  </button>
+                </div>
+
+                {showAddCoupon && (
+                  <form onSubmit={handleSaveCoupon} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-3.5 animate-in slide-in-from-top-2 duration-200">
+                    <span className="text-[9px] font-mono font-extrabold text-indigo-600 uppercase tracking-wider block">
+                      {editingCouponItem ? `Edit Coupon Record: ${editingCouponItem.code}` : 'Issue New Promotional Pass'}
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Coupon Promo Code</label>
+                        <input 
+                          type="text" 
+                          required 
+                          disabled={!!editingCouponItem}
+                          value={newCouponId} 
+                          onChange={(e) => setNewCouponId(e.target.value)}
+                          placeholder="WELCOME50" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none uppercase font-mono font-extrabold text-indigo-600 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Discount Percentage (%)</label>
+                        <input 
+                          type="number" 
+                          required 
+                          min="1" 
+                          max="100"
+                          value={newCouponDiscount} 
+                          onChange={(e) => setNewCouponDiscount(Number(e.target.value))}
+                          placeholder="50" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500">Campaign / Coupon Description</label>
+                      <input 
+                        type="text" 
+                        value={newCouponDescription} 
+                        onChange={(e) => setNewCouponDescription(e.target.value)}
+                        placeholder="50% launch offer discount for active committees" 
+                        className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setEditingCouponItem(null);
+                          setNewCouponId('');
+                          setNewCouponDiscount(10);
+                          setNewCouponDescription('');
+                          setShowAddCoupon(false);
+                        }} 
+                        className="px-3 py-1.5 text-xs text-slate-600 font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                      >
+                        {editingCouponItem ? 'Save Changes' : 'Issue Promo Code'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Coupon listing */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {saasCoupons.map((c) => (
+                    <div key={c.id} className="p-3.5 bg-indigo-50/40 border border-indigo-100/50 rounded-2xl flex items-center justify-between gap-3 relative">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-xs text-indigo-900 font-mono tracking-wide bg-indigo-100 px-2 py-0.5 rounded-md">{c.code}</span>
+                          <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded font-mono">-{c.discountPercent}% OFF</span>
+                        </div>
+                        <p className="text-[9px] text-slate-500 leading-snug">{c.description}</p>
+                      </div>
+
+                      <div className="flex gap-1 items-center">
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setEditingCouponItem(c);
+                            setNewCouponId(c.code);
+                            setNewCouponDiscount(c.discountPercent);
+                            setNewCouponDescription(c.description || '');
+                            setShowAddCoupon(true);
+                          }}
+                          className="text-[10px] text-indigo-600 hover:text-indigo-800 p-1 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+                          title="Edit Coupon"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => handleDeleteCouponItem(c.id)}
+                          className="text-[10px] text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Revoke Code"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION C: Addons Platform Addons */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-amber-600" />
+                    <h3 className="text-sm font-extrabold text-slate-800">3. Modular SaaS Addons</h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingAddonItem(null);
+                      setShowAddAddon(!showAddAddon);
+                    }}
+                    className="text-xs font-bold text-amber-600 flex items-center gap-1.5 cursor-pointer hover:underline bg-amber-50 px-2.5 py-1 rounded-lg"
+                  >
+                    <Plus className="w-3 h-3" />
+                    {showAddAddon ? 'Collapse Form' : 'New Addon'}
+                  </button>
+                </div>
+
+                {showAddAddon && (
+                  <form onSubmit={handleSaveAddon} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-3.5 animate-in slide-in-from-top-2 duration-200">
+                    <span className="text-[9px] font-mono font-extrabold text-amber-600 uppercase tracking-wider block">
+                      {editingAddonItem ? `Edit Platform Addon: ${editingAddonItem.id}` : 'Add Platform Addon'}
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Addon Identifier ID</label>
+                        <input 
+                          type="text" 
+                          required 
+                          disabled={!!editingAddonItem}
+                          value={newAddonId} 
+                          onChange={(e) => setNewAddonId(e.target.value)}
+                          placeholder="e.g. storage_expansion" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none disabled:bg-slate-100 disabled:text-slate-400 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Addon Feature Name</label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={newAddonName} 
+                          onChange={(e) => setNewAddonName(e.target.value)}
+                          placeholder="e.g. Document Archiver Extension" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Price (JOD)</label>
+                        <input 
+                          type="number" 
+                          required 
+                          value={newAddonPrice} 
+                          onChange={(e) => setNewAddonPrice(Number(e.target.value))}
+                          placeholder="5" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Charge Period</label>
+                        <select 
+                          value={newAddonInterval} 
+                          onChange={(e) => setNewAddonInterval(e.target.value as any)}
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                        >
+                          <option value="month">Monthly Recurring</option>
+                          <option value="year">Annually Recurring</option>
+                          <option value="one_time">One-time payment</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Stripe Price ID</label>
+                        <input 
+                          type="text" 
+                          required 
+                          value={newAddonStripePriceId} 
+                          onChange={(e) => setNewAddonStripePriceId(e.target.value)}
+                          placeholder="price_addon_..." 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500">Addon Feature Description</label>
+                      <input 
+                        type="text" 
+                        value={newAddonDescription} 
+                        onChange={(e) => setNewAddonDescription(e.target.value)}
+                        placeholder="Direct API pipeline supporting automatic receipt deliveries to tenants..." 
+                        className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setEditingAddonItem(null);
+                          setNewAddonId('');
+                          setNewAddonName('');
+                          setNewAddonPrice(0);
+                          setNewAddonDescription('');
+                          setNewAddonStripePriceId('');
+                          setShowAddAddon(false);
+                        }} 
+                        className="px-3 py-1.5 text-xs text-slate-600 font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                      >
+                        {editingAddonItem ? 'Save Changes' : 'Enable Feature Addon'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* Addons listing */}
+                <div className="space-y-3">
+                  {saasAddons.map((addon) => (
+                    <div key={addon.id} className="p-3.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-xs text-slate-800">{addon.name}</span>
+                          <span className="bg-amber-50 text-amber-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-md font-mono">{addon.id}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">{addon.description}</p>
+                        <div className="text-[9px] text-slate-400 font-mono">
+                          Stripe ID: <span className="text-slate-600 font-bold">{addon.stripePriceId || 'unassigned'}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 space-y-1.5">
+                        <div>
+                          <span className="text-xs font-black text-slate-800 font-mono">{addon.price} {addon.currency}</span>
+                          <span className="text-[9px] text-slate-400 block font-semibold">{addon.interval === 'one_time' ? 'once' : `/ ${addon.interval}`}</span>
+                        </div>
+                        <div className="flex gap-1 justify-end">
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setEditingAddonItem(addon);
+                              setNewAddonId(addon.id);
+                              setNewAddonName(addon.name);
+                              setNewAddonPrice(addon.price);
+                              setNewAddonInterval(addon.interval as any);
+                              setNewAddonDescription(addon.description || '');
+                              setNewAddonStripePriceId(addon.stripePriceId || '');
+                              setShowAddAddon(true);
+                            }}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 font-bold px-2 py-0.5 rounded transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => handleDeleteAddonItem(addon.id)}
+                            className="text-[10px] text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 font-bold px-2.5 py-0.5 rounded transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Wipe
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -101,6 +101,8 @@ export interface Expense {
   notes?: string;
   attachmentName?: string;
   attachmentUrl?: string; // Base64 data-URL or local image URL
+  status?: 'Paid' | 'Pending' | 'Overdue';
+  dueDate?: string; // YYYY-MM-DD
 }
 
 export interface Building {
@@ -123,6 +125,13 @@ export interface Building {
   reminderTemplate?: string; // Custom WhatsApp/statement payment reminder template
   receiptTemplate?: string; // Custom WhatsApp payment receipt confirmation template
   bankTransferId?: string; // Predefined Bank Transfer info (IBAN or ALIAS name/number)
+  // SaaS Subscription fields
+  subscriptionStatus?: 'active' | 'expired' | 'trial' | 'none';
+  subscriptionPlan?: string;
+  subscriptionStartDate?: string; // YYYY-MM-DD
+  subscriptionEndDate?: string; // YYYY-MM-DD
+  subscriptionAmountPaid?: number; // Price in JOD
+  activeAddons?: string[]; // Array of active addon IDs
 }
 
 export interface AuditLog {
@@ -240,3 +249,50 @@ export interface UserRecord {
   createdAt?: string;
   isSuperAdmin?: boolean;
 }
+
+export interface SaaSPlan {
+  id: string; // e.g. 'monthly' | 'annually'
+  name: string;
+  price: number;
+  currency: string;
+  interval: 'month' | 'year';
+  description: string;
+  features: string[];
+  stripePriceId?: string;
+  isActive: boolean;
+}
+
+export interface SaaSAddon {
+  id: string; // e.g. 'whatsapp_premium', 'extended_analytics'
+  name: string;
+  price: number;
+  currency: string;
+  interval: 'one_time' | 'month' | 'year';
+  description: string;
+  stripePriceId?: string;
+  isActive: boolean;
+}
+
+export interface SaASCoupon {
+  id: string; // code
+  code: string;
+  discountPercent: number; // e.g., 50
+  description: string;
+  isActive: boolean;
+}
+
+export interface StripeConfig {
+  isEnabled: boolean;
+  publicKey: string;
+  secretKey: string;
+  mode: 'test' | 'live';
+  checkoutRedirectType: 'simulated' | 'hosted_checkout';
+}
+
+export interface MultiPropertyConfig {
+  isEnabled: boolean;
+  firstPropertyRatePremium: number;
+  additionalPropertyRate: number;
+  currency: string;
+}
+

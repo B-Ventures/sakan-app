@@ -38,7 +38,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
         sessionStorageSnapshot: { ...sessionStorage },
       };
 
-      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+      const cache = new Set();
+      const safeDumpStr = JSON.stringify(dump, (key, value) => {
+        if (typeof value === 'object' && value !== null) {
+          if (cache.has(value)) return '[Circular]';
+          cache.add(value);
+        }
+        return value;
+      }, 2);
+      const blob = new Blob([safeDumpStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

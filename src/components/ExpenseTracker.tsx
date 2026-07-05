@@ -5,7 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Expense, ExpenseCategory, formatCurrency } from '../types';
-import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import ConfirmationDialog from './ConfirmationDialog';
 
 interface ExpenseTrackerProps {
@@ -27,15 +27,34 @@ export default function ExpenseTracker({
 }: ExpenseTrackerProps) {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [sortField, setSortField] = useState<'date' | 'dueDate' | 'amount' | 'title' | 'category' | 'status'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Extract unique months from expenses for filter dropdown
+  const uniqueMonths = React.useMemo(() => {
+    const months = expenses.map(e => e.date ? e.date.substring(0, 7) : '').filter(Boolean);
+    return Array.from(new Set(months)).sort((a, b) => b.localeCompare(a)); // Descending order
+  }, [expenses]);
+
+  // Reset page when filters or sorting change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterCategory, filterStatus, filterMonth, sortField, sortOrder, itemsPerPage]);
 
   // Form Fields State
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('');
   const [amount, setAmount] = useState<number>(0);
   const [date, setDate] = useState('2026-06-08');
+  const [status, setStatus] = useState<'Paid' | 'Pending' | 'Overdue'>('Paid');
+  const [dueDate, setDueDate] = useState<string>('');
   const [notes, setNotes] = useState('');
   
   // File upload state & base64
@@ -97,6 +116,8 @@ export default function ExpenseTracker({
     setCategory(customExpenseCategories[0] || 'Other');
     setAmount(0);
     setDate(new Date().toISOString().split('T')[0]);
+    setStatus('Paid');
+    setDueDate('');
     setNotes('');
     setAttachmentName('');
     setAttachmentUrl('');
@@ -109,6 +130,8 @@ export default function ExpenseTracker({
     setCategory(exp.category);
     setAmount(exp.amount);
     setDate(exp.date);
+    setStatus(exp.status || 'Paid');
+    setDueDate(exp.dueDate || '');
     setNotes(exp.notes || '');
     setAttachmentName(exp.attachmentName || '');
     setAttachmentUrl(exp.attachmentUrl || '');
@@ -125,10 +148,6 @@ export default function ExpenseTracker({
       alert('Please specify an amount greater than $0');
       return;
     }
-    if (!attachmentUrl) {
-      alert('An attachment receipt is strictly required for expense validation.');
-      return;
-    }
 
     const payload = {
       title,
@@ -136,8 +155,10 @@ export default function ExpenseTracker({
       amount: Number(amount),
       date,
       notes,
-      attachmentName,
-      attachmentUrl,
+      attachmentName: attachmentUrl ? (attachmentName || 'Invoice_Attachment') : '',
+      attachmentUrl: attachmentUrl || '',
+      status,
+      dueDate: dueDate || undefined,
     };
 
     if (editingExpense) {
@@ -152,19 +173,115 @@ export default function ExpenseTracker({
     setIsFormOpen(false);
   };
 
-  const filteredExpenses = expenses.filter(e => {
-    // category filter
-    if (filterCategory !== 'all' && e.category !== filterCategory) return false;
+  // 1. Filter Expenses
+  const filteredExpenses = React.useMemo(() => {
+    return expenses.filter(e => {
+      // category filter
+      if (filterCategory !== 'all' && e.category !== filterCategory) return false;
 
-    // keyword filter
-    if (search.trim() !== '') {
-      const q = search.toLowerCase();
-      const matchTitle = e.title.toLowerCase().includes(q);
-      const matchNotes = e.notes?.toLowerCase().includes(q);
-      return matchTitle || matchNotes;
+      // status filter
+      if (filterStatus !== 'all') {
+        const currentStatus = e.status || 'Paid';
+        if (currentStatus !== filterStatus) return false;
+      }
+
+      // month filter
+      if (filterMonth !== 'all') {
+        const m = e.date ? e.date.substring(0, 7) : '';
+        if (m !== filterMonth) return false;
+      }
+
+      // keyword filter
+      if (search.trim() !== '') {
+        const q = search.toLowerCase();
+        const matchTitle = e.title.toLowerCase().includes(q);
+        const matchNotes = e.notes?.toLowerCase().includes(q);
+        return matchTitle || matchNotes;
+      }
+      return true;
+    });
+  }, [expenses, filterCategory, filterStatus, filterMonth, search]);
+
+  // 2. Sort Expenses
+  const sortedExpenses = React.useMemo(() => {
+    // Safe parser for dates in multiple formats to sort chronologically
+    const parseDateToTime = (dStr: string) => {
+      if (!dStr) return 0;
+      if (dStr.includes('/')) {
+        const parts = dStr.split('/');
+        if (parts.length === 3) {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          const p2 = parseInt(parts[2], 10);
+          if (p0 > 12) {
+            return new Date(p2, p1 - 1, p0).getTime();
+          } else {
+            return new Date(p2, p0 - 1, p1).getTime();
+          }
+        }
+      }
+      if (dStr.includes('-')) {
+        const parts = dStr.split('-');
+        if (parts.length === 3) {
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          const p2 = parseInt(parts[2], 10);
+          if (p0 > 1000) {
+            return new Date(p0, p1 - 1, p2).getTime();
+          } else if (p2 > 1000) {
+            if (p0 > 12) {
+              return new Date(p2, p1 - 1, p0).getTime();
+            } else {
+              return new Date(p2, p0 - 1, p1).getTime();
+            }
+          }
+        }
+      }
+      const t = Date.parse(dStr);
+      return isNaN(t) ? 0 : t;
+    };
+
+    return [...filteredExpenses].sort((a, b) => {
+      if (sortField === 'date') {
+        const timeA = parseDateToTime(a.date || '');
+        const timeB = parseDateToTime(b.date || '');
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+
+      let valA: any = a[sortField] || '';
+      let valB: any = b[sortField] || '';
+
+      if (sortField === 'amount') {
+        valA = Number(valA);
+        valB = Number(valB);
+      } else {
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredExpenses, sortField, sortOrder]);
+
+  // 3. Paginate Expenses
+  const paginatedExpenses = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return sortedExpenses.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedExpenses, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(sortedExpenses.length / itemsPerPage);
+
+  // Helper to toggle sorting
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc'); // Default desc
     }
-    return true;
-  });
+  };
 
   return (
     <div className="space-y-6" id="expense-tracker-module">
@@ -183,33 +300,60 @@ export default function ExpenseTracker({
         </button>
       </div>
 
-      {/* Controls: Searching and Category filter */}
-      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
-        {/* Toggle selectors */}
-        <div className="flex gap-2 bg-slate-50 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
-          <button
-            onClick={() => setFilterCategory('all')}
-            className={`whitespace-nowrap px-4 py-1.5 rounded-lg font-bold text-xs transition-colors ${
-              filterCategory === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            All Categories ({expenses.length})
-          </button>
-          {customExpenseCategories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilterCategory(cat)}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-lg font-bold text-xs transition-colors ${
-                filterCategory === cat ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              {cat} ({expenses.filter(e => e.category === cat).length})
-            </button>
-          ))}
+      {/* Controls: Searching and Category, Status, Month filters */}
+      <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center" id="expense-filters-container">
+        {/* Dropdown filters */}
+        <div className="flex flex-col md:flex-row gap-4 items-center w-full xl:w-auto">
+          {/* Category, Status & Month dropdown filters */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Category:</span>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
+              >
+                <option value="all">All Categories ({expenses.length})</option>
+                {customExpenseCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat} ({expenses.filter(e => e.category === cat).length})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Status:</span>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
+              >
+                <option value="all">All Statuses</option>
+                <option value="Paid">Paid</option>
+                <option value="Pending">Pending</option>
+                <option value="Overdue">Overdue</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Month:</span>
+              <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
+              >
+                <option value="all">All Months</option>
+                {uniqueMonths.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Search Input bar */}
-        <div className="relative w-full md:w-72">
+        <div className="relative w-full xl:w-72">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">
             <Search className="w-4 h-4" />
           </span>
@@ -228,17 +372,38 @@ export default function ExpenseTracker({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50">
-                <th className="py-3 px-4">Expense Details & Category</th>
-                <th className="py-3 px-4">Log Date</th>
-                <th className="py-3 px-4">Additional Notes</th>
-                <th className="py-3 px-4">Verified Receipt</th>
-                <th className="py-3 px-4">Outflow Cost</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+              <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50 select-none">
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('title')}>
+                  <div className="flex items-center gap-1">
+                    Expense Details & Category
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'title' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('status')}>
+                  <div className="flex items-center gap-1">
+                    Status
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'status' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('date')}>
+                  <div className="flex items-center gap-1">
+                    Log / Due Date
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'date' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4">Additional Notes</th>
+                <th className="py-3.5 px-4">Invoice / Receipt</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('amount')}>
+                  <div className="flex items-center gap-1">
+                    Outflow Cost
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'amount' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/50">
-              {filteredExpenses.map((exp) => (
+              {paginatedExpenses.map((exp) => (
                 <tr key={exp.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="py-4 px-4">
                     <div>
@@ -248,8 +413,25 @@ export default function ExpenseTracker({
                       <div className="font-bold text-slate-800 text-sm mt-1.5">{exp.title}</div>
                     </div>
                   </td>
-                  <td className="py-4 px-4 text-xs font-mono text-slate-500 whitespace-nowrap">
-                    {exp.date}
+                  <td className="py-4 px-4">
+                    <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      exp.status === 'Paid' 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                        : exp.status === 'Overdue'
+                        ? 'bg-rose-50 text-rose-700 border-rose-100'
+                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                    }`}>
+                      {exp.status || 'Paid'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 whitespace-nowrap">
+                    <div className="text-xs font-mono text-slate-500">{exp.date}</div>
+                    {exp.dueDate && (
+                      <div className="text-[10px] text-slate-400 font-sans mt-0.5 flex items-center gap-1">
+                        <span className="font-semibold text-slate-500">Due:</span>
+                        <span className="font-mono text-slate-500">{exp.dueDate}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="py-4 px-4 text-xs text-slate-500 max-w-xs truncate" title={exp.notes}>
                     {exp.notes || <span className="text-slate-300 italic">No notes</span>}
@@ -315,7 +497,7 @@ export default function ExpenseTracker({
           </table>
         </div>
 
-        {filteredExpenses.length === 0 && (
+        {sortedExpenses.length === 0 && (
           <div className="text-center py-16 bg-white border-t border-slate-100" id="empty-expenses-state">
             <UploadCloud className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-slate-600">No expenses recorded for filters</p>
@@ -323,6 +505,101 @@ export default function ExpenseTracker({
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs text-slate-500 font-sans" id="expenses-pagination">
+          <div className="flex items-center gap-2">
+            <span>Show</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold focus:outline-none cursor-pointer"
+            >
+              {[5, 10, 15, 25, 50, 100].map(sz => (
+                <option key={sz} value={sz}>{sz} rows</option>
+              ))}
+            </select>
+            <span>
+              Showing <strong className="text-slate-700">{sortedExpenses.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
+              <strong className="text-slate-700">{Math.min(sortedExpenses.length, currentPage * itemsPerPage)}</strong> of{" "}
+              <strong className="text-slate-700">{sortedExpenses.length}</strong> expenses
+            </span>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="First Page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 -mr-1 inline-block" />
+                <ChevronLeft className="w-3.5 h-3.5 inline-block" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="flex items-center gap-1 font-sans">
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pageNum = idx + 1;
+                  const isNear = Math.abs(currentPage - pageNum) <= 1;
+                  const isEnds = pageNum === 1 || pageNum === totalPages;
+                  
+                  if (!isNear && !isEnds) {
+                    if (pageNum === 2 || pageNum === totalPages - 1) {
+                      return <span key={pageNum} className="px-1 text-slate-300">...</span>;
+                    }
+                    return null;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        currentPage === pageNum
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "border border-slate-100 hover:bg-slate-50 text-slate-600"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Next Page"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                title="Last Page"
+              >
+                <ChevronRight className="w-3.5 h-3.5 inline-block" />
+                <ChevronRight className="w-3.5 h-3.5 -ml-1 inline-block" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Maintenance expense addition modal */}
       {isFormOpen && (
@@ -384,21 +661,46 @@ export default function ExpenseTracker({
                 </div>
               </div>
 
-              {/* Date */}
+              {/* Date & Due Date and Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Expense Log Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Due Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Expense Log Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
-                />
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Payment Status *</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as 'Paid' | 'Pending' | 'Overdue')}
+                  className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="Paid">Paid</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Overdue">Overdue</option>
+                </select>
               </div>
 
               {/* Document/Receipt PDF Image File Input */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Attach Receipt Image/PDF *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Attach Original Invoice / Receipt (Optional)</label>
                 
                 {attachmentUrl ? (
                   <div className="border border-slate-100 rounded-xl p-3 bg-slate-50 flex items-center justify-between">
@@ -430,8 +732,8 @@ export default function ExpenseTracker({
                     }`}
                   >
                     <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-600">Drag & drop receipt here, or <span className="text-blue-500">browse</span></p>
-                    <p className="text-[10px] text-slate-400 mt-1">Supports images, receipts photo up to 5MB</p>
+                    <p className="text-xs font-semibold text-slate-600">Drag & drop invoice here, or <span className="text-blue-500">browse</span></p>
+                    <p className="text-[10px] text-slate-400 mt-1">Supports images or PDF up to 5MB</p>
                     
                     <input 
                       type="file" 

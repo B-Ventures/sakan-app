@@ -80,7 +80,9 @@
         "date": { "type": "string" },
         "notes": { "type": "string" },
         "attachmentName": { "type": "string" },
-        "attachmentUrl": { "type": "string" }
+        "attachmentUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "dueDate": { "type": "string" }
       },
       "required": ["id", "title", "category", "amount", "date"]
     },
