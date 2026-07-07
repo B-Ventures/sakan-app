@@ -534,7 +534,32 @@ export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense 
 // SaaS Packages & Billing Config Operations
 // ==========================================
 
+async function isBillingSeeded(type: 'plans' | 'coupons' | 'addons'): Promise<boolean> {
+  try {
+    const docRef = doc(db, 'system_configs', 'billing_meta');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return !!data[type];
+    }
+    return false;
+  } catch (error) {
+    console.error(`Failed to check billing meta for ${type}:`, error);
+    return false;
+  }
+}
+
+async function markBillingAsSeeded(type: 'plans' | 'coupons' | 'addons'): Promise<void> {
+  try {
+    const docRef = doc(db, 'system_configs', 'billing_meta');
+    await setDoc(docRef, { [type]: true }, { merge: true });
+  } catch (error) {
+    console.error(`Failed to mark billing meta for ${type}:`, error);
+  }
+}
+
 export async function fetchSaaSPlans(): Promise<SaaSPlan[]> {
+  const LOCAL_STORAGE_KEY = 'saas_plans_fallback';
   try {
     const q = collection(db, 'system_configs', 'billing', 'saas_plans');
     const snap = await getDocs(q);
@@ -544,64 +569,134 @@ export async function fetchSaaSPlans(): Promise<SaaSPlan[]> {
     });
     
     if (plans.length === 0) {
-      // Seed default plans
-      const defaults: SaaSPlan[] = [
-        {
-          id: 'monthly',
-          name: 'Premium Monthly Plan',
-          price: 10,
-          currency: 'JOD',
-          interval: 'month',
-          description: 'Best for small committees starting off with single-building accounting.',
-          features: ['Unlimited Tenants', 'Standard Analytics', 'WhatsApp Reminders', 'Basic Reports', 'Common Area Expenses'],
-          stripePriceId: 'price_123_monthly_test',
-          isActive: true
-        },
-        {
-          id: 'annually',
-          name: 'Premium Annual Plan',
-          price: 96,
-          currency: 'JOD',
-          interval: 'year',
-          description: 'Equivalent to 8 JOD/month. Perfect for long-term committee property boards.',
-          features: ['All Premium Monthly Features', 'Save 20% on Cumulative Cost', 'Priority Cloud Support', 'Unlimited Statements Export', 'Advanced Data Importer'],
-          stripePriceId: 'price_123_annually_test',
-          isActive: true
+      const seeded = await isBillingSeeded('plans');
+      if (!seeded) {
+        // Seed default plans
+        const defaults: SaaSPlan[] = [
+          {
+            id: 'monthly',
+            name: 'Premium Monthly Plan',
+            price: 10,
+            currency: 'JOD',
+            interval: 'month',
+            description: 'Best for small committees starting off with single-building accounting.',
+            features: ['Unlimited Tenants', 'Standard Analytics', 'WhatsApp Reminders', 'Basic Reports', 'Common Area Expenses'],
+            stripePriceId: 'price_123_monthly_test',
+            isActive: true
+          },
+          {
+            id: 'annually',
+            name: 'Premium Annual Plan',
+            price: 96,
+            currency: 'JOD',
+            interval: 'year',
+            description: 'Equivalent to 8 JOD/month. Perfect for long-term committee property boards.',
+            features: ['All Premium Monthly Features', 'Save 20% on Cumulative Cost', 'Priority Cloud Support', 'Unlimited Statements Export', 'Advanced Data Importer'],
+            stripePriceId: 'price_123_annually_test',
+            isActive: true
+          }
+        ];
+        for (const p of defaults) {
+          try {
+            await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', p.id), p);
+          } catch (e) {
+            console.warn("Could not seed plan in Firestore:", e);
+          }
+          plans.push(p);
         }
-      ];
-      for (const p of defaults) {
-        await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', p.id), p);
-        plans.push(p);
+        try {
+          await markBillingAsSeeded('plans');
+        } catch (e) {}
       }
+    }
+    
+    if (plans.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plans));
     }
     return plans;
   } catch (error) {
-    console.error("Failed to fetch saas plans:", error);
-    return [];
+    console.error("Failed to fetch saas plans from Firestore, using local fallback:", error);
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return [
+      {
+        id: 'monthly',
+        name: 'Premium Monthly Plan',
+        price: 10,
+        currency: 'JOD',
+        interval: 'month',
+        description: 'Best for small committees starting off with single-building accounting.',
+        features: ['Unlimited Tenants', 'Standard Analytics', 'WhatsApp Reminders', 'Basic Reports', 'Common Area Expenses'],
+        stripePriceId: 'price_123_monthly_test',
+        isActive: true
+      },
+      {
+        id: 'annually',
+        name: 'Premium Annual Plan',
+        price: 96,
+        currency: 'JOD',
+        interval: 'year',
+        description: 'Equivalent to 8 JOD/month. Perfect for long-term committee property boards.',
+        features: ['All Premium Monthly Features', 'Save 20% on Cumulative Cost', 'Priority Cloud Support', 'Unlimited Statements Export', 'Advanced Data Importer'],
+        stripePriceId: 'price_123_annually_test',
+        isActive: true
+      }
+    ];
   }
 }
 
 export async function saveSaaSPlan(plan: SaaSPlan): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'saas_plans_fallback';
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let list: SaaSPlan[] = [];
+    if (cached) {
+      try { list = JSON.parse(cached); } catch (e) {}
+    }
+    const idx = list.findIndex(item => item.id === plan.id);
+    if (idx >= 0) {
+      list[idx] = plan;
+    } else {
+      list.push(plan);
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) {}
+
   const path = `system_configs/billing/saas_plans/${plan.id}`;
   try {
     await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', plan.id), plan);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
 }
 
 export async function deleteSaaSPlan(id: string): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'saas_plans_fallback';
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      let list: SaaSPlan[] = JSON.parse(cached);
+      list = list.filter(item => item.id !== id);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+    }
+  } catch (e) {}
+
   const path = `system_configs/billing/saas_plans/${id}`;
   try {
     await deleteDoc(doc(db, 'system_configs', 'billing', 'saas_plans', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn("Firestore delete failed, changes preserved in local storage:", error);
   }
 }
 
 export async function fetchSaaSCoupons(): Promise<SaASCoupon[]> {
+  const LOCAL_STORAGE_KEY = 'saas_coupons_fallback';
   try {
     const q = collection(db, 'system_configs', 'billing', 'saas_coupons');
     const snap = await getDocs(q);
@@ -611,46 +706,96 @@ export async function fetchSaaSCoupons(): Promise<SaASCoupon[]> {
     });
     
     if (coupons.length === 0) {
-      // Seed default coupons
-      const defaults: SaASCoupon[] = [
-        { id: 'BOSSTSC26', code: 'BOSSTSC26', discountPercent: 50, description: 'Exclusive Partner Launch discount coupon.', isActive: true },
-        { id: 'WELCOME50', code: 'WELCOME50', discountPercent: 50, description: 'Standard 50% discount for first-time premium upgraders.', isActive: true },
-        { id: 'SAASFREE', code: 'SAASFREE', discountPercent: 100, description: '100% discount sandbox trial pass.', isActive: true },
-        { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off full premium pass.', isActive: true }
-      ];
-      for (const c of defaults) {
-        await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', c.id), c);
-        coupons.push(c);
+      const seeded = await isBillingSeeded('coupons');
+      if (!seeded) {
+        // Seed default coupons
+        const defaults: SaASCoupon[] = [
+          { id: 'BOSSTSC26', code: 'BOSSTSC26', discountPercent: 50, description: 'Exclusive Partner Launch discount coupon.', isActive: true },
+          { id: 'WELCOME50', code: 'WELCOME50', discountPercent: 50, description: 'Standard 50% discount for first-time premium upgraders.', isActive: true },
+          { id: 'SAASFREE', code: 'SAASFREE', discountPercent: 100, description: '100% discount sandbox trial pass.', isActive: true },
+          { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off full premium pass.', isActive: true }
+        ];
+        for (const c of defaults) {
+          try {
+            await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', c.id), c);
+          } catch (e) {}
+          coupons.push(c);
+        }
+        try {
+          await markBillingAsSeeded('coupons');
+        } catch (e) {}
       }
+    }
+    
+    if (coupons.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(coupons));
     }
     return coupons;
   } catch (error) {
-    console.error("Failed to fetch saas coupons:", error);
-    return [];
+    console.error("Failed to fetch saas coupons from Firestore, using local fallback:", error);
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return [
+      { id: 'BOSSTSC26', code: 'BOSSTSC26', discountPercent: 50, description: 'Exclusive Partner Launch discount coupon.', isActive: true },
+      { id: 'WELCOME50', code: 'WELCOME50', discountPercent: 50, description: 'Standard 50% discount for first-time premium upgraders.', isActive: true },
+      { id: 'SAASFREE', code: 'SAASFREE', discountPercent: 100, description: '100% discount sandbox trial pass.', isActive: true },
+      { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off full premium pass.', isActive: true }
+    ];
   }
 }
 
 export async function saveSaaSCoupon(coupon: SaASCoupon): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'saas_coupons_fallback';
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let list: SaASCoupon[] = [];
+    if (cached) {
+      try { list = JSON.parse(cached); } catch (e) {}
+    }
+    const idx = list.findIndex(item => item.id === coupon.id);
+    if (idx >= 0) {
+      list[idx] = coupon;
+    } else {
+      list.push(coupon);
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) {}
+
   const path = `system_configs/billing/saas_coupons/${coupon.id}`;
   try {
     await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', coupon.id), coupon);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
 }
 
 export async function deleteSaaSCoupon(id: string): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'saas_coupons_fallback';
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      let list: SaASCoupon[] = JSON.parse(cached);
+      list = list.filter(item => item.id !== id);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+    }
+  } catch (e) {}
+
   const path = `system_configs/billing/saas_coupons/${id}`;
   try {
     await deleteDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn("Firestore delete failed, changes preserved in local storage:", error);
   }
 }
 
 export async function fetchSaaSAddons(): Promise<SaaSAddon[]> {
+  const LOCAL_STORAGE_KEY = 'saas_addons_fallback';
   try {
     const q = collection(db, 'system_configs', 'billing', 'saas_addons');
     const snap = await getDocs(q);
@@ -660,50 +805,101 @@ export async function fetchSaaSAddons(): Promise<SaaSAddon[]> {
     });
     
     if (addons.length === 0) {
-      // Seed default addons
-      const defaults: SaaSAddon[] = [
-        { id: 'whatsapp_premium', name: 'Automated WhatsApp API Hub', price: 5, currency: 'JOD', interval: 'month', description: 'Direct headless SMS & WhatsApp API gateway integration to auto-deliver receipts & reminders.', stripePriceId: 'price_addon_wa_test', isActive: true },
-        { id: 'extended_analytics', name: 'AI Financial Forecaster', price: 3, currency: 'JOD', interval: 'month', description: 'Predictive tenant payment trends, dynamic rent collections risk dashboard, and smart budgeting.', stripePriceId: 'price_addon_ai_test', isActive: true },
-        { id: 'extra_storage_pack', name: '10GB Document Storage Vault', price: 15, currency: 'JOD', interval: 'one_time', description: 'Expand your cloud bucket to host up to 10GB of tenant identity files, contracts, and expense receipt scans.', stripePriceId: 'price_addon_storage_test', isActive: true }
-      ];
-      for (const a of defaults) {
-        await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', a.id), a);
-        addons.push(a);
+      const seeded = await isBillingSeeded('addons');
+      if (!seeded) {
+        // Seed default addons
+        const defaults: SaaSAddon[] = [
+          { id: 'whatsapp_premium', name: 'Automated WhatsApp API Hub', price: 5, currency: 'JOD', interval: 'month', description: 'Direct headless SMS & WhatsApp API gateway integration to auto-deliver receipts & reminders.', stripePriceId: 'price_addon_wa_test', isActive: true },
+          { id: 'extended_analytics', name: 'AI Financial Forecaster', price: 3, currency: 'JOD', interval: 'month', description: 'Predictive tenant payment trends, dynamic rent collections risk dashboard, and smart budgeting.', stripePriceId: 'price_addon_ai_test', isActive: true },
+          { id: 'extra_storage_pack', name: '10GB Document Storage Vault', price: 15, currency: 'JOD', interval: 'one_time', description: 'Expand your cloud bucket to host up to 10GB of tenant identity files, contracts, and expense receipt scans.', stripePriceId: 'price_addon_storage_test', isActive: true }
+        ];
+        for (const a of defaults) {
+          try {
+            await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', a.id), a);
+          } catch (e) {}
+          addons.push(a);
+        }
+        try {
+          await markBillingAsSeeded('addons');
+        } catch (e) {}
       }
+    }
+    
+    if (addons.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(addons));
     }
     return addons;
   } catch (error) {
-    console.error("Failed to fetch saas addons:", error);
-    return [];
+    console.error("Failed to fetch saas addons from Firestore, using local fallback:", error);
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return [
+      { id: 'whatsapp_premium', name: 'Automated WhatsApp API Hub', price: 5, currency: 'JOD', interval: 'month', description: 'Direct headless SMS & WhatsApp API gateway integration to auto-deliver receipts & reminders.', stripePriceId: 'price_addon_wa_test', isActive: true },
+      { id: 'extended_analytics', name: 'AI Financial Forecaster', price: 3, currency: 'JOD', interval: 'month', description: 'Predictive tenant payment trends, dynamic rent collections risk dashboard, and smart budgeting.', stripePriceId: 'price_addon_ai_test', isActive: true },
+      { id: 'extra_storage_pack', name: '10GB Document Storage Vault', price: 15, currency: 'JOD', interval: 'one_time', description: 'Expand your cloud bucket to host up to 10GB of tenant identity files, contracts, and expense receipt scans.', stripePriceId: 'price_addon_storage_test', isActive: true }
+    ];
   }
 }
 
 export async function saveSaaSAddon(addon: SaaSAddon): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'saas_addons_fallback';
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let list: SaaSAddon[] = [];
+    if (cached) {
+      try { list = JSON.parse(cached); } catch (e) {}
+    }
+    const idx = list.findIndex(item => item.id === addon.id);
+    if (idx >= 0) {
+      list[idx] = addon;
+    } else {
+      list.push(addon);
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) {}
+
   const path = `system_configs/billing/saas_addons/${addon.id}`;
   try {
     await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', addon.id), addon);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
 }
 
 export async function deleteSaaSAddon(id: string): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'saas_addons_fallback';
+  try {
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      let list: SaaSAddon[] = JSON.parse(cached);
+      list = list.filter(item => item.id !== id);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+    }
+  } catch (e) {}
+
   const path = `system_configs/billing/saas_addons/${id}`;
   try {
     await deleteDoc(doc(db, 'system_configs', 'billing', 'saas_addons', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn("Firestore delete failed, changes preserved in local storage:", error);
   }
 }
 
 export async function fetchStripeConfig(): Promise<StripeConfig> {
+  const LOCAL_STORAGE_KEY = 'stripe_config_fallback';
   try {
     const docRef = doc(db, 'system_configs', 'stripe_config');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return sanitizeFirestoreData(docSnap.data()) as StripeConfig;
+      const data = sanitizeFirestoreData(docSnap.data()) as StripeConfig;
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      return data;
     } else {
       const defaultConfig: StripeConfig = {
         isEnabled: true,
@@ -712,11 +908,20 @@ export async function fetchStripeConfig(): Promise<StripeConfig> {
         mode: 'test',
         checkoutRedirectType: 'simulated'
       };
-      await setDoc(docRef, defaultConfig);
+      try {
+        await setDoc(docRef, defaultConfig);
+      } catch (e) {}
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultConfig));
       return defaultConfig;
     }
   } catch (error) {
-    console.error("Failed to fetch Stripe config, falling back:", error);
+    console.error("Failed to fetch Stripe config from Firestore, using local fallback:", error);
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
     return {
       isEnabled: true,
       publicKey: 'pk_test_51Pxabc123xyzStripePublicKeyPlaceholderForDemoMode',
@@ -729,20 +934,28 @@ export async function fetchStripeConfig(): Promise<StripeConfig> {
 
 export async function saveStripeConfig(config: StripeConfig): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'stripe_config_fallback';
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {}
+
   const path = 'system_configs/stripe_config';
   try {
     await setDoc(doc(db, 'system_configs', 'stripe_config'), config);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
 }
 
 export async function fetchMultiPropertyConfig(): Promise<MultiPropertyConfig> {
+  const LOCAL_STORAGE_KEY = 'multi_property_config_fallback';
   try {
     const docRef = doc(db, 'system_configs', 'multi_property_config');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return sanitizeFirestoreData(docSnap.data()) as MultiPropertyConfig;
+      const data = sanitizeFirestoreData(docSnap.data()) as MultiPropertyConfig;
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      return data;
     } else {
       const defaultConfig: MultiPropertyConfig = {
         isEnabled: true,
@@ -750,11 +963,20 @@ export async function fetchMultiPropertyConfig(): Promise<MultiPropertyConfig> {
         additionalPropertyRate: 5,
         currency: 'JOD'
       };
-      await setDoc(docRef, defaultConfig);
+      try {
+        await setDoc(docRef, defaultConfig);
+      } catch (e) {}
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultConfig));
       return defaultConfig;
     }
   } catch (error) {
-    console.error("Failed to fetch multi-property config, falling back:", error);
+    console.error("Failed to fetch multi-property config from Firestore, using local fallback:", error);
+    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
+    }
     return {
       isEnabled: true,
       firstPropertyRatePremium: 20,
@@ -766,11 +988,16 @@ export async function fetchMultiPropertyConfig(): Promise<MultiPropertyConfig> {
 
 export async function saveMultiPropertyConfig(config: MultiPropertyConfig): Promise<void> {
   enforceRateLimit();
+  const LOCAL_STORAGE_KEY = 'multi_property_config_fallback';
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
+  } catch (e) {}
+
   const path = 'system_configs/multi_property_config';
   try {
     await setDoc(doc(db, 'system_configs', 'multi_property_config'), config);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
 }
 

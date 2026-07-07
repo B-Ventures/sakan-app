@@ -2436,7 +2436,7 @@ export default function App() {
           )}
         </div>
       ) : (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-3 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-4 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
           <button
             onClick={() => setActiveTab('superadmin_analytics')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_analytics' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
@@ -2457,6 +2457,13 @@ export default function App() {
           >
             <CreditCard className="w-5 h-5 text-red-500" />
             SaaS Billing
+          </button>
+          <button
+            onClick={() => setActiveTab('superadmin_packages')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_packages' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <Sliders className="w-5 h-5 text-red-500" />
+            SaaS Packages
           </button>
         </div>
       )}

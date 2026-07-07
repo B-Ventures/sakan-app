@@ -217,7 +217,7 @@ export default function DashboardOverview({
     const timeA = parseDateToTime(a.date);
     const timeB = parseDateToTime(b.date);
     return timeB - timeA;
-  }).slice(0, 10);
+  }).slice(0, 5);
 
   return (
     <div className="space-y-6" id="dashboard-tab">
@@ -226,23 +226,15 @@ export default function DashboardOverview({
         {/* Net Flow */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-net">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Net Profit</span>
+            <span className="text-sm font-medium text-slate-500">Net Balance</span>
             <div className={`p-2 rounded-xl ${netProfit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
-            <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}</h3>
-            <div className="text-xs text-slate-400 mt-2.5 space-y-1">
-              <div className="flex justify-between items-center text-[11px]">
-                <span>Realized In:</span>
-                <span className="text-emerald-600 font-semibold">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</span>
-              </div>
-              <div className="flex justify-between items-center text-[11px]">
-                <span>Operational Out:</span>
-                <span className="text-orange-600 font-semibold">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</span>
-              </div>
-            </div>
+            <h3 className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}
+            </h3>
           </div>
         </div>
 
@@ -257,10 +249,6 @@ export default function DashboardOverview({
           <div className="mt-4">
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
-              <div className="flex justify-between items-center text-[11px]">
-                <span>Projectation:</span>
-                <span className="text-blue-600 font-semibold">{formatCurrency(totalProjectedIncome, activeBuilding?.currency || 'JOD')}</span>
-              </div>
               <div className="flex justify-between items-center text-[11px]">
                 <span>Uncollected (Due):</span>
                 <span className="text-rose-600 font-semibold">{formatCurrency(totalDueIncome, activeBuilding?.currency || 'JOD')}</span>
@@ -281,10 +269,6 @@ export default function DashboardOverview({
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Total Items:</span>
-                <span className="text-slate-700 font-semibold">{expenses.length} items</span>
-              </div>
-              <div className="flex justify-between items-center text-[11px]">
                 <span>Unpaid (Due):</span>
                 <span className="text-orange-600 font-semibold">{formatCurrency(totalDueExpenses, activeBuilding?.currency || 'JOD')}</span>
               </div>
@@ -304,12 +288,8 @@ export default function DashboardOverview({
             <h3 className="text-2xl font-bold text-slate-900">{occupancyRate}%</h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Occupied Units:</span>
-                <span className="text-slate-700 font-semibold">{occupiedUnits} units</span>
-              </div>
-              <div className="flex justify-between items-center text-[11px]">
-                <span>Total Units:</span>
-                <span className="text-slate-700 font-semibold">{totalUnits} units</span>
+                <span>Occupied / Total:</span>
+                <span className="text-slate-700 font-semibold">{occupiedUnits}/{totalUnits}</span>
               </div>
             </div>
           </div>
@@ -337,49 +317,99 @@ export default function DashboardOverview({
               </div>
             </div>
 
-            {/* Custom SVG Bar Chart Container */}
-            <div className="relative h-44 w-full border-b border-slate-100 mt-6 flex items-end justify-around pb-2 px-2">
-              {/* Scale Labels */}
-              <div className="absolute left-0 top-0 text-[9px] text-slate-400 flex flex-col justify-between h-full pointer-events-none">
-                <span>{formatCurrency(Math.max(totalIncomePaid, totalExpenses, 1000), activeBuilding?.currency || 'JOD')}</span>
-                <span>{formatCurrency(Math.round(Math.max(totalIncomePaid, totalExpenses, 1000) / 2), activeBuilding?.currency || 'JOD')}</span>
-                <span>{formatCurrency(0, activeBuilding?.currency || 'JOD')}</span>
+            {/* Custom Bar Chart Container */}
+            <div className="relative h-44 w-full mt-6">
+              {/* Grid Lines & Scale Labels */}
+              <div className="absolute left-0 right-0 top-8 h-[104px] pointer-events-none">
+                {/* 100% Grid Line */}
+                <div className="absolute top-0 left-14 right-0 border-t border-dashed border-slate-100 flex items-center">
+                  <span className="absolute -left-14 -translate-y-1/2 text-[9px] font-mono text-slate-400 w-12 text-right">
+                    {formatCurrency(Math.max(totalIncomePaid, totalExpenses, 1000), activeBuilding?.currency || 'JOD')}
+                  </span>
+                </div>
+                {/* 50% Grid Line */}
+                <div className="absolute top-1/2 left-14 right-0 border-t border-dashed border-slate-100 flex items-center">
+                  <span className="absolute -left-14 -translate-y-1/2 text-[9px] font-mono text-slate-400 w-12 text-right">
+                    {formatCurrency(Math.round(Math.max(totalIncomePaid, totalExpenses, 1000) / 2), activeBuilding?.currency || 'JOD')}
+                  </span>
+                </div>
+                {/* 0% Grid Line (Baseline) */}
+                <div className="absolute bottom-0 left-14 right-0 border-t border-slate-200 flex items-center">
+                  <span className="absolute -left-14 -translate-y-1/2 text-[9px] font-mono text-slate-400 w-12 text-right">
+                    {formatCurrency(0, activeBuilding?.currency || 'JOD')}
+                  </span>
+                </div>
               </div>
 
-              {/* Bar 1: Gross Received */}
-              <div className="flex flex-col items-center gap-1.5 w-1/3">
-                <div className="w-10 sm:w-12 bg-blue-100 hover:bg-blue-200 rounded-t-md relative transition-all duration-300" 
-                     style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 128}px` }}>
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[9px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none whitespace-nowrap z-10">
-                    {formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}
+              {/* Bars Container */}
+              <div className="absolute left-14 right-0 top-8 h-[104px] flex items-end justify-around">
+                {/* Bar 1: Gross Received */}
+                <div className="flex flex-col items-center h-full justify-end relative w-1/3 group">
+                  {/* Floating Value Badge */}
+                  <div 
+                    className="absolute z-10 transition-all duration-300 pointer-events-none whitespace-nowrap"
+                    style={{ bottom: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104 + 6}px` }}
+                  >
+                    <span className="bg-blue-50 text-blue-700 border border-blue-100/80 px-2 py-0.5 rounded-md text-[9.5px] font-black font-mono shadow-xs">
+                      {formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}
+                    </span>
                   </div>
-                  <div className="w-full h-full bg-gradient-to-t from-blue-600 to-blue-500 rounded-t-md shadow-xs"></div>
+                  {/* The Bar */}
+                  <div 
+                    className="w-10 sm:w-12 bg-gradient-to-t from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-t-md shadow-xs transition-all duration-300 cursor-pointer" 
+                    style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104}px` }}
+                  />
+                  {/* Label */}
+                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Received</span>
                 </div>
-                <span className="text-[10.5px] font-bold text-slate-500 whitespace-nowrap text-center">Received</span>
-              </div>
 
-              {/* Bar 2: Total Operational Costs */}
-              <div className="flex flex-col items-center gap-1.5 w-1/3">
-                <div className="w-10 sm:w-12 bg-orange-100 hover:bg-orange-200 rounded-t-md relative transition-all duration-300"
-                     style={{ height: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 128}px` }}>
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[9px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none whitespace-nowrap z-10">
-                    {formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}
+                {/* Bar 2: Total Operational Costs */}
+                <div className="flex flex-col items-center h-full justify-end relative w-1/3 group">
+                  {/* Floating Value Badge */}
+                  <div 
+                    className="absolute z-10 transition-all duration-300 pointer-events-none whitespace-nowrap"
+                    style={{ bottom: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104 + 6}px` }}
+                  >
+                    <span className="bg-orange-50 text-orange-700 border border-orange-100/80 px-2 py-0.5 rounded-md text-[9.5px] font-black font-mono shadow-xs">
+                      {formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}
+                    </span>
                   </div>
-                  <div className="w-full h-full bg-gradient-to-t from-orange-500 to-orange-400 rounded-t-md shadow-xs"></div>
+                  {/* The Bar */}
+                  <div 
+                    className="w-10 sm:w-12 bg-gradient-to-t from-orange-500 to-orange-400 hover:from-orange-400 hover:to-orange-300 rounded-t-md shadow-xs transition-all duration-300 cursor-pointer" 
+                    style={{ height: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104}px` }}
+                  />
+                  {/* Label */}
+                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Costs</span>
                 </div>
-                <span className="text-[10.5px] font-bold text-slate-500 whitespace-nowrap text-center">Costs</span>
-              </div>
 
-              {/* Bar 3: Net Cash Flow */}
-              <div className="flex flex-col items-center gap-1.5 w-1/3">
-                <div className={`w-10 sm:w-12 rounded-t-md relative transition-all duration-300 ${netProfit >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}
-                     style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 128}px` }}>
-                  <div className="absolute -top-7 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white font-mono text-[9px] py-0.5 px-1.5 rounded opacity-0 hover:opacity-100 hover:-top-8 transition-all duration-200 pointer-events-none whitespace-nowrap z-10">
-                    {formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}
+                {/* Bar 3: Net Cash Flow */}
+                <div className="flex flex-col items-center h-full justify-end relative w-1/3 group">
+                  {/* Floating Value Badge */}
+                  <div 
+                    className="absolute z-10 transition-all duration-300 pointer-events-none whitespace-nowrap"
+                    style={{ bottom: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104 + 6}px` }}
+                  >
+                    <span className={`px-2 py-0.5 rounded-md text-[9.5px] font-black font-mono shadow-xs border ${
+                      netProfit >= 0 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100/80' 
+                        : 'bg-rose-50 text-rose-700 border-rose-100/80'
+                    }`}>
+                      {formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}
+                    </span>
                   </div>
-                  <div className={`w-full h-full rounded-t-md bg-gradient-to-t ${netProfit >= 0 ? 'from-emerald-500 to-emerald-400 shadow-xs' : 'from-rose-500 to-rose-400 shadow-xs'}`}></div>
+                  {/* The Bar */}
+                  <div 
+                    className={`w-10 sm:w-12 rounded-t-md shadow-xs transition-all duration-300 cursor-pointer bg-gradient-to-t ${
+                      netProfit >= 0 
+                        ? 'from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300' 
+                        : 'from-rose-500 to-rose-400 hover:from-rose-400 hover:to-rose-300'
+                    }`}
+                    style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104}px` }}
+                  />
+                  {/* Label */}
+                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Net Flow</span>
                 </div>
-                <span className="text-[10.5px] font-bold text-slate-500 whitespace-nowrap text-center">Net Flow</span>
               </div>
             </div>
           </div>
@@ -792,21 +822,21 @@ export default function DashboardOverview({
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-800 text-xs truncate leading-normal" title={tx.title}>
+                      <p className="font-bold text-slate-800 text-xs truncate leading-tight mb-1" title={tx.title}>
                         {tx.title}
                       </p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 font-medium">
-                        <span className={`font-semibold uppercase text-[9px] px-1 py-0.2 rounded-sm shrink-0 ${
+                      <p className="text-[10px] text-slate-400 flex flex-wrap items-center gap-x-1.5 gap-y-1 font-medium leading-none">
+                        <span className={`font-semibold uppercase text-[9.5px] px-1.5 py-0.5 rounded-xs shrink-0 ${
                           tx.type === 'income' ? 'bg-blue-50/60 text-blue-500' : 'bg-orange-50/60 text-orange-500'
                         }`}>
                           {tx.category}
                         </span>
-                        <span className="text-slate-350">•</span>
+                        <span className="text-slate-300">•</span>
                         <span>{tx.date || 'TBD'}</span>
                       </p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 ml-auto">
                     <span className={`font-mono font-extrabold text-xs block ${
                       tx.type === 'income' ? 'text-blue-600' : 'text-orange-600'
                     }`}>

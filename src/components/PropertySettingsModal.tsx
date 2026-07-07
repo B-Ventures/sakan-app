@@ -43,7 +43,8 @@ import {
   AlertCircle,
   Check,
   Terminal,
-  ArrowRight
+  ArrowRight,
+  ChevronDown
 } from 'lucide-react';
 import { 
   fetchSaaSPlans, 
@@ -140,6 +141,10 @@ export default function PropertySettingsModal({
   );
 
   const getPlanBasePrice = (planId: string) => {
+    // Get plan details dynamically to check interval ('month' vs 'year')
+    const dbPlan = plans.find(p => p.id === planId);
+    const interval = dbPlan ? dbPlan.interval : (planId === 'annually' ? 'year' : 'month');
+
     // Check if portfolio discount applies
     const isAddon = buildings && buildings.length > 0 && (multiPropConfig?.isEnabled !== false);
     if (isAddon) {
@@ -149,12 +154,11 @@ export default function PropertySettingsModal({
       const isEligibleAddon = ownerBldgs.length > 1 && ownerBldgs[0].id !== building.id;
       if (isEligibleAddon) {
         const rate = multiPropConfig?.additionalPropertyRate ?? 5;
-        return planId === 'annually' ? rate * 12 : rate;
+        return interval === 'year' ? rate * 12 : rate;
       }
     }
 
     // Otherwise standard rates from DB plans or defaults
-    const dbPlan = plans.find(p => p.id === planId);
     if (dbPlan) return dbPlan.price;
     return planId === 'annually' ? 96 : 10;
   };
@@ -206,10 +210,20 @@ export default function PropertySettingsModal({
             fetchSaaSAddons(),
             fetchMultiPropertyConfig(),
           ]);
-          setPlans(fetchedPlans.filter(p => p.isActive));
-          setCoupons(fetchedCoupons.filter(c => c.isActive));
+          const activePlans = fetchedPlans.filter(p => p.isActive);
+          setPlans(activePlans);
+          if (activePlans.length > 0) {
+            if (building.subscriptionPlan && activePlans.some(p => p.id === building.subscriptionPlan)) {
+              setBillingPlan(building.subscriptionPlan);
+            } else if (activePlans.some(p => p.id === 'monthly')) {
+              setBillingPlan('monthly');
+            } else {
+              setBillingPlan(activePlans[0].id);
+            }
+          }
+          setCoupons(fetchedCoupons.filter(c => c.isActive !== false));
           setStripeConfig(fetchedStripe);
-          setAddons(fetchedAddons.filter(a => a.isActive));
+          setAddons(fetchedAddons.filter(a => a.isActive !== false));
           setMultiPropConfig(fetchedMultiProp);
         } catch (err) {
           console.error("Failed to load SaaS billing config:", err);
@@ -283,16 +297,7 @@ export default function PropertySettingsModal({
       setAppliedDiscount(matched.discountPercent);
       showToast(`Coupon applied! ${matched.code} active (${matched.discountPercent}% off).`, "success");
     } else {
-      // Fallback for demo defaults
-      if (cleanCoupon === 'BOSSTSC26' || cleanCoupon === 'WELCOME50') {
-        setAppliedDiscount(50); // 50% discount
-        showToast("Coupon applied! WELCOME50 active (50% off).", "success");
-      } else if (cleanCoupon === 'FREE30' || cleanCoupon === 'SAASFREE') {
-        setAppliedDiscount(100); // 100% discount
-        showToast("Coupon applied! SAASFREE active (100% off).", "success");
-      } else {
-        showToast("Invalid or inactive coupon code.", "error");
-      }
+      showToast("Invalid or inactive coupon code.", "error");
     }
   };
 
@@ -545,8 +550,8 @@ export default function PropertySettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200 font-sans">
-      <div className="bg-slate-50 rounded-3xl max-w-5xl w-full border border-slate-100 shadow-2xl flex flex-col md:flex-row h-[90vh] md:h-[720px] overflow-hidden relative animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto animate-in fade-in duration-200 font-sans">
+      <div className="bg-slate-50 rounded-3xl max-w-5xl w-full border border-slate-100 shadow-2xl flex flex-col md:flex-row min-h-[480px] h-[95vh] sm:h-[90vh] md:h-[720px] overflow-hidden relative my-auto animate-in zoom-in-95 duration-200">
         
         {/* Toast Warning banner within Settings */}
         {toast && (
@@ -596,9 +601,9 @@ export default function PropertySettingsModal({
         )}
 
         {/* Modal Sidebar Tab Selection */}
-        <div className="bg-white border-b md:border-b-0 md:border-r border-slate-100 p-5 md:w-64 shrink-0 flex flex-col md:justify-between font-sans">
-          <div className="space-y-4 md:space-y-6 flex-1">
-            <div className="flex items-center justify-between md:block">
+        <div className="bg-white border-b md:border-b-0 md:border-r border-slate-100 p-4 md:p-5 md:w-64 shrink-0 flex flex-col md:justify-between font-sans">
+          <div className="space-y-3.5 md:space-y-6 flex-1 flex flex-col justify-center md:justify-start">
+            <div className="flex items-center justify-between md:block shrink-0">
               <div>
                 <span className="text-[10px] font-bold font-mono text-blue-600 block uppercase tracking-wider">Property Manager</span>
                 <h3 className="font-extrabold text-slate-800 text-base mt-1.5 flex items-center gap-2">
@@ -615,76 +620,77 @@ export default function PropertySettingsModal({
               </button>
             </div>
 
-            <nav className="flex md:flex-col gap-1.5 text-xs font-bold text-slate-500 overflow-x-auto md:overflow-x-visible pb-1 md:pb-0 scrollbar-none select-none">
+            {/* Tab Selector */}
+            <nav className="flex md:flex-col gap-1 md:gap-1.5 text-xs font-bold text-slate-500 overflow-x-auto md:overflow-x-visible pb-1.5 md:pb-0 scrollbar-none select-none border-b md:border-b-0 border-slate-100">
               <button
                 onClick={() => { setActiveTab('general'); setEditingIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all shrink-0 w-full ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2.5 rounded-t-lg md:rounded-xl transition-all shrink-0 w-auto md:w-full whitespace-nowrap border-b-2 md:border-b-0 ${
                   activeTab === 'general' 
-                    ? 'bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs' 
-                    : 'hover:bg-slate-50 hover:text-slate-700 bg-slate-100/50 md:bg-transparent'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/20 md:bg-blue-50 font-extrabold' 
+                    : 'border-transparent hover:text-slate-700 bg-transparent hover:bg-slate-50'
                 }`}
               >
-                <Home className="w-4 h-4 shrink-0" />
+                <Home className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 General Details
               </button>
 
               <button
                 onClick={() => { setActiveTab('expenses'); setEditingIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all shrink-0 w-full ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2.5 rounded-t-lg md:rounded-xl transition-all shrink-0 w-auto md:w-full whitespace-nowrap border-b-2 md:border-b-0 ${
                   activeTab === 'expenses' 
-                    ? 'bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs' 
-                    : 'hover:bg-slate-50 hover:text-slate-700 bg-slate-100/50 md:bg-transparent'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/20 md:bg-blue-50 font-extrabold' 
+                    : 'border-transparent hover:text-slate-700 bg-transparent hover:bg-slate-50'
                 }`}
               >
-                <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                <FileSpreadsheet className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 Expense Categories
               </button>
 
               <button
                 onClick={() => { setActiveTab('paymentMethods'); setEditingIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all shrink-0 w-full ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2.5 rounded-t-lg md:rounded-xl transition-all shrink-0 w-auto md:w-full whitespace-nowrap border-b-2 md:border-b-0 ${
                   activeTab === 'paymentMethods' 
-                    ? 'bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs' 
-                    : 'hover:bg-slate-50 hover:text-slate-700 bg-slate-100/50 md:bg-transparent'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/20 md:bg-blue-50 font-extrabold' 
+                    : 'border-transparent hover:text-slate-700 bg-transparent hover:bg-slate-50'
                 }`}
               >
-                <Wallet className="w-4 h-4 shrink-0" />
+                <Wallet className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 Payment Methods
               </button>
 
               <button
                 onClick={() => { setActiveTab('incomeSplits'); setEditingIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all shrink-0 w-full ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2.5 rounded-t-lg md:rounded-xl transition-all shrink-0 w-auto md:w-full whitespace-nowrap border-b-2 md:border-b-0 ${
                   activeTab === 'incomeSplits' 
-                    ? 'bg-blue-50 text-blue-600 border border-blue-100/50 shadow-xs' 
-                    : 'hover:bg-slate-50 hover:text-slate-700 bg-slate-100/50 md:bg-transparent'
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/20 md:bg-blue-50 font-extrabold' 
+                    : 'border-transparent hover:text-slate-700 bg-transparent hover:bg-slate-50'
                 }`}
               >
-                <DollarSign className="w-4 h-4 shrink-0" />
+                <DollarSign className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 Income Split Fees
               </button>
 
               <button
                 onClick={() => { setActiveTab('billing'); setEditingIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all shrink-0 w-full ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2.5 rounded-t-lg md:rounded-xl transition-all shrink-0 w-auto md:w-full whitespace-nowrap border-b-2 md:border-b-0 ${
                   activeTab === 'billing' 
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/50 shadow-xs' 
-                    : 'hover:bg-slate-50 hover:text-slate-700 bg-slate-100/50 md:bg-transparent'
+                    ? 'border-emerald-500 text-emerald-700 bg-emerald-50/20 md:bg-emerald-50 font-extrabold' 
+                    : 'border-transparent hover:text-slate-700 bg-transparent hover:bg-slate-50'
                 }`}
               >
-                <CreditCard className="w-4 h-4 text-emerald-500 shrink-0" />
+                <CreditCard className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-500 shrink-0" />
                 Billing & Subscription
               </button>
 
               <button
                 onClick={() => { setActiveTab('backup'); setEditingIndex(null); }}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all shrink-0 w-full ${
+                className={`flex items-center gap-1.5 md:gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2.5 rounded-t-lg md:rounded-xl transition-all shrink-0 w-auto md:w-full whitespace-nowrap border-b-2 md:border-b-0 ${
                   activeTab === 'backup' 
-                    ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-xs' 
-                    : 'hover:bg-slate-50 hover:text-slate-700 bg-slate-100/50 md:bg-transparent'
+                    ? 'border-amber-500 text-amber-700 bg-amber-50/20 md:bg-amber-50 font-extrabold' 
+                    : 'border-transparent hover:text-slate-700 bg-transparent hover:bg-slate-50'
                 }`}
               >
-                <RefreshCw className="w-4 h-4 text-amber-500 shrink-0" />
+                <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500 shrink-0" />
                 Backup & Recovery
               </button>
             </nav>
@@ -699,9 +705,9 @@ export default function PropertySettingsModal({
         </div>
 
         {/* Tab Contents Frame */}
-        <div className="flex-1 p-6 md:p-8 flex flex-col justify-between overflow-hidden">
+        <div className="flex-1 p-3 sm:p-4 md:p-8 flex flex-col justify-between overflow-hidden min-h-0">
           
-          <div className="space-y-5 flex-1 flex flex-col overflow-hidden">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5 flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex items-center justify-between border-b pb-4 border-slate-200/60 font-sans shrink-0">
               <div>
                 <h4 className="text-base font-bold text-slate-800">
@@ -843,9 +849,9 @@ export default function PropertySettingsModal({
 
             {/* TAB CONTENT: LIST BASED CATEGORIES (Expenses) */}
             {activeTab === 'expenses' && (
-              <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="flex-1 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6 pr-1 min-h-0">
                 {/* Left: Input Form */}
-                <div className="lg:col-span-5 space-y-4">
+                <div className="lg:col-span-5 space-y-4 shrink-0">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 font-sans">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b pb-2.5 border-slate-100">
                       <Plus className="w-4 h-4 text-blue-500" />
@@ -905,13 +911,13 @@ export default function PropertySettingsModal({
                 </div>
 
                 {/* Right: Scrollable List */}
-                <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs">
+                <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs h-fit lg:h-full">
                   <div className="bg-slate-50/50 p-3 px-4 border-b border-slate-200/60 flex items-center justify-between font-sans shrink-0">
                     <span className="text-xs font-bold text-slate-500">Configured Categories</span>
                     <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded-full">{expenseCategories.length} Categories</span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[420px]">
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[300px] lg:max-h-none">
                     {expenseCategories.map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-50/40 transition-colors text-xs text-slate-700">
                         {editingIndex === idx ? (
@@ -940,12 +946,12 @@ export default function PropertySettingsModal({
                           </div>
                         ) : (
                           <>
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-slate-800">{item}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-2">
+                              <span className="font-bold text-slate-800 truncate" title={item}>{item}</span>
                               <button
                                 type="button"
                                 onClick={() => toggleCommonStatus(item, 'expense')}
-                                className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider transition-all cursor-pointer shrink-0 w-fit ${
                                   commonExpenses.includes(item)
                                     ? 'bg-blue-50 text-blue-600 border border-blue-200/50'
                                     : 'bg-slate-100 text-slate-400 border border-slate-200/50 hover:bg-slate-200/50 hover:text-slate-500'
@@ -955,7 +961,7 @@ export default function PropertySettingsModal({
                                 {commonExpenses.includes(item) ? '🏢 Building Common' : '👤 Unit Specific'}
                               </button>
                             </div>
-                            <div className="flex items-center gap-1 font-sans">
+                            <div className="flex items-center gap-1 shrink-0 font-sans">
                               <button
                                 onClick={() => handleStartEdit(idx, item)}
                                 className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
@@ -987,9 +993,9 @@ export default function PropertySettingsModal({
 
             {/* TAB CONTENT: LIST BASED CATEGORIES (Income Splits) */}
             {activeTab === 'incomeSplits' && (
-              <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="flex-1 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6 pr-1 min-h-0">
                 {/* Left: Input Form */}
-                <div className="lg:col-span-5 space-y-4">
+                <div className="lg:col-span-5 space-y-4 shrink-0">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 font-sans">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b pb-2.5 border-slate-100">
                       <Plus className="w-4 h-4 text-blue-500" />
@@ -1049,13 +1055,13 @@ export default function PropertySettingsModal({
                 </div>
 
                 {/* Right: Scrollable List */}
-                <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs">
+                <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs h-fit lg:h-full">
                   <div className="bg-slate-50/50 p-3 px-4 border-b border-slate-200/60 flex items-center justify-between font-sans shrink-0">
                     <span className="text-xs font-bold text-slate-500">Revenue Sub-splits</span>
                     <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded-full">{incomeSplits.length} Active Tags</span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[420px]">
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[300px] lg:max-h-none">
                     {incomeSplits.map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-50/40 transition-colors text-xs text-slate-700">
                         {editingIndex === idx ? (
@@ -1084,12 +1090,12 @@ export default function PropertySettingsModal({
                           </div>
                         ) : (
                           <>
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-slate-800">{item}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-2">
+                              <span className="font-bold text-slate-800 truncate" title={item}>{item}</span>
                               <button
                                 type="button"
                                 onClick={() => toggleCommonStatus(item, 'income')}
-                                className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider transition-all cursor-pointer shrink-0 w-fit ${
                                   commonIncomes.includes(item)
                                     ? 'bg-blue-50 text-blue-600 border border-blue-200/50'
                                     : 'bg-slate-100 text-slate-400 border border-slate-200/50 hover:bg-slate-200/50 hover:text-slate-500'
@@ -1099,7 +1105,7 @@ export default function PropertySettingsModal({
                                 {commonIncomes.includes(item) ? '🏢 Building Common' : '👤 Unit Specific'}
                               </button>
                             </div>
-                            <div className="flex items-center gap-1 font-sans">
+                            <div className="flex items-center gap-1 shrink-0 font-sans">
                               <button
                                 onClick={() => handleStartEdit(idx, item)}
                                 className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
@@ -1131,9 +1137,9 @@ export default function PropertySettingsModal({
 
             {/* TAB CONTENT: CUSTOM STRUCTURED PAYMENT METHODS */}
             {activeTab === 'paymentMethods' && (
-              <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-200">
+              <div className="flex-1 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-200 pr-1 min-h-0">
                 {/* Left: Input Form */}
-                <div className="lg:col-span-5 space-y-4">
+                <div className="lg:col-span-5 space-y-4 shrink-0">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 text-xs font-sans">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b pb-2.5 border-slate-100">
                       <Plus className="w-4 h-4 text-blue-500" />
@@ -1223,13 +1229,13 @@ export default function PropertySettingsModal({
                 </div>
 
                 {/* Right: Scrollable List */}
-                <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs">
+                <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs h-fit lg:h-full">
                   <div className="bg-slate-50/50 p-3 px-4 border-b border-slate-200/60 flex items-center justify-between font-sans shrink-0">
                     <span className="text-xs font-bold text-slate-500 font-sans">Supported Rent Channels</span>
                     <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded-full">{paymentMethods.length} Methods</span>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[420px]">
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[300px] lg:max-h-none">
                     {paymentMethods.map((pm, idx) => {
                       const isEditingThis = editingIndex === idx;
                       return (
@@ -1312,11 +1318,11 @@ export default function PropertySettingsModal({
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-800 text-sm">{pm.name}</span>
-                                  <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                                  <span className="font-bold text-slate-800 text-sm truncate" title={pm.name}>{pm.name}</span>
+                                  <span className={`inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 w-fit ${
                                     pm.type === 'Cash' 
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-150'
                                       : pm.type === 'Transfer'
@@ -1342,12 +1348,12 @@ export default function PropertySettingsModal({
                                   </span>
                                 </div>
                                 {pm.type === 'Transfer' && pm.transferId && (
-                                  <p className="text-[10px] text-slate-500 font-mono mt-1 leading-normal">
+                                  <p className="text-[10px] text-slate-500 font-mono mt-1 leading-normal truncate">
                                     IBAN/ALIAS: <span className="font-bold text-slate-700 bg-slate-50 px-1 py-0.5 rounded border border-slate-100">{pm.transferId}</span>
                                   </p>
                                 )}
                                 {pm.type === 'Credit Card' && pm.paymentLink && (
-                                  <p className="text-[10px] text-slate-500 font-mono mt-1 truncate max-w-[280px] sm:max-w-[340px] leading-normal" title={pm.paymentLink}>
+                                  <p className="text-[10px] text-slate-500 font-mono mt-1 truncate max-w-full leading-normal" title={pm.paymentLink}>
                                     Checkout: <span className="font-semibold text-slate-600 underline">{pm.paymentLink}</span>
                                   </p>
                                 )}
@@ -1386,7 +1392,7 @@ export default function PropertySettingsModal({
 
             {/* TAB CONTENT: SAAS BILLING */}
             {activeTab === 'billing' && (
-              <div className="flex-1 overflow-y-auto pr-1 space-y-6">
+              <div className="flex-1 overflow-y-auto pr-1 space-y-4 sm:space-y-6">
                 {/* 1. Status Overview Header */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="border border-slate-200/60 rounded-2xl p-4.5 bg-white shadow-xs flex flex-col justify-between">
@@ -1424,11 +1430,14 @@ export default function PropertySettingsModal({
                     <div>
                       <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest block">Current Pricing Plan</span>
                       <span className="text-xs font-extrabold text-slate-800 block mt-1.5 capitalize">
-                        {building.subscriptionPlan === 'monthly' || building.subscriptionPlan === 'annually' ? `${building.subscriptionPlan} billing` : '30-Day Free Trial'}
+                        {plans.find(p => p.id === building.subscriptionPlan)?.name || 
+                         (building.subscriptionPlan && building.subscriptionPlan !== 'none' 
+                           ? `${building.subscriptionPlan} Plan` 
+                           : '30-Day Free Trial')}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
-                      {building.subscriptionAmountPaid !== undefined ? `Last paid: JOD ${building.subscriptionAmountPaid}` : 'No previous subscription payment logged.'}
+                      {building.subscriptionAmountPaid !== undefined ? `Last paid: ${getPlanCurrency()} ${building.subscriptionAmountPaid}` : 'No previous subscription payment logged.'}
                     </p>
                   </div>
 
@@ -1557,6 +1566,10 @@ export default function PropertySettingsModal({
                         .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
                       const isEligibleAddon = ownerBldgs.length > 1 && ownerBldgs[0].id !== building.id;
                       if (isEligibleAddon) {
+                        const rate = multiPropConfig?.additionalPropertyRate ?? 5;
+                        const dbPlan = plans.find(p => p.id === billingPlan);
+                        const interval = dbPlan ? dbPlan.interval : (billingPlan === 'annually' ? 'year' : 'month');
+                        const displayRate = interval === 'year' ? rate * 12 : rate;
                         return (
                           <div className="bg-emerald-50/70 border border-emerald-100 text-emerald-800 p-4 rounded-2xl text-xs space-y-1 animate-in slide-in-from-top-2 duration-200">
                             <p className="font-extrabold flex items-center gap-1.5 text-emerald-900">
@@ -1564,7 +1577,7 @@ export default function PropertySettingsModal({
                             </p>
                             <p className="text-[11px] text-emerald-700 leading-relaxed">
                               This building is identified as an additional property asset under your ownership portfolio. 
-                              The subscription fee has been automatically discounted to <strong>{getPlanCurrency()} {multiPropConfig?.additionalPropertyRate ?? 5}/month</strong> (billed at {getPlanCurrency()} {getPlanBasePrice(billingPlan)} total).
+                              The subscription fee has been automatically discounted to <strong>{getPlanCurrency()} {displayRate}/{interval}</strong> (billed at {getPlanCurrency()} {getPlanBasePrice(billingPlan)} total).
                             </p>
                           </div>
                         );
@@ -1578,7 +1591,7 @@ export default function PropertySettingsModal({
                         <div className="flex gap-2">
                           <input 
                             type="text" 
-                            placeholder="e.g. WELCOME50 or SAASFREE" 
+                            placeholder={coupons.length > 0 ? `e.g. ${coupons[0].code}` : "ENTER COUPON CODE"} 
                             value={couponCode}
                             onChange={(e) => setCouponCode(e.target.value)}
                             className="flex-1 text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-sans uppercase placeholder-slate-400 text-slate-800 bg-slate-50 focus:bg-white transition-all"
@@ -1591,7 +1604,16 @@ export default function PropertySettingsModal({
                             Apply
                           </button>
                         </div>
-                        <span className="text-[9px] text-slate-400 block mt-1.5">Try coupon codes <strong>WELCOME50</strong> (50% off) or <strong>SAASFREE</strong> (100% off).</span>
+                        <span className="text-[9px] text-slate-400 block mt-1.5">Try coupon codes {(() => {
+                          const activeCoupons = coupons.filter(c => c.isActive !== false);
+                          if (activeCoupons.length === 0) return "none available.";
+                          return activeCoupons.map((c, idx) => (
+                            <React.Fragment key={c.id}>
+                              <strong>{c.code}</strong> ({c.discountPercent}% off)
+                              {idx < activeCoupons.length - 1 ? (idx === activeCoupons.length - 2 ? " or " : ", ") : ""}
+                            </React.Fragment>
+                          ));
+                        })()}</span>
                       </div>
 
                       <div className="flex flex-col justify-end text-right">
@@ -1720,12 +1742,12 @@ export default function PropertySettingsModal({
                   </form>
                 </div>
 
-                {/* 3. Modular SaaS Addons & Integration Center */}
+                {/* 3. Premium Addons & Integration Center */}
                 <div className="border border-slate-200/60 rounded-3xl p-6 bg-white shadow-xs space-y-5">
                   <div className="border-b pb-4 border-slate-100">
                     <h5 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
                       <Sliders className="w-4 h-4 text-amber-500" />
-                      Modular SaaS Addons
+                      Premium Addons & Integrations
                     </h5>
                     <p className="text-xs text-slate-400 mt-1">Unlock powerful feature-packs to automate communications and predictive analytics.</p>
                   </div>

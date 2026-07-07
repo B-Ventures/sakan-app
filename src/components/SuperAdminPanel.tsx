@@ -25,7 +25,9 @@ import {
   Landmark,
   ChevronDown,
   ChevronUp,
-  Settings
+  Settings,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { 
   updateUserProfile, 
@@ -168,6 +170,7 @@ export default function SuperAdminPanel({
   const [newCouponId, setNewCouponId] = useState('');
   const [newCouponDiscount, setNewCouponDiscount] = useState(10);
   const [newCouponDescription, setNewCouponDescription] = useState('');
+  const [newCouponIsActive, setNewCouponIsActive] = useState(true);
 
   const [newAddonId, setNewAddonId] = useState('');
   const [newAddonName, setNewAddonName] = useState('');
@@ -175,6 +178,7 @@ export default function SuperAdminPanel({
   const [newAddonInterval, setNewAddonInterval] = useState<'one_time' | 'month' | 'year'>('month');
   const [newAddonDescription, setNewAddonDescription] = useState('');
   const [newAddonStripePriceId, setNewAddonStripePriceId] = useState('');
+  const [newAddonIsActive, setNewAddonIsActive] = useState(true);
 
   // Stripe form state
   const [stripeEnabled, setStripeEnabled] = useState(true);
@@ -218,9 +222,7 @@ export default function SuperAdminPanel({
   };
 
   React.useEffect(() => {
-    if (activeSubTab === 'packages') {
-      loadSaaSConfigData();
-    }
+    loadSaaSConfigData();
   }, [activeSubTab]);
 
   // Computations
@@ -595,7 +597,7 @@ export default function SuperAdminPanel({
         code,
         discountPercent: Number(newCouponDiscount),
         description: newCouponDescription,
-        isActive: true
+        isActive: newCouponIsActive
       };
       await saveSaaSCoupon(payload);
       triggerNotification(`Coupon "${payload.code}" saved!`, 'success');
@@ -605,10 +607,28 @@ export default function SuperAdminPanel({
       setNewCouponId('');
       setNewCouponDiscount(10);
       setNewCouponDescription('');
+      setNewCouponIsActive(true);
 
       loadSaaSConfigData();
     } catch (err) {
       triggerNotification('Failed to save coupon: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  const handleToggleCouponActive = async (coupon: SaASCoupon) => {
+    try {
+      setBusyMessage('Toggling coupon status...');
+      const payload: SaASCoupon = {
+        ...coupon,
+        isActive: !coupon.isActive
+      };
+      await saveSaaSCoupon(payload);
+      triggerNotification(`Coupon "${coupon.code}" is now ${payload.isActive ? 'active' : 'deactivated'}!`, 'success');
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to toggle coupon: ' + (err as Error).message, 'error');
     } finally {
       setBusyMessage(null);
     }
@@ -641,7 +661,7 @@ export default function SuperAdminPanel({
         interval: newAddonInterval,
         description: newAddonDescription,
         stripePriceId: newAddonStripePriceId,
-        isActive: true
+        isActive: newAddonIsActive
       };
       await saveSaaSAddon(payload);
       triggerNotification(`SaaS addon "${payload.name}" saved!`, 'success');
@@ -653,10 +673,28 @@ export default function SuperAdminPanel({
       setNewAddonPrice(0);
       setNewAddonDescription('');
       setNewAddonStripePriceId('');
+      setNewAddonIsActive(true);
 
       loadSaaSConfigData();
     } catch (err) {
       triggerNotification('Failed to save addon: ' + (err as Error).message, 'error');
+    } finally {
+      setBusyMessage(null);
+    }
+  };
+
+  const handleToggleAddonActive = async (addon: SaaSAddon) => {
+    try {
+      setBusyMessage('Toggling addon status...');
+      const payload: SaaSAddon = {
+        ...addon,
+        isActive: !addon.isActive
+      };
+      await saveSaaSAddon(payload);
+      triggerNotification(`Addon "${addon.name}" is now ${payload.isActive ? 'active' : 'deactivated'}!`, 'success');
+      loadSaaSConfigData();
+    } catch (err) {
+      triggerNotification('Failed to toggle addon: ' + (err as Error).message, 'error');
     } finally {
       setBusyMessage(null);
     }
@@ -730,7 +768,7 @@ export default function SuperAdminPanel({
       
       await saveBuilding(updatedBld);
       setManualPaymentBld(null);
-      triggerNotification(`Manual payment of JOD ${amountPaidNum} logged! License extended to ${newEndDateStr}.`, 'success');
+      triggerNotification(`Manual payment of ${multiPropCurrency} ${amountPaidNum} logged! License extended to ${newEndDateStr}.`, 'success');
       onRefresh();
     } catch (err) {
       triggerNotification('Failed to log payment: ' + (err as Error).message, 'error');
@@ -1565,9 +1603,12 @@ export default function SuperAdminPanel({
                       const isAddon = isPortfolioAddon(b);
                       const daysRemaining = getDaysRemaining(b.subscriptionEndDate);
                       
-                      let planLabel = 'Trial License';
-                      if (b.subscriptionPlan === 'monthly') planLabel = 'Premium Monthly';
-                      else if (b.subscriptionPlan === 'annually') planLabel = 'Premium Annual';
+                      const dbPlan = saasPlans.find(p => p.id === b.subscriptionPlan);
+                      let planLabel = dbPlan 
+                        ? dbPlan.name 
+                        : (b.subscriptionPlan && b.subscriptionPlan !== 'none' 
+                            ? `${b.subscriptionPlan.charAt(0).toUpperCase() + b.subscriptionPlan.slice(1)} Plan` 
+                            : 'Trial License');
 
                       return (
                         <tr key={b.id} className="hover:bg-slate-50/50 transition-all">
@@ -1592,7 +1633,7 @@ export default function SuperAdminPanel({
                           <td className="px-5 py-3.5 text-center">
                             {isAddon ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 border border-emerald-100 text-emerald-700">
-                                Portfolio Discount (JOD 5)
+                                Portfolio Discount ({multiPropCurrency} {multiPropAdditionalRate})
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-400">
@@ -1720,8 +1761,11 @@ export default function SuperAdminPanel({
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
                 >
                   <option value="none">Free Trial (Default)</option>
-                  <option value="monthly">Premium Monthly</option>
-                  <option value="annually">Premium Annual</option>
+                  {saasPlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} ({plan.price} {plan.currency || 'JOD'}/{plan.interval})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1750,7 +1794,7 @@ export default function SuperAdminPanel({
               </div>
 
               <div>
-                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Cumulative Amount Paid (JOD)</label>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Cumulative Amount Paid ({multiPropCurrency})</label>
                 <input
                   type="number"
                   value={subEditAmount}
@@ -1794,7 +1838,7 @@ export default function SuperAdminPanel({
               <div className="mb-4 bg-emerald-50 border border-emerald-100 text-emerald-800 p-3 rounded-xl text-xs space-y-1">
                 <p className="font-bold">✨ Multi-Property Portfolio Discount Eligible!</p>
                 <p className="text-[11px] text-emerald-700">
-                  This building is owned by an owner with multiple property assets. The suggested monthly payment is discounted to only JOD 5/month!
+                  This building is owned by an owner with multiple property assets. The suggested monthly payment is discounted to only {multiPropCurrency} {multiPropAdditionalRate}/month!
                 </p>
               </div>
             )}
@@ -1802,7 +1846,7 @@ export default function SuperAdminPanel({
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Amount Paid (JOD)</label>
+                  <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Amount Paid ({multiPropCurrency})</label>
                   <input
                     type="number"
                     required
@@ -2374,6 +2418,19 @@ export default function SuperAdminPanel({
                       />
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox"
+                        id="newCouponIsActive"
+                        checked={newCouponIsActive}
+                        onChange={(e) => setNewCouponIsActive(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 cursor-pointer"
+                      />
+                      <label htmlFor="newCouponIsActive" className="text-[11px] font-bold text-slate-600 cursor-pointer">
+                        Is Active (Available for clients to apply)
+                      </label>
+                    </div>
+
                     <div className="flex justify-end gap-2">
                       <button 
                         type="button" 
@@ -2382,6 +2439,7 @@ export default function SuperAdminPanel({
                           setNewCouponId('');
                           setNewCouponDiscount(10);
                           setNewCouponDescription('');
+                          setNewCouponIsActive(true);
                           setShowAddCoupon(false);
                         }} 
                         className="px-3 py-1.5 text-xs text-slate-600 font-semibold cursor-pointer"
@@ -2401,16 +2459,37 @@ export default function SuperAdminPanel({
                 {/* Coupon listing */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {saasCoupons.map((c) => (
-                    <div key={c.id} className="p-3.5 bg-indigo-50/40 border border-indigo-100/50 rounded-2xl flex items-center justify-between gap-3 relative">
+                    <div key={c.id} className={`p-3.5 border rounded-2xl flex items-center justify-between gap-3 relative transition-all ${
+                      c.isActive !== false 
+                        ? 'bg-indigo-50/40 border-indigo-100/50' 
+                        : 'bg-slate-50 border-slate-200 opacity-60'
+                    }`}>
                       <div className="space-y-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-black text-xs text-indigo-900 font-mono tracking-wide bg-indigo-100 px-2 py-0.5 rounded-md">{c.code}</span>
                           <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded font-mono">-{c.discountPercent}% OFF</span>
+                          <span className={`text-[8.5px] font-extrabold px-1.5 py-0.5 rounded font-mono uppercase ${
+                            c.isActive !== false ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {c.isActive !== false ? 'Active' : 'Disabled'}
+                          </span>
                         </div>
                         <p className="text-[9px] text-slate-500 leading-snug">{c.description}</p>
                       </div>
 
-                      <div className="flex gap-1 items-center">
+                      <div className="flex gap-1 items-center shrink-0">
+                        <button 
+                          type="button" 
+                          onClick={() => handleToggleCouponActive(c)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            c.isActive !== false 
+                              ? 'text-amber-600 hover:bg-amber-50 hover:text-amber-800' 
+                              : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-800'
+                          }`}
+                          title={c.isActive !== false ? "Deactivate Code" : "Activate Code"}
+                        >
+                          {c.isActive !== false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
                         <button 
                           type="button" 
                           onClick={() => {
@@ -2418,6 +2497,7 @@ export default function SuperAdminPanel({
                             setNewCouponId(c.code);
                             setNewCouponDiscount(c.discountPercent);
                             setNewCouponDescription(c.description || '');
+                            setNewCouponIsActive(c.isActive !== false);
                             setShowAddCoupon(true);
                           }}
                           className="text-[10px] text-indigo-600 hover:text-indigo-800 p-1 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
@@ -2537,6 +2617,19 @@ export default function SuperAdminPanel({
                       />
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox"
+                        id="newAddonIsActive"
+                        checked={newAddonIsActive}
+                        onChange={(e) => setNewAddonIsActive(e.target.checked)}
+                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 cursor-pointer"
+                      />
+                      <label htmlFor="newAddonIsActive" className="text-[11px] font-bold text-slate-600 cursor-pointer">
+                        Is Active (Visible to clients on property settings)
+                      </label>
+                    </div>
+
                     <div className="flex justify-end gap-2">
                       <button 
                         type="button" 
@@ -2547,6 +2640,7 @@ export default function SuperAdminPanel({
                           setNewAddonPrice(0);
                           setNewAddonDescription('');
                           setNewAddonStripePriceId('');
+                          setNewAddonIsActive(true);
                           setShowAddAddon(false);
                         }} 
                         className="px-3 py-1.5 text-xs text-slate-600 font-semibold cursor-pointer"
@@ -2566,11 +2660,20 @@ export default function SuperAdminPanel({
                 {/* Addons listing */}
                 <div className="space-y-3">
                   {saasAddons.map((addon) => (
-                    <div key={addon.id} className="p-3.5 bg-slate-50 border border-slate-100 rounded-2xl flex items-start justify-between gap-4">
+                    <div key={addon.id} className={`p-3.5 border rounded-2xl flex items-start justify-between gap-4 transition-all ${
+                      addon.isActive !== false 
+                        ? 'bg-slate-50 border-slate-100' 
+                        : 'bg-slate-50 border-slate-200 opacity-60'
+                    }`}>
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-xs text-slate-800">{addon.name}</span>
                           <span className="bg-amber-50 text-amber-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-md font-mono">{addon.id}</span>
+                          <span className={`text-[8.5px] font-extrabold px-1.5 py-0.5 rounded font-mono uppercase ${
+                            addon.isActive !== false ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {addon.isActive !== false ? 'Active' : 'Disabled'}
+                          </span>
                         </div>
                         <p className="text-[10px] text-slate-500 leading-relaxed">{addon.description}</p>
                         <div className="text-[9px] text-slate-400 font-mono">
@@ -2583,7 +2686,19 @@ export default function SuperAdminPanel({
                           <span className="text-xs font-black text-slate-800 font-mono">{addon.price} {addon.currency}</span>
                           <span className="text-[9px] text-slate-400 block font-semibold">{addon.interval === 'one_time' ? 'once' : `/ ${addon.interval}`}</span>
                         </div>
-                        <div className="flex gap-1 justify-end">
+                        <div className="flex gap-1 justify-end items-center">
+                          <button 
+                            type="button" 
+                            onClick={() => handleToggleAddonActive(addon)}
+                            className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                              addon.isActive !== false 
+                                ? 'text-amber-600 hover:bg-amber-50 hover:text-amber-800' 
+                                : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-800'
+                            }`}
+                            title={addon.isActive !== false ? "Deactivate Addon" : "Activate Addon"}
+                          >
+                            {addon.isActive !== false ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
                           <button 
                             type="button" 
                             onClick={() => {
@@ -2594,6 +2709,7 @@ export default function SuperAdminPanel({
                               setNewAddonInterval(addon.interval as any);
                               setNewAddonDescription(addon.description || '');
                               setNewAddonStripePriceId(addon.stripePriceId || '');
+                              setNewAddonIsActive(addon.isActive !== false);
                               setShowAddAddon(true);
                             }}
                             className="text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 font-bold px-2 py-0.5 rounded transition-colors inline-flex items-center gap-1 cursor-pointer"
