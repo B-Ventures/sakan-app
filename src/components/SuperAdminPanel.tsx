@@ -309,9 +309,9 @@ export default function SuperAdminPanel({
       const customerBuildings = buildings.filter(b => b.ownerId === ownerId);
       
       const payload = customerBuildings.map(b => {
-        const bTenants = tenants.filter(t => t.ownerId === ownerId || t.buildingName === b.name);
-        const bPayments = payments.filter(p => p.ownerId === ownerId || p.buildingName === b.name);
-        const bExpenses = expenses.filter(e => e.ownerId === ownerId || e.buildingName === b.name);
+        const bTenants = tenants.filter(t => t.buildingId === b.id || (t.ownerId === ownerId && t.buildingName === b.name));
+        const bPayments = payments.filter(p => p.buildingId === b.id || (p.ownerId === ownerId && p.buildingName === b.name));
+        const bExpenses = expenses.filter(e => e.buildingId === b.id || (e.ownerId === ownerId && e.buildingName === b.name));
 
         return {
           building: b,
@@ -778,10 +778,11 @@ export default function SuperAdminPanel({
   };
 
   // PLATFORM METRIC ACCUMULATORS
-  const platformRent = payments.reduce((sum, p) => sum + (p.rentPaid || p.amount || 0), 0);
-  const platformGuard = payments.reduce((sum, p) => sum + (p.guardPaid || 0), 0);
-  const platformMaintenance = payments.reduce((sum, p) => sum + (p.maintenancePaid || 0), 0);
-  const platformPaymentsTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const paidPayments = payments.filter(p => p.status === 'Paid');
+  const platformRent = paidPayments.reduce((sum, p) => sum + (p.rentPaid || p.amount || 0), 0);
+  const platformGuard = paidPayments.reduce((sum, p) => sum + (p.guardPaid || 0), 0);
+  const platformMaintenance = paidPayments.reduce((sum, p) => sum + (p.maintenancePaid || 0), 0);
+  const platformPaymentsTotal = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const platformExpensesTotal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const platformBalance = platformPaymentsTotal - platformExpensesTotal;
 
@@ -795,8 +796,30 @@ export default function SuperAdminPanel({
   const trialSubscriptionsCount = buildings.filter(b => b.subscriptionStatus === 'trial' || !b.subscriptionStatus).length;
   const expiredSubscriptionsCount = buildings.filter(b => b.subscriptionStatus === 'expired').length;
   const totalSaaSPaidRevenue = buildings.reduce((sum, b) => sum + (b.subscriptionAmountPaid || 0), 0);
-  const mrrEstimate = buildings.filter(b => b.subscriptionStatus === 'active' && b.subscriptionPlan === 'monthly').length * 10 + 
-                     buildings.filter(b => b.subscriptionStatus === 'active' && b.subscriptionPlan === 'annually').length * 8;
+  const mrrEstimate = buildings.reduce((sum, b) => {
+    if (b.subscriptionStatus !== 'active') return sum;
+    // Try to find matching plan in configured saasPlans
+    const plan = saasPlans.find(p => p.id === b.subscriptionPlan);
+    if (plan) {
+      if (plan.interval === 'year') {
+        return sum + Math.round((plan.price || 0) / 12);
+      } else {
+        return sum + (plan.price || 0);
+      }
+    }
+    // Context-aware fallback matching based on case-insensitive plan name keywords
+    const planIdLower = (b.subscriptionPlan || '').toLowerCase();
+    if (planIdLower.includes('annual') || planIdLower.includes('year') || planIdLower === 'annually') {
+      return sum + 8; // standard annual plan is equivalent to JOD 8/month
+    } else if (planIdLower.includes('month') || planIdLower.includes('premium')) {
+      return sum + 10; // standard monthly or generic premium is JOD 10/month
+    }
+    // Default fallback value if an active subscription plan exists but is unrecognized
+    if (b.subscriptionPlan && b.subscriptionPlan !== 'none') {
+      return sum + 10;
+    }
+    return sum;
+  }, 0);
 
   return (
     <div className="space-y-6" id="superadmin-panel">
@@ -1242,7 +1265,7 @@ export default function SuperAdminPanel({
                         const term = tenantSearch.toLowerCase();
                         return b.name?.toLowerCase().includes(term);
                       }).map((b) => {
-                        const bTenants = tenants.filter(t => t.ownerId === b.ownerId || t.buildingName === b.name);
+                        const bTenants = tenants.filter(t => t.buildingId === b.id || (t.ownerId === b.ownerId && t.buildingName === b.name));
                         const totalUnits = bTenants.length;
                         const occupied = bTenants.filter(t => t.status === 'active').length;
                         const vacant = bTenants.filter(t => t.status === 'vacant').length;
@@ -1415,7 +1438,7 @@ export default function SuperAdminPanel({
       {activeSubTab === 'subscriptions' && (
         <div className="space-y-6 animate-fade-in" id="superadmin-subscriptions-console">
           {/* Subscription Metrics Overview */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 hover:shadow-md transition-all duration-200" id="sub-metrics-active-card">
               <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
                 <CheckCircle className="w-5 h-5" />
@@ -1443,6 +1466,16 @@ export default function SuperAdminPanel({
               <div>
                 <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">EXPIRED LICENSES</span>
                 <span className="text-xl font-black text-slate-800 block mt-1">{expiredSubscriptionsCount} Out of Service</span>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center gap-4 hover:shadow-md transition-all duration-200" id="sub-metrics-revenue-card">
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center shrink-0">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[9px] font-mono font-extrabold text-slate-400 uppercase tracking-widest leading-none">TOTAL REVENUE</span>
+                <span className="text-xl font-black text-indigo-700 block mt-1">JOD {totalSaaSPaidRevenue.toLocaleString()}</span>
               </div>
             </div>
 
@@ -2232,7 +2265,10 @@ export default function SuperAdminPanel({
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500">Stripe Price ID</label>
+                        <label className="text-[10px] font-bold text-slate-500 flex justify-between">
+                          <span>Stripe Price ID</span>
+                          <span className="text-[9px] text-amber-600 font-extrabold font-sans">Requires price_... NOT prod_...</span>
+                        </label>
                         <input 
                           type="text" 
                           required 
@@ -2241,6 +2277,7 @@ export default function SuperAdminPanel({
                           placeholder="price_1Px..." 
                           className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
                         />
+                        <p className="text-[9px] text-slate-400 mt-1">Please enter a valid Stripe Price ID (e.g., price_1Px...). Do not enter a Product ID (starting with prod_).</p>
                       </div>
                     </div>
 
@@ -2594,7 +2631,10 @@ export default function SuperAdminPanel({
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500">Stripe Price ID</label>
+                        <label className="text-[10px] font-bold text-slate-500 flex justify-between">
+                          <span>Stripe Price ID</span>
+                          <span className="text-[9px] text-amber-600 font-extrabold font-sans">Requires price_... NOT prod_...</span>
+                        </label>
                         <input 
                           type="text" 
                           required 
@@ -2603,6 +2643,7 @@ export default function SuperAdminPanel({
                           placeholder="price_addon_..." 
                           className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
                         />
+                        <p className="text-[9px] text-slate-400 mt-1">Please enter a valid Stripe Price ID (e.g., price_1Px...). Do not enter a Product ID (starting with prod_).</p>
                       </div>
                     </div>
 

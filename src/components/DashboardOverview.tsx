@@ -69,7 +69,10 @@ export default function DashboardOverview({
 
   // Total Expenses
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const netProfit = totalIncomePaid - totalExpenses;
+  const totalExpensesPaid = expenses
+    .filter(e => (e.status || 'Paid') === 'Paid')
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const netProfit = totalIncomePaid - totalExpensesPaid;
 
   // Unpaid Rent Accounts (Pending & Overdue for current month or overall)
   // We exclude any unpaid payment if there exists a 'Paid' payment covering the same month for this unit/tenant
@@ -235,6 +238,12 @@ export default function DashboardOverview({
             <h3 className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(netProfit, activeBuilding?.currency || 'JOD')}
             </h3>
+            <div className="text-xs text-slate-400 mt-2.5 space-y-1">
+              <div className="flex justify-between items-center text-[11px]">
+                <span>Unpaid Bills (Pending):</span>
+                <span className="text-orange-650 font-semibold">{formatCurrency(totalDueExpenses, activeBuilding?.currency || 'JOD')}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -324,13 +333,13 @@ export default function DashboardOverview({
                 {/* 100% Grid Line */}
                 <div className="absolute top-0 left-14 right-0 border-t border-dashed border-slate-100 flex items-center">
                   <span className="absolute -left-14 -translate-y-1/2 text-[9px] font-mono text-slate-400 w-12 text-right">
-                    {formatCurrency(Math.max(totalIncomePaid, totalExpenses, 1000), activeBuilding?.currency || 'JOD')}
+                    {formatCurrency(Math.max(totalIncomePaid, totalExpensesPaid, 1000), activeBuilding?.currency || 'JOD')}
                   </span>
                 </div>
                 {/* 50% Grid Line */}
                 <div className="absolute top-1/2 left-14 right-0 border-t border-dashed border-slate-100 flex items-center">
                   <span className="absolute -left-14 -translate-y-1/2 text-[9px] font-mono text-slate-400 w-12 text-right">
-                    {formatCurrency(Math.round(Math.max(totalIncomePaid, totalExpenses, 1000) / 2), activeBuilding?.currency || 'JOD')}
+                    {formatCurrency(Math.round(Math.max(totalIncomePaid, totalExpensesPaid, 1000) / 2), activeBuilding?.currency || 'JOD')}
                   </span>
                 </div>
                 {/* 0% Grid Line (Baseline) */}
@@ -348,7 +357,7 @@ export default function DashboardOverview({
                   {/* Floating Value Badge */}
                   <div 
                     className="absolute z-10 transition-all duration-300 pointer-events-none whitespace-nowrap"
-                    style={{ bottom: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104 + 6}px` }}
+                    style={{ bottom: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104 + 6}px` }}
                   >
                     <span className="bg-blue-50 text-blue-700 border border-blue-100/80 px-2 py-0.5 rounded-md text-[9.5px] font-black font-mono shadow-xs">
                       {formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}
@@ -357,27 +366,27 @@ export default function DashboardOverview({
                   {/* The Bar */}
                   <div 
                     className="w-10 sm:w-12 bg-gradient-to-t from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-t-md shadow-xs transition-all duration-300 cursor-pointer" 
-                    style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104}px` }}
+                    style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104}px` }}
                   />
                   {/* Label */}
                   <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Received</span>
                 </div>
 
-                {/* Bar 2: Total Operational Costs */}
+                {/* Bar 2: Total Operational Costs (Paid) */}
                 <div className="flex flex-col items-center h-full justify-end relative w-1/3 group">
                   {/* Floating Value Badge */}
                   <div 
                     className="absolute z-10 transition-all duration-300 pointer-events-none whitespace-nowrap"
-                    style={{ bottom: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104 + 6}px` }}
+                    style={{ bottom: `${(totalExpensesPaid / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104 + 6}px` }}
                   >
                     <span className="bg-orange-50 text-orange-700 border border-orange-100/80 px-2 py-0.5 rounded-md text-[9.5px] font-black font-mono shadow-xs">
-                      {formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}
+                      {formatCurrency(totalExpensesPaid, activeBuilding?.currency || 'JOD')}
                     </span>
                   </div>
                   {/* The Bar */}
                   <div 
                     className="w-10 sm:w-12 bg-gradient-to-t from-orange-500 to-orange-400 hover:from-orange-400 hover:to-orange-300 rounded-t-md shadow-xs transition-all duration-300 cursor-pointer" 
-                    style={{ height: `${(totalExpenses / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104}px` }}
+                    style={{ height: `${(totalExpensesPaid / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104}px` }}
                   />
                   {/* Label */}
                   <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Costs</span>
@@ -388,7 +397,7 @@ export default function DashboardOverview({
                   {/* Floating Value Badge */}
                   <div 
                     className="absolute z-10 transition-all duration-300 pointer-events-none whitespace-nowrap"
-                    style={{ bottom: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104 + 6}px` }}
+                    style={{ bottom: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104 + 6}px` }}
                   >
                     <span className={`px-2 py-0.5 rounded-md text-[9.5px] font-black font-mono shadow-xs border ${
                       netProfit >= 0 
@@ -405,7 +414,7 @@ export default function DashboardOverview({
                         ? 'from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300' 
                         : 'from-rose-500 to-rose-400 hover:from-rose-400 hover:to-rose-300'
                     }`}
-                    style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpenses, 1000)) * 104}px` }}
+                    style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104}px` }}
                   />
                   {/* Label */}
                   <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Net Flow</span>

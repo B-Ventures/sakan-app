@@ -43,7 +43,10 @@ function calculateDashboardStats(
 
   const totalProjectedIncome = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const netProfit = totalIncomePaid - totalExpenses;
+  const totalExpensesPaid = expenses
+    .filter(e => (e.status || 'Paid') === 'Paid')
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const netProfit = totalIncomePaid - totalExpensesPaid;
 
   // Expense categories mapping
   const expenseByCategory: Record<string, number> = {};
@@ -62,6 +65,7 @@ function calculateDashboardStats(
     totalMaintenancePaid,
     totalProjectedIncome,
     totalExpenses,
+    totalExpensesPaid,
     netProfit,
     expenseByCategory
   };
@@ -153,6 +157,25 @@ describe('Dashboard Calculation Engine Unit Tests', () => {
     expect(stats.totalProjectedIncome).toBe(1100); // Paid + Pending = 1100
     expect(stats.totalExpenses).toBe(250); // 150 + 100 = 250
     expect(stats.netProfit).toBe(250); // Realized Income (500) - Total Expenses (250) = 250
+  });
+
+  it('should only deduct Paid status expenses from netProfit and ignore Pending/Overdue', () => {
+    const payments: Payment[] = [
+      { id: 'p1', tenantId: 't1', tenantName: 'A', unit: '1', amount: 500, status: 'Paid', date: '2026-06-01', monthPaidFor: '2026-06', method: 'Cash', receiptNumber: 'REC-1' }
+    ];
+
+    const expenses: Expense[] = [
+      { id: 'e1', title: 'Paid Plumbing', category: 'Maintenance', amount: 100, date: '2026-06-02', status: 'Paid' },
+      { id: 'e2', title: 'Pending Cleaning', category: 'Cleaning', amount: 150, date: '2026-06-03', status: 'Pending' },
+      { id: 'e3', title: 'Overdue Elevator', category: 'Maintenance', amount: 200, date: '2026-06-04', status: 'Overdue' }
+    ];
+
+    const stats = calculateDashboardStats([], payments, expenses);
+
+    expect(stats.totalIncomePaid).toBe(500);
+    expect(stats.totalExpenses).toBe(450); // All logged expenses = 100 + 150 + 200 = 450
+    expect(stats.totalExpensesPaid).toBe(100); // Only Paid expense = 100
+    expect(stats.netProfit).toBe(400); // 500 (income) - 100 (paid expenses) = 400
   });
 
   it('should correctly categorize and group expenses', () => {

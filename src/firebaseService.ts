@@ -467,8 +467,8 @@ export async function deleteBuildingWithSubcollections(buildingId: string): Prom
   }
 }
 
-export async function fetchAllTenants(buildings: Building[]): Promise<(Tenant & { buildingName: string; ownerId: string })[]> {
-  const tenants: (Tenant & { buildingName: string; ownerId: string })[] = [];
+export async function fetchAllTenants(buildings: Building[]): Promise<(Tenant & { buildingId: string; buildingName: string; ownerId: string })[]> {
+  const tenants: (Tenant & { buildingId: string; buildingName: string; ownerId: string })[] = [];
   try {
     await Promise.all(buildings.map(async (b) => {
       const q = collection(db, 'buildings', b.id, 'tenants');
@@ -476,10 +476,11 @@ export async function fetchAllTenants(buildings: Building[]): Promise<(Tenant & 
       snap.forEach((docSnap) => {
         tenants.push({
           id: docSnap.id,
+          buildingId: b.id,
           buildingName: b.name,
           ownerId: b.ownerId,
           ...sanitizeFirestoreData(docSnap.data())
-        } as Tenant & { buildingName: string; ownerId: string });
+        } as Tenant & { buildingId: string; buildingName: string; ownerId: string });
       });
     }));
   } catch (error) {
@@ -488,8 +489,8 @@ export async function fetchAllTenants(buildings: Building[]): Promise<(Tenant & 
   return tenants;
 }
 
-export async function fetchAllPayments(buildings: Building[]): Promise<(Payment & { buildingName: string; ownerId: string })[]> {
-  const payments: (Payment & { buildingName: string; ownerId: string })[] = [];
+export async function fetchAllPayments(buildings: Building[]): Promise<(Payment & { buildingId: string; buildingName: string; ownerId: string })[]> {
+  const payments: (Payment & { buildingId: string; buildingName: string; ownerId: string })[] = [];
   try {
     await Promise.all(buildings.map(async (b) => {
       const q = collection(db, 'buildings', b.id, 'payments');
@@ -497,10 +498,11 @@ export async function fetchAllPayments(buildings: Building[]): Promise<(Payment 
       snap.forEach((docSnap) => {
         payments.push({
           id: docSnap.id,
+          buildingId: b.id,
           buildingName: b.name,
           ownerId: b.ownerId,
           ...sanitizeFirestoreData(docSnap.data())
-        } as Payment & { buildingName: string; ownerId: string });
+        } as Payment & { buildingId: string; buildingName: string; ownerId: string });
       });
     }));
   } catch (error) {
@@ -509,8 +511,8 @@ export async function fetchAllPayments(buildings: Building[]): Promise<(Payment 
   return payments;
 }
 
-export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense & { buildingName: string; ownerId: string })[]> {
-  const expenses: (Expense & { buildingName: string; ownerId: string })[] = [];
+export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense & { buildingId: string; buildingName: string; ownerId: string })[]> {
+  const expenses: (Expense & { buildingId: string; buildingName: string; ownerId: string })[] = [];
   try {
     await Promise.all(buildings.map(async (b) => {
       const q = collection(db, 'buildings', b.id, 'expenses');
@@ -518,10 +520,11 @@ export async function fetchAllExpenses(buildings: Building[]): Promise<(Expense 
       snap.forEach((docSnap) => {
         expenses.push({
           id: docSnap.id,
+          buildingId: b.id,
           buildingName: b.name,
           ownerId: b.ownerId,
           ...sanitizeFirestoreData(docSnap.data())
-        } as Expense & { buildingName: string; ownerId: string });
+        } as Expense & { buildingId: string; buildingName: string; ownerId: string });
       });
     }));
   } catch (error) {

@@ -220,7 +220,6 @@ export default function App() {
   useEffect(() => {
     if (isSuperAdminSession) {
       loadSuperAdminDashboard();
-      setActiveTab('superadmin_analytics');
     } else {
       setAllCustomers([]);
       setAllBuildings([]);
@@ -332,6 +331,126 @@ export default function App() {
       setActiveBuilding(null);
     }
   };
+
+  // --- STRIPE CHECKOUT CALLBACK VERIFICATION ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeCheckout = params.get('stripe_checkout');
+    const sessionId = params.get('session_id');
+    const type = params.get('type');
+    const itemId = params.get('itemId');
+    const buildingId = params.get('buildingId');
+
+    if (stripeCheckout === 'success' && sessionId && type && itemId && buildingId && activeUserId) {
+      const verifyStripePayment = async () => {
+        try {
+          showGlobalToast("Verifying Stripe Checkout Payment... Please wait.", "info");
+
+          const res = await fetch(`/api/verify-checkout-session?session_id=${sessionId}`);
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || "Verification failed on server.");
+          }
+
+          const verification = await res.json();
+          if (verification.paid) {
+            if (type === 'plan') {
+              const today = new Date();
+              const startDateStr = today.toISOString().slice(0, 10);
+              const durationDays = itemId === 'annually' ? 365 : 30;
+              const endDate = new Date();
+              endDate.setDate(today.getDate() + durationDays);
+              const endDateStr = endDate.toISOString().slice(0, 10);
+
+              const amountInJod = Math.round(verification.amountTotal * 0.71223);
+
+              const updatedFields = {
+                subscriptionStatus: 'active' as const,
+                subscriptionPlan: itemId,
+                subscriptionStartDate: startDateStr,
+                subscriptionEndDate: endDateStr,
+                subscriptionAmountPaid: amountInJod,
+              };
+
+              const targetB = buildings.find(b => b.id === buildingId) || activeBuilding;
+              if (targetB) {
+                const newB = { ...targetB, ...updatedFields };
+                await saveBuilding(newB);
+                setBuildings(prev => prev.map(b => b.id === buildingId ? newB : b));
+                if (activeBuilding?.id === buildingId) {
+                  setActiveBuilding(newB);
+                }
+
+                await logAction(
+                  buildingId,
+                  activeUserId,
+                  activeUserEmail || '',
+                  'UPDATE_BUILDING_SETTINGS',
+                  `Stripe Checkout Subscription successfully verified: ${itemId} ($${verification.amountTotal} USD equivalent to ${amountInJod} JOD).`,
+                  buildingId,
+                  'building',
+                  { fields: updatedFields }
+                );
+
+                showGlobalToast(`🎉 Subscription to "${itemId}" is active! Stripe payment verified.`, 'success');
+              }
+            } else if (type === 'addon') {
+              const targetB = buildings.find(b => b.id === buildingId) || activeBuilding;
+              if (targetB) {
+                const currentAddons = targetB.activeAddons || [];
+                if (!currentAddons.includes(itemId)) {
+                  const updatedAddons = [...currentAddons, itemId];
+                  const updatedFields = { activeAddons: updatedAddons };
+                  const newB = { ...targetB, ...updatedFields };
+                  
+                  await saveBuilding(newB);
+                  setBuildings(prev => prev.map(b => b.id === buildingId ? newB : b));
+                  if (activeBuilding?.id === buildingId) {
+                    setActiveBuilding(newB);
+                  }
+
+                  await logAction(
+                    buildingId,
+                    activeUserId,
+                    activeUserEmail || '',
+                    'UPDATE_BUILDING_SETTINGS',
+                    `Stripe Checkout Addon successfully verified: ${itemId} ($${verification.amountTotal}).`,
+                    buildingId,
+                    'building',
+                    { fields: updatedFields }
+                  );
+
+                  showGlobalToast(`🎉 Addon "${itemId}" is now activated! Stripe payment verified.`, 'success');
+                }
+              }
+            }
+          } else {
+            showGlobalToast("Stripe Payment verification failed. The session shows unpaid.", "error");
+          }
+        } catch (err: any) {
+          console.error("Stripe Verification Error:", err);
+          showGlobalToast(`Failed to verify payment: ${err.message}`, "error");
+        } finally {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('stripe_checkout');
+          url.searchParams.delete('session_id');
+          url.searchParams.delete('type');
+          url.searchParams.delete('itemId');
+          url.searchParams.delete('buildingId');
+          window.history.replaceState({}, '', url.pathname + url.search);
+        }
+      };
+
+      if (buildings.length > 0) {
+        verifyStripePayment();
+      }
+    } else if (stripeCheckout === 'cancel') {
+      showGlobalToast("Stripe Checkout was cancelled.", "info");
+      const url = new URL(window.location.href);
+      url.searchParams.delete('stripe_checkout');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+  }, [buildings, activeUserId, activeBuilding]);
 
   // 3. Realtime subcollection listeners
   useEffect(() => {
@@ -663,6 +782,7 @@ export default function App() {
 
   const handleSignOut = async () => {
     try {
+      setActiveTab('overview');
       if (isDemoMode) {
         setIsDemoMode(false);
         setDemoUser(null);
@@ -1835,6 +1955,7 @@ export default function App() {
           <button
             onClick={() => {
               setImpersonatedUser(null);
+              setActiveTab('superadmin_directory');
               showGlobalToast('Diagnostic support tunnel ended.', 'success');
             }}
             className="px-3 py-1 bg-white hover:bg-slate-100 text-red-600 text-[9px] font-extrabold uppercase rounded transition-colors tracking-widest cursor-pointer"
@@ -1936,8 +2057,9 @@ export default function App() {
           )}
 
           <nav className="space-y-1 flex-1">
+            {/* Property Management Section */}
             {!(isSuperAdminSession && !impersonatedUser) && (
-              <>
+              <div className="space-y-1">
                 <button
                   onClick={() => setActiveTab('overview')}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
@@ -1963,72 +2085,75 @@ export default function App() {
                   Units & Beneficiaries
                 </button>
 
-            <button
-              onClick={() => setActiveTab('payments')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'payments'
-                  ? 'bg-slate-100 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              id="tab-btn-payments"
-            >
-              <CreditCard className="w-4 h-4" />
-              Income Collections
-            </button>
+                <button
+                  onClick={() => setActiveTab('payments')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'payments'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-payments"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Income Collections
+                </button>
 
-            <button
-              onClick={() => setActiveTab('expenses')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'expenses'
-                  ? 'bg-slate-100 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              id="tab-btn-expenses"
-            >
-              <DollarSign className="w-4 h-4" />
-              Expense Ledger
-            </button>
+                <button
+                  onClick={() => setActiveTab('expenses')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'expenses'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-expenses"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Expense Ledger
+                </button>
 
-            <button
-              onClick={() => setActiveTab('reminders')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'reminders'
-                  ? 'bg-slate-100 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              id="tab-btn-reminders"
-            >
-              <FileText className="w-4 h-4" />
-              Statements & Alerts
-            </button>
+                <button
+                  onClick={() => setActiveTab('reminders')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'reminders'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-reminders"
+                >
+                  <FileText className="w-4 h-4" />
+                  Statements & Alerts
+                </button>
 
-            <button
-              onClick={() => setActiveTab('audit')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'audit'
-                  ? 'bg-slate-100 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-              id="tab-btn-audit"
-            >
-              <Shield className="w-4 h-4" />
-              Security Audit Trail
-            </button>
-              </>
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'audit'
+                      ? 'bg-slate-100 text-slate-900 font-bold'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-audit"
+                >
+                  <Shield className="w-4 h-4" />
+                  Security Audit Trail
+                </button>
+              </div>
             )}
 
-            {isSuperAdminSession && (
-              <>
+            {isSuperAdminSession && !impersonatedUser && (
+              <div className="pt-4 mt-4 border-t border-slate-100 space-y-1">
+                <div className="px-4 mb-2">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-mono">System Admin Tools</span>
+                </div>
                 <button
                   onClick={() => setActiveTab('superadmin_analytics')}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'superadmin_analytics'
                       ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      : 'text-slate-650 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                   id="tab-btn-superadmin-analytics"
                 >
-                  <Activity className="w-4 h-4 text-red-600" />
+                  <Activity className="w-4 h-4 text-red-600 animate-pulse" />
                   Global Platform Analytics
                 </button>
 
@@ -2037,7 +2162,7 @@ export default function App() {
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'superadmin_directory'
                       ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      : 'text-slate-650 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                   id="tab-btn-superadmin-directory"
                 >
@@ -2050,12 +2175,12 @@ export default function App() {
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'superadmin_subscriptions'
                       ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      : 'text-slate-650 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                   id="tab-btn-superadmin-subscriptions"
                 >
                   <CreditCard className="w-4 h-4 text-red-600" />
-                  SaaS Billing & Subscriptions
+                  Subscriptions & Licenses
                 </button>
 
                 <button
@@ -2063,14 +2188,14 @@ export default function App() {
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === 'superadmin_packages'
                       ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      : 'text-slate-650 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                   id="tab-btn-superadmin-packages"
                 >
                   <Sliders className="w-4 h-4 text-red-600" />
-                  SaaS Packages & Stripe Settings
+                  Subscription Plans & Stripe
                 </button>
-              </>
+              </div>
             )}
           </nav>
 
@@ -2219,8 +2344,8 @@ export default function App() {
               {activeTab === 'audit' && 'System Audit Trail Ledger'}
               {activeTab === 'superadmin_analytics' && '📈 Global Platform Analytics'}
               {activeTab === 'superadmin_directory' && '🛡️ System SuperAdmin Customer Directory'}
-              {activeTab === 'superadmin_subscriptions' && '💳 Platform SaaS Subscriptions & Plans Console'}
-              {activeTab === 'superadmin_packages' && '⚙️ SaaS Packages & Stripe Integration'}
+              {activeTab === 'superadmin_subscriptions' && '💳 Platform Subscriptions & Licenses Console'}
+              {activeTab === 'superadmin_packages' && '⚙️ Subscription Plans & Stripe Integration'}
               {activeTab === 'superadmin' && '🛡️ System SuperAdmin Customer Directory'}
             </h1>
           </div>
@@ -2376,6 +2501,7 @@ export default function App() {
                   }}
                   onEndImpersonation={() => {
                     setImpersonatedUser(null);
+                    setActiveTab('superadmin_directory');
                     showGlobalToast('Impersonation mode ended. Back to Admin area.', 'success');
                   }}
                   onRefresh={loadSuperAdminDashboard}
@@ -2389,7 +2515,7 @@ export default function App() {
 
       {/* Mobile Footer Tab Bar */}
       {!(isSuperAdminSession && !impersonatedUser) ? (
-        <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid ${isSuperAdminSession ? 'grid-cols-6' : 'grid-cols-5'} p-2 z-40 text-center text-[9px] font-bold text-slate-500`}>
+        <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid ${(isSuperAdminSession && !impersonatedUser) ? 'grid-cols-6' : 'grid-cols-5'} p-2 z-40 text-center text-[9px] font-bold text-slate-500`}>
           <button
             onClick={() => setActiveTab('overview')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'overview' ? 'text-blue-600' : 'text-slate-400'}`}
@@ -2425,7 +2551,7 @@ export default function App() {
             <FileText className="w-4 h-4" />
             Alerts
           </button>
-          {isSuperAdminSession && (
+          {isSuperAdminSession && !impersonatedUser && (
             <button
               onClick={() => setActiveTab('superadmin_subscriptions')}
               className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
@@ -2441,29 +2567,29 @@ export default function App() {
             onClick={() => setActiveTab('superadmin_analytics')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_analytics' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
-            <Activity className="w-5 h-5 text-red-500" />
-            Global Analytics
+            <Activity className="w-4.5 h-4.5 text-red-500" />
+            Analytics
           </button>
           <button
             onClick={() => setActiveTab('superadmin_directory')}
-            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_directory' ? 'text-red-650 font-extrabold' : 'text-slate-400'}`}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_directory' ? 'text-red-605 font-extrabold' : 'text-slate-400'}`}
           >
-            <Shield className="w-5 h-5 text-red-500" />
-            SuperAdmin Registry
+            <Shield className="w-4.5 h-4.5 text-red-500" />
+            Registry
           </button>
           <button
             onClick={() => setActiveTab('superadmin_subscriptions')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_subscriptions' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
-            <CreditCard className="w-5 h-5 text-red-500" />
-            SaaS Billing
+            <CreditCard className="w-4.5 h-4.5 text-red-500" />
+            Licenses
           </button>
           <button
             onClick={() => setActiveTab('superadmin_packages')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_packages' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
-            <Sliders className="w-5 h-5 text-red-500" />
-            SaaS Packages
+            <Sliders className="w-4.5 h-4.5 text-red-500" />
+            Plans
           </button>
         </div>
       )}

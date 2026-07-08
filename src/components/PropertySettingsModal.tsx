@@ -141,24 +141,8 @@ export default function PropertySettingsModal({
   );
 
   const getPlanBasePrice = (planId: string) => {
-    // Get plan details dynamically to check interval ('month' vs 'year')
+    // Standard rates from DB plans or defaults
     const dbPlan = plans.find(p => p.id === planId);
-    const interval = dbPlan ? dbPlan.interval : (planId === 'annually' ? 'year' : 'month');
-
-    // Check if portfolio discount applies
-    const isAddon = buildings && buildings.length > 0 && (multiPropConfig?.isEnabled !== false);
-    if (isAddon) {
-      const ownerBldgs = buildings
-        .filter(b => b.ownerId === building.ownerId)
-        .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
-      const isEligibleAddon = ownerBldgs.length > 1 && ownerBldgs[0].id !== building.id;
-      if (isEligibleAddon) {
-        const rate = multiPropConfig?.additionalPropertyRate ?? 5;
-        return interval === 'year' ? rate * 12 : rate;
-      }
-    }
-
-    // Otherwise standard rates from DB plans or defaults
     if (dbPlan) return dbPlan.price;
     return planId === 'annually' ? 96 : 10;
   };
@@ -303,7 +287,13 @@ export default function PropertySettingsModal({
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (appliedDiscount < 100) {
+    const selectedPlanObj = plans.find(p => p.id === billingPlan);
+    const basePrice = getPlanBasePrice(billingPlan);
+    const finalPrice = Math.max(0, basePrice - (basePrice * appliedDiscount) / 100);
+
+    const isHostedStripe = stripeConfig?.isEnabled && stripeConfig?.checkoutRedirectType === 'hosted_checkout';
+
+    if (finalPrice > 0 && !isHostedStripe) {
       if (!cardNumber.trim() || !cardName.trim() || !cardExpiry.trim() || !cardCvv.trim()) {
         showToast("Please complete your credit card details.", "error");
         return;
@@ -316,11 +306,72 @@ export default function PropertySettingsModal({
 
     setIsSubmittingBilling(true);
     try {
+      if (finalPrice > 0 && isHostedStripe) {
+        const priceId = selectedPlanObj?.stripePriceId;
+        const interval = selectedPlanObj ? selectedPlanObj.interval : (billingPlan === 'annually' ? 'year' : 'month');
+        // Convert local JOD price to USD equivalent for Stripe (e.g. 10 JOD -> ~14 USD, 96 JOD -> ~135 USD)
+        const usdAmount = finalPrice * 1.404;
+
+        const bodyPayload: any = {
+          buildingId: building.id,
+          itemType: "plan",
+          itemId: billingPlan,
+          successUrl: `${window.location.origin}/?stripe_checkout=success&session_id={CHECKOUT_SESSION_ID}&type=plan&itemId=${billingPlan}&buildingId=${building.id}`,
+          cancelUrl: `${window.location.origin}/?stripe_checkout=cancel`
+        };
+
+        if (appliedDiscount > 0) {
+          bodyPayload.dynamicPrice = {
+            name: `${selectedPlanObj?.name || (billingPlan === 'annually' ? 'Premium Annual Plan' : 'Premium Monthly Plan')} (Discount Applied)`,
+            amount: Math.round(usdAmount * 100) / 100,
+            interval: interval === 'year' ? 'year' : 'month'
+          };
+          bodyPayload.priceId = priceId || "dynamic_price";
+        } else {
+          if (!priceId) {
+            throw new Error(`No Stripe Price ID configured for the plan "${selectedPlanObj?.name || billingPlan}". Please configure it in Super Admin.`);
+          }
+          bodyPayload.priceId = priceId;
+        }
+
+        showToast("Initiating secure Stripe Checkout sandbox...", "info");
+        const res = await fetch("/api/create-checkout-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(bodyPayload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to initiate Stripe Checkout session.");
+        }
+
+        const data = await res.json();
+        if (data.url) {
+          showToast("Redirecting to Stripe secure gateway...", "success");
+          try {
+            if (window.top && window.top !== window) {
+              window.top.location.href = data.url;
+            } else {
+              window.location.href = data.url;
+            }
+          } catch (e) {
+            console.warn("Top redirect blocked by iframe sandbox, falling back to window.open", e);
+            window.open(data.url, "_blank");
+          }
+          return; // The browser will navigate away
+        } else {
+          throw new Error("Invalid checkout session URL returned from backend.");
+        }
+      }
+
+      // Simulated offline/sandbox mode for free or when local billing is selected
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       const today = new Date();
       const startDateStr = today.toISOString().slice(0, 10);
-      
-      const selectedPlanObj = plans.find(p => p.id === billingPlan);
-      const basePrice = getPlanBasePrice(billingPlan);
       const durationDays = selectedPlanObj 
         ? (selectedPlanObj.interval === 'year' ? 365 : 30)
         : (billingPlan === 'annually' ? 365 : 30);
@@ -328,8 +379,6 @@ export default function PropertySettingsModal({
       const endDate = new Date();
       endDate.setDate(today.getDate() + durationDays);
       const endDateStr = endDate.toISOString().slice(0, 10);
-      
-      const finalPrice = Math.max(0, basePrice - (basePrice * appliedDiscount) / 100);
 
       await onUpdateSettings({
         subscriptionStatus: 'active',
@@ -348,9 +397,9 @@ export default function PropertySettingsModal({
       setCardName('');
       setCouponCode('');
       setAppliedDiscount(0);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast("Failed to process subscription settings.", "error");
+      showToast(err.message || "Failed to process subscription settings.", "error");
     } finally {
       setIsSubmittingBilling(false);
     }
@@ -1454,293 +1503,331 @@ export default function PropertySettingsModal({
                   </div>
                 </div>
 
-                {/* 2. Main Subscription Checkout Section */}
-                <div className="border border-slate-200/60 rounded-3xl p-6 bg-white shadow-xs space-y-6">
-                  <div className="border-b pb-4 border-slate-100">
-                    <h5 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                      <CreditCard className="w-4 h-4 text-emerald-500" />
-                      Renew or Change Subscription
-                    </h5>
-                    <p className="text-xs text-slate-400 mt-1">Choose a flexible plan that matches your building scale and secure your tenant billing services.</p>
-                  </div>
-
-                  <form onSubmit={handleSubscribe} className="space-y-6">
-                    {/* Plan Selector Grid */}
+                {/* 2. Main Subscription Checkout Section or Active Subscription Banner */}
+                {building.subscriptionStatus === 'active' ? (
+                  <div className="border border-emerald-200 rounded-3xl p-6 bg-emerald-50/10 space-y-6 animate-in fade-in-50 duration-200">
+                    <div className="flex items-start gap-3.5 border-b pb-4 border-emerald-100">
+                      <div className="p-2.5 bg-emerald-100/70 text-emerald-700 rounded-xl shrink-0">
+                        <CheckCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-black text-emerald-800 uppercase tracking-wide flex items-center gap-2">
+                          Your License is Active
+                          <span className="bg-emerald-500 text-white text-[9px] font-mono px-2 py-0.5 rounded-full uppercase font-black">Secure</span>
+                        </h5>
+                        <p className="text-xs text-emerald-600/90 mt-1">
+                          This building is currently subscribed to the <span className="font-extrabold capitalize">{plans.find(p => p.id === building.subscriptionPlan)?.name || building.subscriptionPlan || 'Premium'} Plan</span>.
+                        </p>
+                      </div>
+                    </div>
+                    
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {plans.length > 0 ? (
-                        plans.map((p) => {
-                          const isSelected = billingPlan === p.id;
-                          return (
+                      <div className="bg-white border border-emerald-100 rounded-2xl p-4 space-y-1 shadow-2xs">
+                        <span className="text-[8px] font-mono font-extrabold text-slate-400 block uppercase tracking-wider">CUMULATIVE FEES PAID</span>
+                        <span className="text-md font-black text-slate-800 block mt-1">
+                          {getPlanCurrency()} {(building.subscriptionAmountPaid || 0).toLocaleString()}
+                        </span>
+                        <span className="text-[9px] text-slate-400 block leading-normal mt-0.5">Logged in platform local billing currency.</span>
+                      </div>
+                      <div className="bg-white border border-emerald-100 rounded-2xl p-4 space-y-1 shadow-2xs">
+                        <span className="text-[8px] font-mono font-extrabold text-slate-400 block uppercase tracking-wider">LICENSE VALID UNTIL</span>
+                        <span className="text-md font-black text-slate-800 block mt-1 font-mono">
+                          {building.subscriptionEndDate || 'N/A'}
+                        </span>
+                        <span className="text-[9px] text-slate-400 block leading-normal mt-0.5">Automatically renews or prompts on expiration day.</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                      Your premium service is fully unlocked and secure. You have already completed checkout for this cycle. If you wish to upgrade, downgrade, or cancel your plan, please contact the platform Super Admin team, or wait until your current cycle ends on <strong className="font-mono">{building.subscriptionEndDate || 'N/A'}</strong>.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="border border-slate-200/60 rounded-3xl p-6 bg-white shadow-xs space-y-6">
+                    <div className="border-b pb-4 border-slate-100">
+                      <h5 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <CreditCard className="w-4 h-4 text-emerald-500" />
+                        Renew or Change Subscription
+                      </h5>
+                      <p className="text-xs text-slate-400 mt-1">Choose a flexible plan that matches your building scale and secure your tenant billing services.</p>
+                    </div>
+
+                    <form onSubmit={handleSubscribe} className="space-y-6">
+                      {/* Plan Selector Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {plans.length > 0 ? (
+                          plans.map((p) => {
+                            const isSelected = billingPlan === p.id;
+                            return (
+                              <div 
+                                key={p.id}
+                                onClick={() => setBillingPlan(p.id)}
+                                className={`border rounded-2xl p-5 cursor-pointer transition-all select-none flex flex-col justify-between space-y-4 relative ${
+                                  isSelected
+                                    ? 'border-emerald-500 bg-emerald-50/10 ring-2 ring-emerald-500/10 shadow-sm'
+                                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/40'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-extrabold text-slate-800">{p.name}</span>
+                                  <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md capitalize">{p.interval}ly cycle</span>
+                                </div>
+                                <div>
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-black text-slate-900 font-mono">{getPlanBasePrice(p.id)} {getPlanCurrency()}</span>
+                                    <span className="text-[10px] font-semibold text-slate-400">/ {p.interval}</span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 mt-1">{p.description}</p>
+                                </div>
+                                {isSelected && (
+                                  <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                                )}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <>
+                            {/* Monthly Plan Card */}
                             <div 
-                              key={p.id}
-                              onClick={() => setBillingPlan(p.id)}
+                              onClick={() => setBillingPlan('monthly')}
                               className={`border rounded-2xl p-5 cursor-pointer transition-all select-none flex flex-col justify-between space-y-4 relative ${
-                                isSelected
+                                billingPlan === 'monthly'
                                   ? 'border-emerald-500 bg-emerald-50/10 ring-2 ring-emerald-500/10 shadow-sm'
-                                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/40'
+                                  : 'border-slate-200 hover:border-slate-305 hover:bg-slate-50/40'
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-extrabold text-slate-800">{p.name}</span>
-                                <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md capitalize">{p.interval}ly cycle</span>
+                                <span className="text-xs font-extrabold text-slate-800">Monthly Plan</span>
+                                <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-md">Cancel Anytime</span>
                               </div>
                               <div>
                                 <div className="flex items-baseline gap-1">
-                                  <span className="text-2xl font-black text-slate-900 font-mono">{getPlanBasePrice(p.id)} {getPlanCurrency()}</span>
-                                  <span className="text-[10px] font-semibold text-slate-400">/ {p.interval}</span>
+                                  <span className="text-2xl font-black text-slate-900 font-mono">
+                                    {getPlanBasePrice('monthly')} {getPlanCurrency()}
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-400">/ month</span>
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-1">{p.description}</p>
+                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">Best for small committees starting off with single-building accounting.</p>
                               </div>
-                              {isSelected && (
+                              {billingPlan === 'monthly' && (
                                 <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
                               )}
                             </div>
-                          );
-                        })
-                      ) : (
-                        <>
-                          {/* Monthly Plan Card */}
-                          <div 
-                            onClick={() => setBillingPlan('monthly')}
-                            className={`border rounded-2xl p-5 cursor-pointer transition-all select-none flex flex-col justify-between space-y-4 relative ${
-                              billingPlan === 'monthly'
-                                ? 'border-emerald-500 bg-emerald-50/10 ring-2 ring-emerald-500/10 shadow-sm'
-                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/40'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-extrabold text-slate-800">Monthly Plan</span>
-                              <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-md">Cancel Anytime</span>
-                            </div>
-                            <div>
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-slate-900 font-mono">
-                                  {getPlanBasePrice('monthly')} {getPlanCurrency()}
-                                </span>
-                                <span className="text-[10px] font-semibold text-slate-400">/ month</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">Best for small committees starting off with single-building accounting.</p>
-                            </div>
-                            {billingPlan === 'monthly' && (
-                              <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
-                            )}
-                          </div>
 
-                          {/* Annual Plan Card */}
-                          <div 
-                            onClick={() => setBillingPlan('annually')}
-                            className={`border rounded-2xl p-5 cursor-pointer transition-all select-none flex flex-col justify-between space-y-4 relative ${
-                              billingPlan === 'annually'
-                                ? 'border-emerald-500 bg-emerald-50/10 ring-2 ring-emerald-500/10 shadow-sm'
-                                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/40'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-extrabold text-slate-800">Annual Plan</span>
-                                <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[8px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Save 20%</span>
-                              </div>
-                              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-extrabold px-2 py-0.5 rounded-md">Best Value</span>
-                            </div>
-                            <div>
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-black text-slate-900 font-mono">
-                                  {getPlanBasePrice('annually')} {getPlanCurrency()}
-                                </span>
-                                <span className="text-[10px] font-semibold text-slate-400">/ year</span>
-                              </div>
-                              <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">Equivalent to {(getPlanBasePrice('annually') / 12).toFixed(1)} {getPlanCurrency()}/month. Perfect for long-term committee boards.</p>
-                            </div>
-                            {billingPlan === 'annually' && (
-                              <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Promo Code & Discounts Section */}
-                    {buildings && buildings.length > 1 && (multiPropConfig?.isEnabled !== false) && (() => {
-                      const ownerBldgs = buildings
-                        .filter(b => b.ownerId === building.ownerId)
-                        .sort((a, b) => new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime());
-                      const isEligibleAddon = ownerBldgs.length > 1 && ownerBldgs[0].id !== building.id;
-                      if (isEligibleAddon) {
-                        const rate = multiPropConfig?.additionalPropertyRate ?? 5;
-                        const dbPlan = plans.find(p => p.id === billingPlan);
-                        const interval = dbPlan ? dbPlan.interval : (billingPlan === 'annually' ? 'year' : 'month');
-                        const displayRate = interval === 'year' ? rate * 12 : rate;
-                        return (
-                          <div className="bg-emerald-50/70 border border-emerald-100 text-emerald-800 p-4 rounded-2xl text-xs space-y-1 animate-in slide-in-from-top-2 duration-200">
-                            <p className="font-extrabold flex items-center gap-1.5 text-emerald-900">
-                              <span>✨ Multi-Property Portfolio Discount Activated!</span>
-                            </p>
-                            <p className="text-[11px] text-emerald-700 leading-relaxed">
-                              This building is identified as an additional property asset under your ownership portfolio. 
-                              The subscription fee has been automatically discounted to <strong>{getPlanCurrency()} {displayRate}/{interval}</strong> (billed at {getPlanCurrency()} {getPlanBasePrice(billingPlan)} total).
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-5">
-                      <div>
-                        <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1.5">Have a Promotion Coupon?</label>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            placeholder={coupons.length > 0 ? `e.g. ${coupons[0].code}` : "ENTER COUPON CODE"} 
-                            value={couponCode}
-                            onChange={(e) => setCouponCode(e.target.value)}
-                            className="flex-1 text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-sans uppercase placeholder-slate-400 text-slate-800 bg-slate-50 focus:bg-white transition-all"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleApplyCoupon}
-                            className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] px-5 rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 uppercase tracking-wide"
-                          >
-                            Apply
-                          </button>
-                        </div>
-                        <span className="text-[9px] text-slate-400 block mt-1.5">Try coupon codes {(() => {
-                          const activeCoupons = coupons.filter(c => c.isActive !== false);
-                          if (activeCoupons.length === 0) return "none available.";
-                          return activeCoupons.map((c, idx) => (
-                            <React.Fragment key={c.id}>
-                              <strong>{c.code}</strong> ({c.discountPercent}% off)
-                              {idx < activeCoupons.length - 1 ? (idx === activeCoupons.length - 2 ? " or " : ", ") : ""}
-                            </React.Fragment>
-                          ));
-                        })()}</span>
-                      </div>
-
-                      <div className="flex flex-col justify-end text-right">
-                        <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">Total Active Pricing</span>
-                        <div className="mt-1 flex items-baseline justify-end gap-2">
-                          {appliedDiscount > 0 && (
-                            <span className="text-sm font-semibold text-slate-400 line-through font-mono">
-                              {getPlanCurrency()} {getPlanBasePrice(billingPlan)}
-                            </span>
-                          )}
-                          <span className="text-2xl font-black text-slate-900 font-mono">
-                            {getPlanCurrency()} {Math.max(0, getPlanBasePrice(billingPlan) - (getPlanBasePrice(billingPlan) * appliedDiscount) / 100)}
-                          </span>
-                        </div>
-                        <span className="text-[9px] text-slate-400 mt-1">Includes cloud database access & WhatsApp templates server proxying.</span>
-                      </div>
-                    </div>
-
-                    {/* Credit Card Inputs - only if price > 0 */}
-                    {appliedDiscount < 100 && (
-                      <div className="border-t border-slate-150 pt-5 space-y-4">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-emerald-500" />
-                          <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Secure Checkout Ledger Details</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Card Number</label>
-                            <input 
-                              type="text" 
-                              placeholder="4111 2222 3333 4444"
-                              maxLength={19}
-                              value={cardNumber}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
-                                setCardNumber(value);
-                              }}
-                              className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Card Holder Name</label>
-                            <input 
-                              type="text" 
-                              placeholder="Name as written on Card"
-                              value={cardName}
-                              onChange={(e) => setCardName(e.target.value)}
-                              className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-800 bg-slate-50 focus:bg-white"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div>
-                            <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Expiration Date</label>
-                            <input 
-                              type="text" 
-                              placeholder="MM/YY"
-                              maxLength={5}
-                              value={cardExpiry}
-                              onChange={(e) => {
-                                let v = e.target.value;
-                                if (v.length === 2 && !v.includes('/')) {
-                                  v += '/';
-                                }
-                                setCardExpiry(v);
-                              }}
-                              className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">CVV / Security Code</label>
-                            <input 
-                              type="password" 
-                              placeholder="•••"
-                              maxLength={3}
-                              value={cardCvv}
-                              onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                              className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
-                            />
-                          </div>
-                          <div className="flex flex-col justify-end">
-                            <button
-                              type="submit"
-                              disabled={isSubmittingBilling}
-                              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wide"
+                            {/* Annual Plan Card */}
+                            <div 
+                              onClick={() => setBillingPlan('annually')}
+                              className={`border rounded-2xl p-5 cursor-pointer transition-all select-none flex flex-col justify-between space-y-4 relative ${
+                                billingPlan === 'annually'
+                                  ? 'border-emerald-500 bg-emerald-50/10 ring-2 ring-emerald-500/10 shadow-sm'
+                                  : 'border-slate-200 hover:border-slate-305 hover:bg-slate-50/40'
+                              }`}
                             >
-                              {isSubmittingBilling ? (
-                                <>
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                  Authorizing...
-                                </>
-                              ) : (
-                                <>
-                                  <CreditCard className="w-4 h-4" />
-                                  Subscribe & Activate
-                                </>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-extrabold text-slate-800">Annual Plan</span>
+                                  <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[8px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Save 20%</span>
+                                </div>
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-extrabold px-2 py-0.5 rounded-md">Best Value</span>
+                              </div>
+                              <div>
+                                <div className="flex items-baseline gap-1">
+                                  <span className="text-2xl font-black text-slate-900 font-mono">
+                                    {getPlanBasePrice('annually')} {getPlanCurrency()}
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-400">/ year</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">Equivalent to {(getPlanBasePrice('annually') / 12).toFixed(1)} {getPlanCurrency()}/month. Perfect for long-term committee boards.</p>
+                              </div>
+                              {billingPlan === 'annually' && (
+                                <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
                               )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-5">
+                        <div>
+                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1.5">Have a Promotion Coupon?</label>
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              placeholder={coupons.length > 0 ? `e.g. ${coupons[0].code}` : "ENTER COUPON CODE"} 
+                              value={couponCode}
+                              onChange={(e) => setCouponCode(e.target.value)}
+                              className="flex-1 text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-sans uppercase placeholder-slate-400 text-slate-800 bg-slate-50 focus:bg-white transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleApplyCoupon}
+                              className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] px-5 rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 uppercase tracking-wide"
+                            >
+                              Apply
                             </button>
                           </div>
+                          <span className="text-[9px] text-slate-400 block mt-1.5">Try coupon codes {(() => {
+                            const activeCoupons = coupons.filter(c => c.isActive !== false);
+                            if (activeCoupons.length === 0) return "none available.";
+                            return activeCoupons.map((c, idx) => (
+                              <React.Fragment key={c.id}>
+                                <strong>{c.code}</strong> ({c.discountPercent}% off)
+                                {idx < activeCoupons.length - 1 ? (idx === activeCoupons.length - 2 ? " or " : ", ") : ""}
+                              </React.Fragment>
+                            ));
+                          })()}</span>
+                        </div>
+
+                        <div className="flex flex-col justify-end text-right">
+                          <span className="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest">Total Active Pricing</span>
+                          <div className="mt-1 flex items-baseline justify-end gap-2">
+                            {appliedDiscount > 0 && (
+                              <span className="text-sm font-semibold text-slate-400 line-through font-mono">
+                                {getPlanCurrency()} {getPlanBasePrice(billingPlan)}
+                              </span>
+                            )}
+                            <span className="text-2xl font-black text-slate-900 font-mono">
+                              {getPlanCurrency()} {Math.max(0, getPlanBasePrice(billingPlan) - (getPlanBasePrice(billingPlan) * appliedDiscount) / 100)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-slate-400 mt-1">Includes cloud database access & WhatsApp templates server proxying.</span>
                         </div>
                       </div>
-                    )}
 
-                    {appliedDiscount === 100 && (
-                      <div className="border-t border-slate-150 pt-5 flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={isSubmittingBilling}
-                          className="py-3 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wide"
-                        >
-                          {isSubmittingBilling ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              Activating...
-                            </>
-                          ) : (
-                            <>
-                              <Check className="w-4 h-4" />
-                              Activate Promo Access (100% Free)
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </form>
-                </div>
+                      {/* Credit Card Inputs - only if price > 0 */}
+                      {appliedDiscount < 100 && (
+                        stripeConfig?.isEnabled && stripeConfig?.checkoutRedirectType === 'hosted_checkout' ? (
+                          <div className="border-t border-slate-150 pt-5 space-y-4">
+                            <div className="flex justify-end">
+                              <button
+                                type="submit"
+                                disabled={isSubmittingBilling}
+                                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer uppercase tracking-widest"
+                              >
+                                {isSubmittingBilling ? (
+                                  <>
+                                    <RefreshCw className="w-4 h-4 animate-spin" />
+                                    Connecting to Secure Gateway...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard className="w-4 h-4" />
+                                    Proceed to Secure Checkout
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="border-t border-slate-150 pt-5 space-y-4">
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="w-4 h-4 text-emerald-500" />
+                              <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Secure Checkout Details</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Card Number</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="4111 2222 3333 4444"
+                                  maxLength={19}
+                                  value={cardNumber}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
+                                    setCardNumber(value);
+                                  }}
+                                  className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Card Holder Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Name as written on Card"
+                                  value={cardName}
+                                  onChange={(e) => setCardName(e.target.value)}
+                                  className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-800 bg-slate-50 focus:bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <div>
+                                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">Expiration Date</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="MM/YY"
+                                  maxLength={5}
+                                  value={cardExpiry}
+                                  onChange={(e) => {
+                                    let v = e.target.value;
+                                    if (v.length === 2 && !v.includes('/')) {
+                                      v += '/';
+                                    }
+                                    setCardExpiry(v);
+                                  }}
+                                  className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">CVV / Security Code</label>
+                                <input 
+                                  type="password" 
+                                  placeholder="•••"
+                                  maxLength={3}
+                                  value={cardCvv}
+                                  onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                                  className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
+                                />
+                              </div>
+                              <div className="flex flex-col justify-end">
+                                <button
+                                  type="submit"
+                                  disabled={isSubmittingBilling}
+                                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wide"
+                                >
+                                  {isSubmittingBilling ? (
+                                    <>
+                                      <RefreshCw className="w-4 h-4 animate-spin" />
+                                      Subscribing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CreditCard className="w-4 h-4" />
+                                      Subscribe
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      )}
+
+                      {appliedDiscount === 100 && (
+                        <div className="border-t border-slate-150 pt-5 flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={isSubmittingBilling}
+                            className="py-3 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wide"
+                          >
+                            {isSubmittingBilling ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Activating...
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-4 h-4" />
+                                Activate Promo Access (100% Free)
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                )}
 
                 {/* 3. Premium Addons & Integration Center */}
                 <div className="border border-slate-200/60 rounded-3xl p-6 bg-white shadow-xs space-y-5">
@@ -1802,6 +1889,59 @@ export default function PropertySettingsModal({
                                 <button
                                   type="button"
                                   onClick={async () => {
+                                    const isHostedStripe = stripeConfig?.isEnabled && stripeConfig?.checkoutRedirectType === 'hosted_checkout';
+                                    if (isHostedStripe && (addon.price || 0) > 0) {
+                                      const priceId = addon.stripePriceId;
+                                      if (!priceId) {
+                                        showToast(`No Stripe Price ID configured for addon "${addon.name}". Please configure it in Super Admin.`, "error");
+                                        return;
+                                      }
+                                      try {
+                                        showToast("Initiating secure Stripe Checkout for addon...", "info");
+                                        const res = await fetch("/api/create-checkout-session", {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json"
+                                          },
+                                          body: JSON.stringify({
+                                            buildingId: building.id,
+                                            itemType: "addon",
+                                            itemId: addon.id,
+                                            priceId: priceId,
+                                            successUrl: `${window.location.origin}/?stripe_checkout=success&session_id={CHECKOUT_SESSION_ID}&type=addon&itemId=${addon.id}&buildingId=${building.id}`,
+                                            cancelUrl: `${window.location.origin}/?stripe_checkout=cancel`
+                                          })
+                                        });
+
+                                        if (!res.ok) {
+                                          const errData = await res.json();
+                                          throw new Error(errData.error || "Failed to initiate Stripe Checkout session.");
+                                        }
+
+                                        const data = await res.json();
+                                        if (data.url) {
+                                          showToast("Redirecting to Stripe secure gateway...", "success");
+                                          try {
+                                            if (window.top && window.top !== window) {
+                                              window.top.location.href = data.url;
+                                            } else {
+                                              window.location.href = data.url;
+                                            }
+                                          } catch (e) {
+                                            console.warn("Top redirect blocked by iframe sandbox, falling back to window.open", e);
+                                            window.open(data.url, "_blank");
+                                          }
+                                          return;
+                                        } else {
+                                          throw new Error("Invalid session URL returned from backend.");
+                                        }
+                                      } catch (err: any) {
+                                        console.error(err);
+                                        showToast(err.message || "Failed to activate addon with Stripe.", "error");
+                                      }
+                                      return;
+                                    }
+
                                     const currentAddons = building.activeAddons || [];
                                     const updated = [...currentAddons, addon.id];
                                     await onUpdateSettings({ activeAddons: updated });
