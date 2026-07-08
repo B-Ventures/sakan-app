@@ -240,8 +240,10 @@ export default function DashboardOverview({
             </h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Unpaid Bills (Pending):</span>
-                <span className="text-orange-650 font-semibold">{formatCurrency(totalDueExpenses, activeBuilding?.currency || 'JOD')}</span>
+                <span>Projected (After Bills):</span>
+                <span className={`font-semibold ${(netProfit - totalDueExpenses) >= 0 ? 'text-emerald-650' : 'text-rose-650'}`}>
+                  {formatCurrency(netProfit - totalDueExpenses, activeBuilding?.currency || 'JOD')}
+                </span>
               </div>
             </div>
           </div>
