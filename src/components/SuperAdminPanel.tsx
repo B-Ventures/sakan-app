@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { UserRecord, Building, Tenant, Payment, Expense, SaaSPlan, SaaSAddon, SaASCoupon, StripeConfig, MultiPropertyConfig } from '../types';
+import React, { useState, useEffect } from 'react';
+import { UserRecord, Building, Tenant, Payment, Expense, SaaSPlan, SaaSAddon, SaASCoupon, StripeConfig, MultiPropertyConfig, LandingPageConfig, DEFAULT_LANDING_CONFIG } from '../types';
 import { 
   Users, 
   Building2, 
@@ -64,8 +64,10 @@ interface SuperAdminPanelProps {
   onImpersonate: (user: { uid: string; email: string; displayName?: string }) => void;
   onEndImpersonation: () => void;
   onRefresh: () => void;
-  activeSubTab?: 'directory' | 'analytics' | 'subscriptions' | 'packages';
-  onChangeSubTab?: (tab: 'directory' | 'analytics' | 'subscriptions' | 'packages') => void;
+  activeSubTab?: 'directory' | 'analytics' | 'subscriptions' | 'packages' | 'landing_page';
+  onChangeSubTab?: (tab: 'directory' | 'analytics' | 'subscriptions' | 'packages' | 'landing_page') => void;
+  landingConfig?: LandingPageConfig;
+  onSaveLandingConfig?: (config: LandingPageConfig) => Promise<void>;
 }
 
 export default function SuperAdminPanel({
@@ -80,12 +82,14 @@ export default function SuperAdminPanel({
   onEndImpersonation,
   onRefresh,
   activeSubTab: propActiveSubTab,
-  onChangeSubTab
+  onChangeSubTab,
+  landingConfig,
+  onSaveLandingConfig
 }: SuperAdminPanelProps) {
-  const [localSubTab, setLocalSubTab] = useState<'directory' | 'analytics' | 'subscriptions' | 'packages'>('analytics');
+  const [localSubTab, setLocalSubTab] = useState<'directory' | 'analytics' | 'subscriptions' | 'packages' | 'landing_page'>('analytics');
   
   const activeSubTab = propActiveSubTab !== undefined ? propActiveSubTab : localSubTab;
-  const setActiveSubTab = (tab: 'directory' | 'analytics' | 'subscriptions' | 'packages') => {
+  const setActiveSubTab = (tab: 'directory' | 'analytics' | 'subscriptions' | 'packages' | 'landing_page') => {
     setLocalSubTab(tab);
     if (onChangeSubTab) {
       onChangeSubTab(tab);
@@ -192,6 +196,30 @@ export default function SuperAdminPanel({
   const [multiPropFirstRate, setMultiPropFirstRate] = useState(20);
   const [multiPropAdditionalRate, setMultiPropAdditionalRate] = useState(5);
   const [multiPropCurrency, setMultiPropCurrency] = useState('JOD');
+
+  // Landing Page Editor State
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [landingConfigForm, setLandingConfigForm] = useState<LandingPageConfig>(DEFAULT_LANDING_CONFIG);
+
+  useEffect(() => {
+    if (landingConfig) {
+      setLandingConfigForm(landingConfig);
+    }
+  }, [landingConfig]);
+
+  const handleSaveLandingConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onSaveLandingConfig) return;
+    setSavingConfig(true);
+    try {
+      await onSaveLandingConfig(landingConfigForm);
+      setNotification({ message: "Landing page updated successfully!", type: "success" });
+    } catch (error) {
+      setNotification({ message: "Failed to update landing page configuration.", type: "error" });
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const loadSaaSConfigData = async () => {
     try {
@@ -1183,9 +1211,9 @@ export default function SuperAdminPanel({
               <div>
                 <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-emerald-600" />
-                  SaaS Revenue & Billing Subscriptions Hub
+                  Revenue & Billing Subscriptions Hub
                 </h4>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Global SaaS metrics computed from property owner subscriptions.</p>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Global metrics computed from property owner subscriptions.</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 px-3 py-1 rounded-xl border border-emerald-100 font-extrabold">
@@ -1256,7 +1284,7 @@ export default function SuperAdminPanel({
                         <th className="px-4 py-3 text-center">Total Units</th>
                         <th className="px-4 py-3 text-center">Occupied (Active)</th>
                         <th className="px-4 py-3 text-center">Vacant</th>
-                        <th className="px-4 py-3 text-center">SaaS License</th>
+                        <th className="px-4 py-3 text-center">License Plan</th>
                         <th className="px-4 py-3 text-right">Avg Rent (JOD)</th>
                       </tr>
                     </thead>
@@ -1504,7 +1532,7 @@ export default function SuperAdminPanel({
               <p className="text-xs text-slate-500 leading-relaxed">
                 {multiPropEnabled ? (
                   <>
-                    To encourage owners to register their entire portfolio, our SaaS subscription policy automatically discounts subsequent properties.
+                    To encourage owners to register their entire portfolio, our subscription policy automatically discounts subsequent properties.
                     The <strong>first building</strong> pays standard package rates ({multiPropCurrency} {multiPropFirstRate}/mo Premium). 
                     Any <strong>additional buildings</strong> added by the same owner only pay a heavily discounted fee of <strong>{multiPropCurrency} {multiPropAdditionalRate}/month</strong>.
                   </>
@@ -1534,7 +1562,7 @@ export default function SuperAdminPanel({
             {/* Header and Controls */}
             <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-black text-slate-800">SaaS License Directory</h3>
+                <h3 className="text-sm font-black text-slate-800">Platform License Directory</h3>
                 <p className="text-xs text-slate-400 mt-0.5">List of all registered properties, their subscription plans, expiration counts, and cumulative fees collected.</p>
               </div>
 
@@ -1862,7 +1890,7 @@ export default function SuperAdminPanel({
       {manualPaymentBld && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in" id="log-offline-payment-modal">
           <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl p-6 relative animate-in zoom-in-95 duration-150">
-            <h3 className="font-extrabold text-slate-800 text-lg mb-1">Record SaaS Offline Payment</h3>
+            <h3 className="font-extrabold text-slate-800 text-lg mb-1">Record Offline Subscription Payment</h3>
             <p className="text-xs text-slate-400 mb-4">
               Log a manual wire transfer, cash transaction, or check payment for <strong>{manualPaymentBld.name}</strong>.
             </p>
@@ -1992,8 +2020,8 @@ export default function SuperAdminPanel({
             <div className="absolute top-0 right-0 p-8 opacity-10">
               <Settings className="w-40 h-40" />
             </div>
-            <span className="text-[9px] font-mono font-extrabold text-red-400 uppercase tracking-widest block mb-1">STRIPE & SAAS ARCHITECTURE CONSOLE</span>
-            <h2 className="text-xl font-extrabold tracking-tight">SaaS Subscription Plans & Gateways Control Panel</h2>
+            <span className="text-[9px] font-mono font-extrabold text-red-400 uppercase tracking-widest block mb-1">STRIPE & SUBSCRIPTION ARCHITECTURE CONSOLE</span>
+            <h2 className="text-xl font-extrabold tracking-tight">Subscription Plans & Gateways Control Panel</h2>
             <p className="text-xs text-slate-300 mt-2 max-w-2xl leading-relaxed">
               Super-administrators can dynamically adjust the billing rates, launch discount promo codes, release value-added modular addons, and modify private Stripe credentials in real-time. This bypasses hard-coded configurations.
             </p>
@@ -2196,7 +2224,7 @@ export default function SuperAdminPanel({
                 <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-emerald-600" />
-                    <h3 className="text-sm font-extrabold text-slate-800">1. SaaS Pricing Tiers / Packages</h3>
+                    <h3 className="text-sm font-extrabold text-slate-800">1. Subscription Pricing Tiers / Packages</h3>
                   </div>
                   <button
                     onClick={() => {
@@ -2324,7 +2352,7 @@ export default function SuperAdminPanel({
                         type="submit" 
                         className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
                       >
-                        {editingPlanItem ? 'Save Changes' : 'Register SaaS Package'}
+                        {editingPlanItem ? 'Save Changes' : 'Register Subscription Package'}
                       </button>
                     </div>
                   </form>
@@ -2561,7 +2589,7 @@ export default function SuperAdminPanel({
                 <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-amber-600" />
-                    <h3 className="text-sm font-extrabold text-slate-800">3. Modular SaaS Addons</h3>
+                    <h3 className="text-sm font-extrabold text-slate-800">3. Modular Subscription Addons</h3>
                   </div>
                   <button
                     onClick={() => {
@@ -2775,6 +2803,304 @@ export default function SuperAdminPanel({
 
             </div>
           </div>
+        </div>
+      )}
+
+      {activeSubTab === 'landing_page' && (
+        <div className="space-y-6 animate-in fade-in-50 duration-200">
+          <div className="bg-gradient-to-r from-slate-900 via-red-950 to-slate-900 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+              <Settings className="w-40 h-40" />
+            </div>
+            <span className="text-[9px] font-mono font-extrabold text-red-400 uppercase tracking-widest block mb-1">LANDING PAGE CONTENT CONFIGURATION</span>
+            <h2 className="text-xl font-extrabold tracking-tight">SuperAdmin Live Site Editor</h2>
+            <p className="text-xs text-slate-300 mt-2 max-w-2xl leading-relaxed">
+              Customize the branding, logo, titles, features, and marketing messages of your public landing page. These changes sync instantly to Firestore and reflect in real-time.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveLandingConfig} className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-800">Branding & Hero Content</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Control the core visual components of your site</p>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={savingConfig}
+                className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-600/15 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {savingConfig ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin animate-infinite" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    Save Landing Page Changes
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Content Fields Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Site Name & Abbreviation */}
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Name</label>
+                <input
+                  type="text"
+                  required
+                  value={landingConfigForm.siteName || ''}
+                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteName: e.target.value })}
+                  className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-bold"
+                  placeholder="e.g. bProp"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Logo Abbreviation</label>
+                <input
+                  type="text"
+                  required
+                  value={landingConfigForm.siteLogoAbbrev || ''}
+                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteLogoAbbrev: e.target.value })}
+                  className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-bold"
+                  placeholder="e.g. bP"
+                />
+              </div>
+
+              {/* Hero Badge & Headline */}
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Badge Text</label>
+                <input
+                  type="text"
+                  required
+                  value={landingConfigForm.heroBadge || ''}
+                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroBadge: e.target.value })}
+                  className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                  placeholder="e.g. Next-Gen Property Ledgers"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Bold Title</label>
+                <input
+                  type="text"
+                  required
+                  value={landingConfigForm.heroTitle || ''}
+                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroTitle: e.target.value })}
+                  className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                  placeholder="e.g. Ditch the Ledger Chaos."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Title Gradient Phrase</label>
+                <input
+                  type="text"
+                  required
+                  value={landingConfigForm.heroTitleGradient || ''}
+                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroTitleGradient: e.target.value })}
+                  className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-semibold"
+                  placeholder="e.g. Automate Property Financials."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Description Text</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={landingConfigForm.heroDescription || ''}
+                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroDescription: e.target.value })}
+                  className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 leading-relaxed"
+                  placeholder="Enter high-impact marketing value description..."
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-6">
+              <h4 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Features Section Copy</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Features Main Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={landingConfigForm.featuresTitle || ''}
+                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, featuresTitle: e.target.value })}
+                    className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Features Sub-Description</label>
+                  <input
+                    type="text"
+                    required
+                    value={landingConfigForm.featuresDescription || ''}
+                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, featuresDescription: e.target.value })}
+                    className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                  />
+                </div>
+
+                {/* Feature 1 */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                  <span className="text-[9px] font-extrabold font-mono text-blue-600 uppercase">FEATURE CARD #1 (Ledger)</span>
+                  <div>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={landingConfigForm.feature1Title || ''}
+                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature1Title: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Description</label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={landingConfigForm.feature1Desc || ''}
+                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature1Desc: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
+                    />
+                  </div>
+                </div>
+
+                {/* Feature 2 */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                  <span className="text-[9px] font-extrabold font-mono text-indigo-600 uppercase">FEATURE CARD #2 (Mobile optimized)</span>
+                  <div>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={landingConfigForm.feature2Title || ''}
+                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature2Title: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Description</label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={landingConfigForm.feature2Desc || ''}
+                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature2Desc: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
+                    />
+                  </div>
+                </div>
+
+                {/* Feature 3 */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3 md:col-span-2">
+                  <span className="text-[9px] font-extrabold font-mono text-emerald-600 uppercase">FEATURE CARD #3 (Secure Cloud Sync)</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={landingConfigForm.feature3Title || ''}
+                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature3Title: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Description</label>
+                      <textarea
+                        rows={2}
+                        required
+                        value={landingConfigForm.feature3Desc || ''}
+                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature3Desc: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-6">
+              <h4 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Audit & Conversion Copy</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Audit History Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={landingConfigForm.auditTitle || ''}
+                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, auditTitle: e.target.value })}
+                    className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Audit History Description</label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={landingConfigForm.auditDesc || ''}
+                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, auditDesc: e.target.value })}
+                    className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 leading-relaxed"
+                  />
+                </div>
+
+                <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-150 space-y-4">
+                  <span className="text-[9px] font-extrabold font-mono text-red-700 uppercase">Bottom Conversion CTA Card</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[9px] font-extrabold text-slate-500 block mb-1 uppercase">CTA Card Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={landingConfigForm.ctaTitle || ''}
+                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, ctaTitle: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-extrabold text-slate-500 block mb-1 uppercase">CTA Card Description</label>
+                      <textarea
+                        rows={2}
+                        required
+                        value={landingConfigForm.ctaDesc || ''}
+                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, ctaDesc: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <button
+                type="submit"
+                disabled={savingConfig}
+                className="w-full sm:w-auto px-6 py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-600/15 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {savingConfig ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Saving changes...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Landing Page Configuration
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

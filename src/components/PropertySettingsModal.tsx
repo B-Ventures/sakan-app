@@ -334,7 +334,7 @@ export default function PropertySettingsModal({
           bodyPayload.priceId = priceId;
         }
 
-        showToast("Initiating secure Stripe Checkout sandbox...", "info");
+        showToast("Initiating secure Stripe Checkout...", "info");
         const res = await fetch("/api/create-checkout-session", {
           method: "POST",
           headers: {
@@ -1205,7 +1205,7 @@ export default function PropertySettingsModal({
                         >
                           <option value="Cash">Cash Handover</option>
                           <option value="Transfer">Bank Transfer / Wire IBAN</option>
-                          <option value="Credit Card">Credit Card Sandbox (Stripe)</option>
+                          <option value="Credit Card">Online Credit Card (Stripe)</option>
                         </select>
                       </div>
 

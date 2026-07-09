@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Tenant, Payment, Expense, Building as BuildingType, UserRecord } from './types';
+import { Tenant, Payment, Expense, Building as BuildingType, UserRecord, LandingPageConfig, DEFAULT_LANDING_CONFIG } from './types';
 import { INITIAL_TENANTS, INITIAL_PAYMENTS, INITIAL_EXPENSES } from './mockData';
 import DashboardOverview from './components/DashboardOverview';
 import TenantList from './components/TenantList';
@@ -60,12 +60,16 @@ import {
   deleteBuildingWithSubcollections,
   fetchAllTenants,
   fetchAllPayments,
-  fetchAllExpenses
+  fetchAllExpenses,
+  fetchLandingPageConfig,
+  saveLandingPageConfig
 } from './firebaseService';
 import PropertySettingsModal from './components/PropertySettingsModal';
 import DataImporter from './components/DataImporter';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import AuditTrail from './components/AuditTrail';
+import LandingPage from './components/LandingPage';
+import LoginModal from './components/LoginModal';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   DEFAULT_INCOME_CATEGORIES,
@@ -80,6 +84,7 @@ export default function App() {
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [demoUser, setDemoUser] = useState<{ uid: string; displayName: string; email: string } | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   // BUILDINGS STATE
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
@@ -114,6 +119,23 @@ export default function App() {
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
   const [superAdminLoading, setSuperAdminLoading] = useState<boolean>(false);
+
+  // --- LANDING PAGE CUSTOMIZATION STATE ---
+  const [landingConfig, setLandingConfig] = useState<LandingPageConfig>(DEFAULT_LANDING_CONFIG);
+
+  useEffect(() => {
+    const loadLandingConfig = async () => {
+      try {
+        const config = await fetchLandingPageConfig();
+        if (config) {
+          setLandingConfig(config);
+        }
+      } catch (err) {
+        console.warn("Could not load landing page configuration from database:", err);
+      }
+    };
+    loadLandingConfig();
+  }, []);
 
   // GLOBAL FLOATING TOAST NOTIFICATION SERVICE
   const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
@@ -745,16 +767,15 @@ export default function App() {
   };
 
   // SuperAdmin Secure Password Authentication
-  const handleSuperAdminPasswordSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const enteredEmail = adminEmailInput.trim().toLowerCase();
+  const handleModalSuperAdminSignIn = async (email: string, pass: string) => {
+    const enteredEmail = email.trim().toLowerCase();
     if (enteredEmail !== 'hisham@bosstsc.com' && enteredEmail !== 'hisham.balatiah@gmail.com') {
       showGlobalToast('Invalid SuperAdmin email! Access Denied.', 'error');
       return;
     }
     
     const correctPassword = (import.meta as any).env.VITE_SUPERADMIN_PASSWORD || 'bosstsc2026';
-    if (adminPasswordInput === correctPassword) {
+    if (pass === correctPassword) {
       setIsDemoMode(false);
       setDemoUser(null);
       const mockAdmin: User = {
@@ -765,6 +786,7 @@ export default function App() {
       } as any;
       setCurrentUser(mockAdmin);
       showGlobalToast('🔑 Logged in successfully as SuperAdmin!', 'success');
+      setIsAuthModalOpen(false);
       
       // Register or update profile in users database
       await registerUser({
@@ -1713,97 +1735,24 @@ export default function App() {
     );
   }
 
-  // RENDER SECURITY SIGN-IN PAGE
+  // RENDER SECURITY SIGN-IN PAGE / LANDING PAGE
   if (!activeUserId) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 font-sans">
-        <div className="max-w-md w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8 animate-in fade-in duration-300">
-          <div className="text-center space-y-3">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl mx-auto shadow-md">bP</div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">bProp</h1>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Real-time property portal to track rent payouts, tenant ledger, and building outflow expenses.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <button
-              onClick={handleGoogleSignIn}
-              className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-4.5 px-6 rounded-2xl shadow-sm transition-all text-center hover:shadow-md cursor-pointer"
-            >
-              <Lock className="w-4 h-4" />
-              Sign In with Google Account
-            </button>
-            
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-100"></div>
-              <span className="flex-shrink mx-4 text-slate-300 text-[10px] tracking-wider uppercase font-extrabold font-mono">Sandbox</span>
-              <div className="flex-grow border-t border-slate-100"></div>
-            </div>
-
-            <button
-              onClick={handleDemoSignIn}
-              className="w-full flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-xs py-4 px-6 rounded-2xl border border-slate-200/60 transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-              Test Drive (Local Demo Mode)
-            </button>
-          </div>
-
-          <div className="text-center pt-2">
-            <p className="text-[10px] text-slate-400 font-medium">
-              A secure, installable PWA designed for mobile with offline-first tracking.
-            </p>
-          </div>
-
-          {/* Collapsible SuperAdmin Password entryway */}
-          <div className="border-t border-slate-100/80 pt-4 text-center">
-            <button
-              type="button"
-              onClick={() => setIsAdminFormVisible(!isAdminFormVisible)}
-              className="text-slate-400 hover:text-slate-600 transition-colors text-[10px] font-extrabold tracking-wider uppercase font-mono inline-flex items-center gap-1 cursor-pointer"
-            >
-              <Shield className="w-3 h-3 text-slate-400" />
-              {isAdminFormVisible ? 'Hide Admin access' : 'SuperAdmin Entrance'}
-            </button>
-
-            {isAdminFormVisible && (
-              <form onSubmit={handleSuperAdminPasswordSignIn} className="mt-4 p-4 bg-slate-50 border border-slate-200/60 rounded-2xl text-left space-y-3 animate-in slide-in-from-top-2 duration-200">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">SuperAdmin Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={adminEmailInput}
-                    onChange={(e) => setAdminEmailInput(e.target.value)}
-                    placeholder="hisham@bosstsc.com"
-                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-blue-500 font-sans"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">Secret Passcode</label>
-                  <input
-                    type="password"
-                    required
-                    value={adminPasswordInput}
-                    onChange={(e) => setAdminPasswordInput(e.target.value)}
-                    placeholder="Enter password"
-                    className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-blue-500 font-mono"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors cursor-pointer text-center uppercase tracking-wider font-mono"
-                >
-                  Verify Access
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      </div>
+      <>
+        <LandingPage
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onLaunchDemo={handleDemoSignIn}
+          config={landingConfig}
+        />
+        <LoginModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onGoogleSignIn={handleGoogleSignIn}
+          onDemoSignIn={handleDemoSignIn}
+          onSuperAdminSignIn={handleModalSuperAdminSignIn}
+          authLoading={authLoading}
+        />
+      </>
     );
   }
 
@@ -1893,25 +1842,25 @@ export default function App() {
               </div>
             </form>
 
-            {/* Column 2: Sandbox Test Drive */}
+            {/* Column 2: Demo Test Drive */}
             <div className="space-y-5 flex flex-col justify-between">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="p-1 px-1.5 bg-amber-100 text-amber-700 font-mono text-[9px] font-black rounded uppercase">Option B</span>
-                  <h3 className="text-sm font-extrabold text-slate-800">Sandbox Test Drive</h3>
+                  <h3 className="text-sm font-extrabold text-slate-800">Demo Test Drive</h3>
                 </div>
                 
                 <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-800 space-y-2">
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-[8px] font-black font-mono text-amber-700">
-                    ⚡ INSTANT SANDBOX TEMPLATE
+                    ⚡ INSTANT TOUR TEMPLATE
                   </span>
                   <p className="text-xs leading-relaxed text-slate-600">
-                    Skip building registration entirely. Click below to instantly launch our fully pre-loaded sandbox workspace under a demo account.
+                    Skip building registration entirely. Click below to instantly launch our fully pre-loaded demo workspace under a tour account.
                   </p>
                   <div className="text-[10px] text-slate-500 font-medium space-y-1">
                     <p>• Automated 1-click test drive setup</p>
                     <p>• Pre-seeded workspace tenants, ledgers & expenses</p>
-                    <p>• Cleanly isolated from SuperAdmin listings</p>
+                    <p>• Cleanly isolated from main directories</p>
                     <p>• Subject to daily resets for evaluation safety</p>
                   </div>
                 </div>
@@ -1923,9 +1872,10 @@ export default function App() {
                   onClick={handleCreateSandboxBuilding}
                   disabled={creatingBuilding}
                   className="w-full bg-slate-900 hover:bg-slate-850 disabled:opacity-50 text-white font-extrabold text-xs py-3.5 px-4 rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  id="sandbox-demo-signin-btn"
                 >
                   <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                  SANDBOX (TEST DRIVE)
+                  START INSTANT TOUR
                 </button>
                 
                 <button
@@ -2012,7 +1962,7 @@ export default function App() {
                         }`}
                       >
                         {b.name}
-                        {b.isSandbox && ' (Sandbox)'}
+                        {b.isSandbox && ' (Demo Workspace)'}
                       </button>
                     ))}
                   </div>
@@ -2031,25 +1981,25 @@ export default function App() {
                 </div>
               )}
 
-              {/* Sandbox badge & reset utility */}
+              {/* Demo Workspace badge & reset utility */}
               {activeBuilding?.isSandbox && (
                 <div className="mt-2.5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-1.5 select-none text-left animate-in fade-in-50 slide-in-from-top-1">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1 text-[9px] font-extrabold text-amber-700 uppercase tracking-wide font-mono">
                       <Sparkles className="w-3 h-3 text-amber-500 animate-spin" />
-                      Sandbox Mode
+                      Demo Workspace
                     </span>
                     <button
                       onClick={handleCreateSandboxBuilding}
                       disabled={creatingBuilding}
                       className="text-[9px] font-bold text-amber-700 hover:text-amber-900 underline hover:no-underline transition-all cursor-pointer uppercase tracking-wider leading-none"
-                      title="Reset sandbox to original pre-seeded estate records"
+                      title="Reset demo records to original pre-seeded estate records"
                     >
                       {creatingBuilding ? 'Resetting...' : 'Reset'}
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 leading-normal font-medium">
-                    Predefined tour data. Subject to daily resets to prevent free subscription misuse. Excluded from SuperAdmin summaries.
+                    Predefined tour data. Subject to daily resets to prevent free subscription misuse. Excluded from system directories.
                   </p>
                 </div>
               )}
@@ -2194,6 +2144,19 @@ export default function App() {
                 >
                   <Sliders className="w-4 h-4 text-red-600" />
                   Subscription Plans & Stripe
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('superadmin_landing')}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeTab === 'superadmin_landing'
+                      ? 'bg-red-50 text-red-700 font-bold border-l-2 border-red-600 pl-[14px]'
+                      : 'text-slate-650 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                  id="tab-btn-superadmin-landing"
+                >
+                  <Settings className="w-4 h-4 text-red-600" />
+                  Landing Page Editor
                 </button>
               </div>
             )}
@@ -2346,6 +2309,7 @@ export default function App() {
               {activeTab === 'superadmin_directory' && '🛡️ System SuperAdmin Customer Directory'}
               {activeTab === 'superadmin_subscriptions' && '💳 Platform Subscriptions & Licenses Console'}
               {activeTab === 'superadmin_packages' && '⚙️ Subscription Plans & Stripe Integration'}
+              {activeTab === 'superadmin_landing' && '🎨 SuperAdmin Landing Page Editor'}
               {activeTab === 'superadmin' && '🛡️ System SuperAdmin Customer Directory'}
             </h1>
           </div>
@@ -2465,7 +2429,7 @@ export default function App() {
                 />
               )}
 
-              {(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') && isSuperAdminSession && (
+              {(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages' || activeTab === 'superadmin_landing') && isSuperAdminSession && (
                 <SuperAdminPanel
                   customers={allCustomers}
                   buildings={allBuildings}
@@ -2474,6 +2438,16 @@ export default function App() {
                   expenses={allExpenses}
                   loading={superAdminLoading}
                   impersonatedUser={impersonatedUser}
+                  landingConfig={landingConfig}
+                  onSaveLandingConfig={async (newConfig) => {
+                    try {
+                      await saveLandingPageConfig(newConfig);
+                      setLandingConfig(newConfig);
+                      showGlobalToast("Landing page configuration saved successfully!", "success");
+                    } catch (error) {
+                      showGlobalToast("Failed to save landing page config: " + (error instanceof Error ? error.message : String(error)), "error");
+                    }
+                  }}
                   activeSubTab={
                     activeTab === 'superadmin_directory'
                       ? 'directory'
@@ -2481,6 +2455,8 @@ export default function App() {
                       ? 'subscriptions'
                       : activeTab === 'superadmin_packages'
                       ? 'packages'
+                      : activeTab === 'superadmin_landing'
+                      ? 'landing_page'
                       : 'analytics'
                   }
                   onChangeSubTab={(tab) => {
@@ -2490,6 +2466,8 @@ export default function App() {
                       setActiveTab('superadmin_subscriptions');
                     } else if (tab === 'packages') {
                       setActiveTab('superadmin_packages');
+                    } else if (tab === 'landing_page') {
+                      setActiveTab('superadmin_landing');
                     } else {
                       setActiveTab('superadmin_analytics');
                     }
@@ -2554,7 +2532,7 @@ export default function App() {
           {isSuperAdminSession && !impersonatedUser && (
             <button
               onClick={() => setActiveTab('superadmin_subscriptions')}
-              className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+              className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages' || activeTab === 'superadmin_landing') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
             >
               <Shield className="w-4 h-4 text-red-500" />
               Admin
@@ -2562,7 +2540,7 @@ export default function App() {
           )}
         </div>
       ) : (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-4 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-5 p-2 z-40 text-center text-[9px] font-bold text-slate-500">
           <button
             onClick={() => setActiveTab('superadmin_analytics')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_analytics' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
@@ -2590,6 +2568,13 @@ export default function App() {
           >
             <Sliders className="w-4.5 h-4.5 text-red-500" />
             Plans
+          </button>
+          <button
+            onClick={() => setActiveTab('superadmin_landing')}
+            className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_landing' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
+          >
+            <Settings className="w-4.5 h-4.5 text-red-500" />
+            Landing
           </button>
         </div>
       )}

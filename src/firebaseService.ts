@@ -12,7 +12,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { Building, Tenant, Payment, Expense, AuditLog, UserRecord, SaaSPlan, SaaSAddon, SaASCoupon, StripeConfig, MultiPropertyConfig } from './types';
+import { Building, Tenant, Payment, Expense, AuditLog, UserRecord, SaaSPlan, SaaSAddon, SaASCoupon, StripeConfig, MultiPropertyConfig, LandingPageConfig } from './types';
 import { clientRateLimiter } from './utils/rateLimiter';
 
 // satisfaction of Layer 9: Rate limiting validation gate before cloud writes
@@ -1003,6 +1003,30 @@ export async function saveMultiPropertyConfig(config: MultiPropertyConfig): Prom
     console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
 }
+
+export async function fetchLandingPageConfig(): Promise<LandingPageConfig | null> {
+  try {
+    const docRef = doc(db, 'system_configs', 'landing_page_config');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return sanitizeFirestoreData(docSnap.data()) as LandingPageConfig;
+    }
+  } catch (error) {
+    console.error("Failed to fetch landing page config from Firestore:", error);
+  }
+  return null;
+}
+
+export async function saveLandingPageConfig(config: LandingPageConfig): Promise<void> {
+  enforceRateLimit('landing_page_config_write');
+  try {
+    await setDoc(doc(db, 'system_configs', 'landing_page_config'), cleanUndefined(config));
+  } catch (error) {
+    console.error("Failed to save landing page config to Firestore:", error);
+    throw error;
+  }
+}
+
 
 
 

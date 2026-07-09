@@ -296,3 +296,47 @@ export interface MultiPropertyConfig {
   currency: string;
 }
 
+export interface LandingPageConfig {
+  siteName: string;
+  siteLogoAbbrev: string;
+  heroBadge: string;
+  heroTitle: string;
+  heroTitleGradient: string;
+  heroDescription: string;
+  featuresTitle: string;
+  featuresDescription: string;
+  feature1Title: string;
+  feature1Desc: string;
+  feature2Title: string;
+  feature2Desc: string;
+  feature3Title: string;
+  feature3Desc: string;
+  auditTitle: string;
+  auditDesc: string;
+  ctaTitle: string;
+  ctaDesc: string;
+}
+
+export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
+  siteName: "bProp",
+  siteLogoAbbrev: "bP",
+  heroBadge: "Next-Gen Property Ledgers",
+  heroTitle: "Ditch the Ledger Chaos.",
+  heroTitleGradient: "Automate Property Financials.",
+  heroDescription: "The absolute simplest way for property owners to record rent collections, log utility repair expenses, and track splits—with zero spreadsheets or manual tracking math required.",
+  featuresTitle: "Built strictly for the realities of modern building management.",
+  featuresDescription: "Every utility tool we've crafted solves real on-the-ground problems, eliminating double entries, missing receipts, and human calculator errors.",
+  feature1Title: "Dynamic Income ledger & Auto-Splits",
+  feature1Desc: "Define rent profiles with customizable sub-portions (e.g., base rent portions, guard fees, cleaning fees). When a payment is recorded, bProp automatically splits the ledger so you know exactly which pool has been funded.",
+  feature2Title: "Seamless Mobile Experience",
+  feature2Desc: "Access bProp smoothly on any smartphone, tablet, or laptop. Record payments or log maintenance expenses during building walks with a layout custom-fit for touch interaction.",
+  feature3Title: "Automated Secure Sync",
+  feature3Desc: "Your records are securely saved to the cloud and instantly up to date across all devices. Your ledgers remain private, encrypted, and backed up with zero manual effort.",
+  auditTitle: "A chronological history log keeps your portfolio accountable.",
+  auditDesc: "Every rent transaction registered, utility payment made, or tenant ledger edit is tracked inside our built-in history trail. Maintain absolute clarity between owners, accountants, and on-site staff.",
+  ctaTitle: "Stop losing yield. Reclaim your weekends.",
+  ctaDesc: "Join portfolio owners who trust bProp. Start with a risk-free 1-click dashboard test drive, or log in with your Google Account instantly."
+};
+
+
+

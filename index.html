@@ -7,6 +7,32 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#2563eb" />
     <link rel="apple-touch-icon" href="https://img.icons8.com/color/192/000000/building.png" />
+    <script>
+      // Clear development service workers and caches early to prevent white screen caching issues
+      (function() {
+        var isDev = window.location.hostname === 'localhost' || 
+                    window.location.hostname.endsWith('.run.app') || 
+                    window.location.hostname.includes('aistudio');
+        if (isDev) {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for (var i = 0; i < registrations.length; i++) {
+                registrations[i].unregister();
+                console.log('Early dev SW unregistered');
+              }
+            }).catch(function(err) { console.error('Early SW unregister error:', err); });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              for (var i = 0; i < keys.length; i++) {
+                caches.delete(keys[i]);
+                console.log('Early dev cache deleted:', keys[i]);
+              }
+            }).catch(function(err) { console.error('Early cache delete error:', err); });
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

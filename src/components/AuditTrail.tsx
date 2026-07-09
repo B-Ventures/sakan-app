@@ -190,7 +190,7 @@ export default function AuditTrail({ activeBuilding, isDemoMode }: AuditTrailPro
           {isDemoMode && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-1.5 text-[10px] font-extrabold text-blue-700 flex items-center gap-1.5 self-start md:self-center">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-              EVALUATION SANDBOX PREVIEW
+              EVALUATION TOUR PREVIEW
             </div>
           )}
         </div>
