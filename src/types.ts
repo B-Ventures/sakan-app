@@ -299,6 +299,7 @@ export interface MultiPropertyConfig {
 export interface LandingPageConfig {
   siteName: string;
   siteLogoAbbrev: string;
+  siteLogoUrl?: string;
   heroBadge: string;
   heroTitle: string;
   heroTitleGradient: string;
@@ -320,6 +321,7 @@ export interface LandingPageConfig {
 export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
   siteName: "bProp",
   siteLogoAbbrev: "bP",
+  siteLogoUrl: "",
   heroBadge: "Next-Gen Property Ledgers",
   heroTitle: "Ditch the Ledger Chaos.",
   heroTitleGradient: "Automate Property Financials.",

@@ -2876,6 +2876,58 @@ export default function SuperAdminPanel({
                 />
               </div>
 
+              <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Logo Image (Optional)</label>
+                <p className="text-[10px] text-slate-400 mb-3 font-medium">Upload a custom logo image. If provided, it will replace the text abbreviation on the landing page.</p>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  {landingConfigForm.siteLogoUrl ? (
+                    <div className="relative w-16 h-16 bg-slate-900 rounded-xl border border-slate-200 overflow-hidden group shrink-0">
+                      <img src={landingConfigForm.siteLogoUrl} className="w-full h-full object-contain" alt="Custom Logo" referrerPolicy="no-referrer" />
+                      <button
+                        type="button"
+                        onClick={() => setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: "" })}
+                        className="absolute inset-0 bg-red-600/90 text-white font-extrabold text-[9px] uppercase flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 bg-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">
+                      None
+                    </div>
+                  )}
+                  <div className="flex-1 w-full space-y-3">
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: reader.result as string });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-1">Or direct logo URL:</span>
+                      <input
+                        type="text"
+                        value={landingConfigForm.siteLogoUrl || ''}
+                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: e.target.value })}
+                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-hidden text-slate-600 font-medium"
+                        placeholder="https://example.com/logo.png"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Hero Badge & Headline */}
               <div>
                 <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Badge Text</label>

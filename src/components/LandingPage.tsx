@@ -97,11 +97,20 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
           
           {/* Logo */}
           <div className="flex items-center gap-3 select-none">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-md shadow-md shadow-blue-600/20 uppercase">
-              {activeConfig.siteLogoAbbrev}
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-md shadow-md shadow-blue-600/20 overflow-hidden">
+              {activeConfig.siteLogoUrl ? (
+                <img
+                  src={activeConfig.siteLogoUrl}
+                  className="w-full h-full object-cover"
+                  alt="logo"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span>{activeConfig.siteLogoAbbrev}</span>
+              )}
             </div>
             <span className="font-extrabold text-lg tracking-tight text-white font-sans">
-              {activeConfig.siteName}<span className="text-blue-500 text-xs ml-1 uppercase tracking-widest font-mono font-black">Financials</span>
+              {activeConfig.siteName}
             </span>
           </div>
 
@@ -211,291 +220,298 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
       </header>
 
       {/* Hero Section */}
-      <section className="relative pt-12 pb-20 md:py-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+      <section className="relative pt-16 pb-12 md:pt-24 md:pb-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto overflow-hidden text-center">
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-400 text-[10px] font-black uppercase tracking-wider font-mono">
+            <Sparkles className="w-3 h-3 text-blue-400 animate-pulse" />
+            {activeConfig.heroBadge}
+          </div>
           
-          {/* Left Text Column */}
-          <div className="lg:col-span-5 space-y-6 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-400 text-[10px] font-black uppercase tracking-wider font-mono">
-              <Sparkles className="w-3 h-3 text-blue-400 animate-pulse" />
-              {activeConfig.heroBadge}
-            </div>
-            
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
-              {activeConfig.heroTitle} <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400">
-                {activeConfig.heroTitleGradient}
-              </span>
-            </h1>
-            
-            <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium">
-              {activeConfig.heroDescription}
-            </p>
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
+            {activeConfig.heroTitle} <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400">
+              {activeConfig.heroTitleGradient}
+            </span>
+          </h1>
+          
+          <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto font-medium">
+            {activeConfig.heroDescription}
+          </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <button
+              onClick={onOpenAuth}
+              className="w-full sm:w-auto px-6 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              Start Automating Now
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            
+            <button
+              onClick={onLaunchDemo}
+              className="w-full sm:w-auto px-6 py-4 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-sm rounded-2xl border border-slate-800 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+              Explore Live Demo
+            </button>
+          </div>
+
+          {/* Micro Stats Row */}
+          <div className="grid grid-cols-3 gap-6 pt-10 border-t border-slate-800/80 max-w-xl mx-auto">
+            <div>
+              <span className="block text-2xl font-extrabold text-white">98%</span>
+              <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Rent Collected On-Time</span>
+            </div>
+            <div>
+              <span className="block text-2xl font-extrabold text-white">12h+</span>
+              <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Saved per Month</span>
+            </div>
+            <div>
+              <span className="block text-2xl font-extrabold text-white">100%</span>
+              <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Tax & Audit Compliant</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Live Interactive Preview Section */}
+      <section className="relative py-12 md:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto overflow-hidden" id="simulator">
+        <div className="text-center max-w-3xl mx-auto space-y-3 mb-10">
+          <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-widest font-mono">Live Interactive Preview</h2>
+          <h3 className="text-3xl font-extrabold text-white tracking-tight">
+            See how it works in real-time
+          </h3>
+          <p className="text-xs text-slate-400 leading-relaxed font-medium">
+            Interact with the simulated ledger below to test live calculation splits, log utility expenses, and compile automated alerts.
+          </p>
+        </div>
+
+        <div className="relative w-full flex justify-center">
+          <div className="absolute inset-0 bg-blue-500/10 rounded-3xl blur-3xl -z-10 pointer-events-none transform translate-y-12" />
+          
+          {/* Desktop UI Frame */}
+          <div className="w-full max-w-3xl bg-slate-900 border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-auto min-h-[500px] lg:h-[590px]">
+            
+            {/* Desktop Titlebar Controls */}
+            <div className="bg-slate-950 px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-rose-500/40" />
+                <div className="w-3 h-3 rounded-full bg-amber-500/40" />
+                <div className="w-3 h-3 rounded-full bg-emerald-500/40" />
+                <span className="text-[10px] font-mono text-slate-500 ml-3 uppercase tracking-widest font-bold">bProp INTERACTIVE PREVIEW</span>
+              </div>
+              <div className="px-2.5 py-0.5 bg-blue-500/10 border border-blue-500/25 rounded text-[8px] font-mono text-blue-400 font-extrabold uppercase">
+                No Sign-In Required
+              </div>
+            </div>
+
+            {/* Mockup Navigation Tabs */}
+            <div className="bg-slate-900/60 border-b border-slate-800/40 grid grid-cols-3 text-center shrink-0">
               <button
-                onClick={onOpenAuth}
-                className="w-full sm:w-auto px-6 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => setSimulatorTab('ledger')}
+                className={`py-3 text-[10px] sm:text-xs font-bold border-b-2 flex items-center justify-center gap-1.5 transition-all ${
+                  simulatorTab === 'ledger' 
+                    ? 'border-blue-500 text-white bg-slate-800/30' 
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
+                }`}
               >
-                Start Automating Now
-                <ArrowRight className="w-4 h-4" />
+                <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span className="truncate">Rent Ledger</span>
               </button>
-              
+              <button
+                onClick={() => setSimulatorTab('expenses')}
+                className={`py-3 text-[10px] sm:text-xs font-bold border-b-2 flex items-center justify-center gap-1.5 transition-all ${
+                  simulatorTab === 'expenses' 
+                    ? 'border-emerald-500 text-white bg-slate-800/30' 
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
+                }`}
+              >
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="truncate">Expenses & Outflow</span>
+              </button>
+              <button
+                onClick={() => setSimulatorTab('alerts')}
+                className={`py-3 text-[10px] sm:text-xs font-bold border-b-2 flex items-center justify-center gap-1.5 transition-all ${
+                  simulatorTab === 'alerts' 
+                    ? 'border-indigo-500 text-white bg-slate-800/30' 
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="truncate">Billing Alerts</span>
+              </button>
+            </div>
+
+            {/* Interactive Area */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-900/40">
+              <AnimatePresence mode="wait">
+                {simulatorTab === 'ledger' && (
+                  <motion.div
+                    key="ledger-sim"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950 p-3.5 rounded-xl border border-slate-800/50 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Interactive Rent Receipts</span>
+                        <span className="block text-base font-extrabold text-blue-400">${totalMockIncome} JOD</span>
+                      </div>
+                      <div className="text-right text-[10px] text-slate-400 font-medium">
+                        Click status badges below to toggle payment states!
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {mockPayments.map(p => (
+                        <div 
+                          key={p.id}
+                          className="flex items-center justify-between bg-slate-900 border border-slate-800/70 p-3 rounded-xl hover:border-slate-700 transition-all"
+                        >
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-white block">{p.tenant}</span>
+                            <span className="text-[10px] text-slate-500">{p.unit} • Due: {p.date}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-xs font-black font-mono text-slate-300">${p.amount} JOD</span>
+                            <button
+                              onClick={() => handleToggleSimulatorPayment(p.id)}
+                              className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase select-none tracking-wider cursor-pointer ${
+                                p.status === 'Paid' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' :
+                                p.status === 'Overdue' ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400' :
+                                'bg-amber-500/10 border border-amber-500/30 text-amber-400'
+                              }`}
+                            >
+                              {p.status}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {simulatorTab === 'expenses' && (
+                  <motion.div
+                    key="expenses-sim"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/50 text-center sm:text-left">
+                        <span className="text-[9px] text-slate-500 font-bold block uppercase">Est. Rent</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-blue-400">+ ${totalMockIncome}</span>
+                      </div>
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/50 text-center sm:text-left">
+                        <span className="text-[9px] text-slate-500 font-bold block uppercase">Outflows</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-rose-400">- ${totalMockOutflow}</span>
+                      </div>
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/50 text-center sm:text-left">
+                        <span className="text-[9px] text-slate-500 font-bold block uppercase">Net Yield</span>
+                        <span className={`text-xs sm:text-sm font-extrabold ${netMockProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          ${netMockProfit}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Log custom maintenance cost form */}
+                    <form onSubmit={handleAddSimulatorExpense} className="flex flex-col sm:flex-row gap-2 bg-slate-900 border border-slate-800/70 p-3 rounded-xl">
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g., Water Pump Repair"
+                        value={newExpenseTitle}
+                        onChange={(e) => setNewExpenseTitle(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-slate-800 text-xs px-3 py-2 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <input
+                        type="number"
+                        required
+                        placeholder="Amount ($ JOD)"
+                        value={newExpenseAmount}
+                        onChange={(e) => setNewExpenseAmount(e.target.value)}
+                        className="w-full sm:w-28 bg-slate-950 border border-slate-800 text-xs px-3 py-2 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="submit"
+                        className="px-4 py-2 sm:py-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center justify-center cursor-pointer font-bold text-xs shrink-0"
+                      >
+                        <Plus className="w-4 h-4 mr-1 sm:mr-0" />
+                        <span className="sm:hidden">Add Outflow</span>
+                      </button>
+                    </form>
+
+                    {/* Expense Outflow List */}
+                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                      {mockExpenses.map(e => (
+                        <div key={e.id} className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-lg border border-slate-850">
+                          <div>
+                            <span className="text-xs font-bold text-slate-200 block">{e.title}</span>
+                            <span className="text-[9px] text-slate-500">{e.date} • {e.category}</span>
+                          </div>
+                          <span className="text-xs font-bold text-rose-400">-${e.amount} JOD</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {simulatorTab === 'alerts' && (
+                  <motion.div
+                    key="alerts-sim"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800/50 space-y-1">
+                      <span className="text-[10px] text-indigo-400 font-extrabold uppercase block tracking-wider font-mono">⚠️ Outbound Tenant Billing Statement</span>
+                      <p className="text-xs text-slate-400 leading-normal">
+                        Whenever a billing cycle settles, bProp generates clean, WhatsApp-ready statements with payment details, IBAN, and payment links. No more phone-chasing!
+                      </p>
+                    </div>
+
+                    {/* Mock WhatsApp Notification Panel */}
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3 font-mono text-[11px] leading-relaxed text-slate-300">
+                      <div className="flex items-center gap-1.5 pb-2 border-b border-slate-800">
+                        <Send className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="font-bold text-slate-400">Preview Outbound Reminder:</span>
+                      </div>
+                      <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-[10px] space-y-1 whitespace-pre-wrap select-all">
+                        {"Dear Sarah Jenkins (Apt 202),\n\nThis is a friendly statement alert regarding your monthly balance for 2026-07:\n\n• Rent Portion: $920 JOD\n• Guard Fee: $50 JOD\n• Status: Overdue\n\nPlease transfer total amount to Bank IBAN: JO89BOSSTSC202600104\n\nOr pay online here: https://prop.bventures.me/pay?r=apt202"}
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => alert("Simulation sent! Sign up to enable real WhatsApp/SMS sync.")}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Send className="w-3 h-3" />
+                          Send Simulated Statement
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Simulator Action Banner */}
+            <div className="p-4 bg-slate-950/80 border-t border-slate-800/60 text-center space-y-2 shrink-0">
+              <span className="text-[10px] text-slate-500 font-bold block">These interactive widgets represent the real app interface.</span>
               <button
                 onClick={onLaunchDemo}
-                className="w-full sm:w-auto px-6 py-4 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white font-bold text-sm rounded-2xl border border-slate-800 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-extrabold transition-all"
               >
-                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                Explore Live Demo
+                Enter full workspace (Read-only view)
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Micro Stats Row */}
-            <div className="grid grid-cols-3 gap-6 pt-6 border-t border-slate-800/80 max-w-md mx-auto lg:mx-0">
-              <div>
-                <span className="block text-2xl font-extrabold text-white">98%</span>
-                <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Rent Collected On-Time</span>
-              </div>
-              <div>
-                <span className="block text-2xl font-extrabold text-white">12h+</span>
-                <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Saved per Month</span>
-              </div>
-              <div>
-                <span className="block text-2xl font-extrabold text-white">100%</span>
-                <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Tax & Audit Compliant</span>
-              </div>
-            </div>
           </div>
-
-          {/* Right Column: Beautiful Custom Live simulator (Mocking UI elements in a desktop screen) */}
-          <div className="lg:col-span-7 relative w-full flex justify-center" id="simulator">
-            <div className="absolute inset-0 bg-blue-500/10 rounded-3xl blur-3xl -z-10 pointer-events-none transform translate-y-12" />
-            
-            {/* Desktop UI Frame */}
-            <div className="w-full max-w-2xl bg-slate-900 border border-slate-800/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-auto min-h-[460px] lg:h-[480px]">
-              
-              {/* Desktop Titlebar Controls */}
-              <div className="bg-slate-950 px-4 py-3 border-b border-slate-800/60 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-rose-500/40" />
-                  <div className="w-3 h-3 rounded-full bg-amber-500/40" />
-                  <div className="w-3 h-3 rounded-full bg-emerald-500/40" />
-                  <span className="text-[10px] font-mono text-slate-500 ml-3 uppercase tracking-widest font-bold">bProp INTERACTIVE PREVIEW</span>
-                </div>
-                <div className="px-2.5 py-0.5 bg-blue-500/10 border border-blue-500/25 rounded text-[8px] font-mono text-blue-400 font-extrabold uppercase">
-                  No Sign-In Required
-                </div>
-              </div>
-
-              {/* Mockup Navigation Tabs */}
-              <div className="bg-slate-900/60 border-b border-slate-800/40 grid grid-cols-3 text-center shrink-0">
-                <button
-                  onClick={() => setSimulatorTab('ledger')}
-                  className={`py-3 text-[10px] sm:text-xs font-bold border-b-2 flex items-center justify-center gap-1.5 transition-all ${
-                    simulatorTab === 'ledger' 
-                      ? 'border-blue-500 text-white bg-slate-800/30' 
-                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                  <span className="truncate">Rent Ledger</span>
-                </button>
-                <button
-                  onClick={() => setSimulatorTab('expenses')}
-                  className={`py-3 text-[10px] sm:text-xs font-bold border-b-2 flex items-center justify-center gap-1.5 transition-all ${
-                    simulatorTab === 'expenses' 
-                      ? 'border-emerald-500 text-white bg-slate-800/30' 
-                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
-                  }`}
-                >
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="truncate">Expenses & Outflow</span>
-                </button>
-                <button
-                  onClick={() => setSimulatorTab('alerts')}
-                  className={`py-3 text-[10px] sm:text-xs font-bold border-b-2 flex items-center justify-center gap-1.5 transition-all ${
-                    simulatorTab === 'alerts' 
-                      ? 'border-indigo-500 text-white bg-slate-800/30' 
-                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/10'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span className="truncate">Billing Alerts</span>
-                </button>
-              </div>
-
-              {/* Interactive Area */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-900/40">
-                <AnimatePresence mode="wait">
-                  {simulatorTab === 'ledger' && (
-                    <motion.div
-                      key="ledger-sim"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-4"
-                    >
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-950 p-3.5 rounded-xl border border-slate-800/50 gap-2">
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Interactive Rent Receipts</span>
-                          <span className="block text-base font-extrabold text-blue-400">${totalMockIncome} JOD</span>
-                        </div>
-                        <div className="text-right text-[10px] text-slate-400 font-medium">
-                          Click status badges below to toggle payment states!
-                        </div>
-                      </div>
-
-                      <div className="space-y-2.5">
-                        {mockPayments.map(p => (
-                          <div 
-                            key={p.id}
-                            className="flex items-center justify-between bg-slate-900 border border-slate-800/70 p-3 rounded-xl hover:border-slate-700 transition-all"
-                          >
-                            <div className="min-w-0">
-                              <span className="font-bold text-xs text-white block">{p.tenant}</span>
-                              <span className="text-[10px] text-slate-500">{p.unit} • Due: {p.date}</span>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <span className="text-xs font-black font-mono text-slate-300">${p.amount} JOD</span>
-                              <button
-                                onClick={() => handleToggleSimulatorPayment(p.id)}
-                                className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase select-none tracking-wider cursor-pointer ${
-                                  p.status === 'Paid' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' :
-                                  p.status === 'Overdue' ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400' :
-                                  'bg-amber-500/10 border border-amber-500/30 text-amber-400'
-                                }`}
-                              >
-                                {p.status}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {simulatorTab === 'expenses' && (
-                    <motion.div
-                      key="expenses-sim"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-4"
-                    >
-                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/50 text-center sm:text-left">
-                          <span className="text-[9px] text-slate-500 font-bold block uppercase">Est. Rent</span>
-                          <span className="text-xs sm:text-sm font-extrabold text-blue-400">+ ${totalMockIncome}</span>
-                        </div>
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/50 text-center sm:text-left">
-                          <span className="text-[9px] text-slate-500 font-bold block uppercase">Outflows</span>
-                          <span className="text-xs sm:text-sm font-extrabold text-rose-400">- ${totalMockOutflow}</span>
-                        </div>
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/50 text-center sm:text-left">
-                          <span className="text-[9px] text-slate-500 font-bold block uppercase">Net Yield</span>
-                          <span className={`text-xs sm:text-sm font-extrabold ${netMockProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            ${netMockProfit}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Log custom maintenance cost form */}
-                      <form onSubmit={handleAddSimulatorExpense} className="flex flex-col sm:flex-row gap-2 bg-slate-900 border border-slate-800/70 p-3 rounded-xl">
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g., Water Pump Repair"
-                          value={newExpenseTitle}
-                          onChange={(e) => setNewExpenseTitle(e.target.value)}
-                          className="flex-1 bg-slate-950 border border-slate-800 text-xs px-3 py-2 rounded-lg text-white focus:outline-none focus:border-emerald-500"
-                        />
-                        <input
-                          type="number"
-                          required
-                          placeholder="Amount ($ JOD)"
-                          value={newExpenseAmount}
-                          onChange={(e) => setNewExpenseAmount(e.target.value)}
-                          className="w-full sm:w-28 bg-slate-950 border border-slate-800 text-xs px-3 py-2 rounded-lg text-white focus:outline-none focus:border-emerald-500"
-                        />
-                        <button
-                          type="submit"
-                          className="px-4 py-2 sm:py-0 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center justify-center cursor-pointer font-bold text-xs shrink-0"
-                        >
-                          <Plus className="w-4 h-4 mr-1 sm:mr-0" />
-                          <span className="sm:hidden">Add Outflow</span>
-                        </button>
-                      </form>
-
-                      {/* Expense Outflow List */}
-                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                        {mockExpenses.map(e => (
-                          <div key={e.id} className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-lg border border-slate-850">
-                            <div>
-                              <span className="text-xs font-bold text-slate-200 block">{e.title}</span>
-                              <span className="text-[9px] text-slate-500">{e.date} • {e.category}</span>
-                            </div>
-                            <span className="text-xs font-bold text-rose-400">-${e.amount} JOD</span>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {simulatorTab === 'alerts' && (
-                    <motion.div
-                      key="alerts-sim"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-4"
-                    >
-                      <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800/50 space-y-1">
-                        <span className="text-[10px] text-indigo-400 font-extrabold uppercase block tracking-wider font-mono">⚠️ Outbound Tenant Billing Statement</span>
-                        <p className="text-xs text-slate-400 leading-normal">
-                          Whenever a billing cycle settles, bProp generates clean, WhatsApp-ready statements with payment details, IBAN, and payment links. No more phone-chasing!
-                        </p>
-                      </div>
-
-                      {/* Mock WhatsApp Notification Panel */}
-                      <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3 font-mono text-[11px] leading-relaxed text-slate-300">
-                        <div className="flex items-center gap-1.5 pb-2 border-b border-slate-800">
-                          <Send className="w-3.5 h-3.5 text-emerald-500" />
-                          <span className="font-bold text-slate-400">Preview Outbound Reminder:</span>
-                        </div>
-                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-[10px] space-y-1 whitespace-pre-wrap select-all">
-                          {"Dear Sarah Jenkins (Apt 202),\n\nThis is a friendly statement alert regarding your monthly balance for 2026-07:\n\n• Rent Portion: $920 JOD\n• Guard Fee: $50 JOD\n• Status: Overdue\n\nPlease transfer total amount to Bank IBAN: JO89BOSSTSC202600104\n\nOr pay online here: https://prop.bventures.me/pay?r=apt202"}
-                        </div>
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => alert("Simulation sent! Sign up to enable real WhatsApp/SMS sync.")}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <Send className="w-3 h-3" />
-                            Send Simulated Statement
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Simulator Action Banner */}
-              <div className="p-4 bg-slate-950/80 border-t border-slate-800/60 text-center space-y-2 shrink-0">
-                <span className="text-[10px] text-slate-500 font-bold block">These interactive widgets represent the real app interface.</span>
-                <button
-                  onClick={onLaunchDemo}
-                  className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-extrabold transition-all"
-                >
-                  Enter full workspace (Read-only view)
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-            </div>
-          </div>
-
         </div>
       </section>
 
@@ -761,8 +777,17 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
       <footer className="border-t border-slate-900 py-12 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2 select-none">
-            <div className="w-6 h-6 bg-slate-800 rounded-lg flex items-center justify-center text-white font-black text-xs uppercase">
-              {activeConfig.siteLogoAbbrev}
+            <div className="w-6 h-6 bg-slate-800 rounded-lg flex items-center justify-center text-white font-black text-xs overflow-hidden">
+              {activeConfig.siteLogoUrl ? (
+                <img
+                  src={activeConfig.siteLogoUrl}
+                  className="w-full h-full object-cover"
+                  alt="logo"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span>{activeConfig.siteLogoAbbrev}</span>
+              )}
             </div>
             <span className="font-bold text-slate-300 tracking-tight">{activeConfig.siteName} Portal</span>
           </div>
