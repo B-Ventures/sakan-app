@@ -131,7 +131,7 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
   const netMockProfit = totalMockIncome - totalMockOutflow;
 
   return (
-    <div className={`min-h-screen bg-[#0B0F19] text-slate-100 ${language === 'ar' ? 'font-arabic' : 'font-sans'} selection:bg-blue-500/30 selection:text-blue-200 overflow-x-hidden relative w-full`} dir={dir}>
+    <div className={`min-h-screen bg-[#0B0F19] text-slate-100 ${language === 'ar' ? 'font-arabic' : 'font-sans'} selection:bg-blue-500/30 selection:text-blue-200 overflow-x-clip relative w-full`} dir={dir}>
       
       {/* Background Decorative Mesh Gradients */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none -z-10" />
