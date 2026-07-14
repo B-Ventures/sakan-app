@@ -25,6 +25,53 @@ async function startServer() {
     ? getFirestore(appFirebase, (firebaseConfig as any).firestoreDatabaseId)
     : getFirestore(appFirebase);
 
+  // Dynamic Web App Manifest serving to reflect custom tenant branding instantly!
+  app.get("/manifest.json", async (req, res) => {
+    try {
+      const configDoc = await getDoc(doc(db, "system_configs", "landing_page_config"));
+      const config = configDoc.exists() ? configDoc.data() : null;
+
+      const siteName = config?.siteName || "bProp";
+      const shortName = config?.siteLogoAbbrev || siteName.slice(0, 10);
+      const logoUrl = config?.siteLogoUrl || "https://img.icons8.com/color/512/000000/building.png";
+
+      res.setHeader("Content-Type", "application/json");
+      res.json({
+        "id": "/",
+        "scope": "/",
+        "name": `${siteName} Building Payments & Expenses Tracker`,
+        "short_name": shortName,
+        "description": "Secure building property management, tenant Rent Ledger, statements and expenses manager.",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0B0F19",
+        "theme_color": "#2563eb",
+        "orientation": "portrait",
+        "icons": [
+          {
+            "src": logoUrl,
+            "sizes": "192x192",
+            "type": "image/png"
+          },
+          {
+            "src": logoUrl,
+            "sizes": "512x512",
+            "type": "image/png"
+          }
+        ]
+      });
+    } catch (err) {
+      console.error("Failed to generate dynamic manifest, serving fallback static manifest:", err);
+      try {
+        const fallbackPath = path.join(process.cwd(), "public", "manifest.json");
+        if (fs.existsSync(fallbackPath)) {
+          return res.sendFile(fallbackPath);
+        }
+      } catch (innerErr) {}
+      res.status(500).json({ error: "Failed to generate manifest" });
+    }
+  });
+
   // API Route: Create Stripe Checkout Session
   app.post("/api/create-checkout-session", async (req, res) => {
     try {

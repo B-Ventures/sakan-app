@@ -139,6 +139,34 @@ export default function App() {
     loadLandingConfig();
   }, []);
 
+  // Sync document head metadata with customized database branding
+  useEffect(() => {
+    if (!landingConfig) return;
+    const siteName = landingConfig.siteName || "bProp";
+    const logoUrl = landingConfig.siteLogoUrl || "https://img.icons8.com/color/512/000000/building.png";
+
+    // Dynamic Title
+    document.title = `${siteName} - Building Payments & Expenses Ledger`;
+
+    // Dynamic Favicon
+    let favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.rel = 'shortcut icon';
+      document.head.appendChild(favicon);
+    }
+    favicon.href = logoUrl;
+
+    // Dynamic Apple Touch Icon
+    let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+    if (!appleIcon) {
+      appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      document.head.appendChild(appleIcon);
+    }
+    appleIcon.href = logoUrl;
+  }, [landingConfig]);
+
   // GLOBAL FLOATING TOAST NOTIFICATION SERVICE
   const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
