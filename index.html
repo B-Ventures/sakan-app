@@ -8,6 +8,15 @@
     <meta name="theme-color" content="#2563eb" />
     <link rel="apple-touch-icon" href="https://img.icons8.com/color/192/000000/building.png" />
     <script>
+      // Capture PWA install prompt early to prevent missing it before React compiles or mounts
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        if (typeof window.onBeforeInstallPromptCaptured === 'function') {
+          window.onBeforeInstallPromptCaptured(e);
+        }
+      });
+
       // Clear development service workers and caches early to prevent white screen caching issues
       (function() {
         var isDev = window.location.hostname === 'localhost' || 

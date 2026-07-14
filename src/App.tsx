@@ -155,8 +155,21 @@ export default function App() {
   const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
 
   useEffect(() => {
+    // If the installation prompt was already captured by our early inline script
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
+      setIsInstallable(true);
+    }
+
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+      (window as any).deferredPrompt = e;
+    };
+
+    // Register a callback for the early listener in case the event fires mid-load
+    (window as any).onBeforeInstallPromptCaptured = (e: any) => {
       setDeferredPrompt(e);
       setIsInstallable(true);
     };
@@ -167,6 +180,7 @@ export default function App() {
       setIsAppInstalled(true);
       setIsInstallable(false);
       setDeferredPrompt(null);
+      (window as any).deferredPrompt = null;
       showGlobalToast('✨ Property Payments tracker installed successfully!', 'success');
     };
 
@@ -180,6 +194,7 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      delete (window as any).onBeforeInstallPromptCaptured;
     };
   }, []);
 
@@ -1747,6 +1762,8 @@ export default function App() {
           onOpenAuth={() => setIsAuthModalOpen(true)}
           onLaunchDemo={handleDemoSignIn}
           config={landingConfig}
+          isInstallable={isInstallable}
+          onInstallPWA={handleInstallPWA}
         />
         <LoginModal
           isOpen={isAuthModalOpen}

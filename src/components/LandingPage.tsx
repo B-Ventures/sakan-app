@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building, 
   ShieldCheck, 
@@ -20,7 +20,10 @@ import {
   Heart,
   MessageSquare,
   Menu,
-  X
+  X,
+  Share2,
+  Download,
+  Monitor
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LandingPageConfig, DEFAULT_LANDING_CONFIG } from '../types';
@@ -30,14 +33,114 @@ interface LandingPageProps {
   onOpenAuth: () => void;
   onLaunchDemo: () => void;
   config?: LandingPageConfig;
+  isInstallable?: boolean;
+  onInstallPWA?: () => void;
 }
 
-export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: LandingPageProps) {
+export default function LandingPage({ 
+  onOpenAuth, 
+  onLaunchDemo, 
+  config,
+  isInstallable = false,
+  onInstallPWA
+}: LandingPageProps) {
   const { t, language, setLanguage, isRtl, dir } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
   
   const baseConfig = config || DEFAULT_LANDING_CONFIG;
+
+  // Scroll listener to toggle sticky header background and elevation
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 20) {
+        setIsScrolled(true);
+      } else {
+        setIsScrolled(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Check standalone mode (PWA installed and active)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+      setIsStandalone(!!standalone);
+    }
+  }, []);
+
+  // Dynamic manifest generator on client-side to ensure custom brand logo is fully integrated in PWA prompt
+  useEffect(() => {
+    const siteName = baseConfig.siteName || "bProp";
+    const shortName = baseConfig.siteLogoAbbrev || siteName.slice(0, 10);
+    const logoUrl = baseConfig.siteLogoUrl || "https://img.icons8.com/color/512/000000/building.png";
+
+    const customManifest = {
+      id: "/",
+      scope: "/",
+      name: `${siteName} Building Payments & Expenses Tracker`,
+      short_name: shortName,
+      description: "Secure building property management, tenant Rent Ledger, statements and expenses manager.",
+      start_url: window.location.origin + "/",
+      display: "standalone",
+      background_color: "#0B0F19",
+      theme_color: "#2563eb",
+      orientation: "portrait",
+      icons: [
+        {
+          src: logoUrl,
+          sizes: "192x192",
+          type: "image/png"
+        },
+        {
+          src: logoUrl,
+          sizes: "512x512",
+          type: "image/png"
+        }
+      ]
+    };
+
+    // Replace the static manifest link with a dynamically generated Blob URL
+    const existingLink = document.querySelector('link[rel="manifest"]');
+    if (existingLink) {
+      existingLink.remove();
+    }
+
+    const stringified = JSON.stringify(customManifest);
+    const blob = new Blob([stringified], { type: 'application/json' });
+    const manifestUrl = URL.createObjectURL(blob);
+
+    const newLink = document.createElement('link');
+    newLink.rel = 'manifest';
+    newLink.href = manifestUrl;
+    document.head.appendChild(newLink);
+
+    // Synchronize browser favicon and apple-touch-icon with the customized brand logo URL
+    let favicon = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.rel = 'shortcut icon';
+      document.head.appendChild(favicon);
+    }
+    favicon.href = logoUrl;
+
+    let appleIcon = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+    if (!appleIcon) {
+      appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      document.head.appendChild(appleIcon);
+    }
+    appleIcon.href = logoUrl;
+
+    return () => {
+      URL.revokeObjectURL(manifestUrl);
+    };
+  }, [baseConfig]);
   
   // Dynamically translate default config values to high-quality Arabic when language is 'ar'
   const arDefaultConfig = {
@@ -138,7 +241,11 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
       <div className="absolute top-[600px] right-1/4 w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none -z-10" />
 
       {/* Landing Navigation Header */}
-      <header className="sticky top-0 bg-[#0B0F19]/80 backdrop-blur-md border-b border-slate-800/60 h-16 z-40 transition-all">
+      <header className={`sticky top-0 z-40 h-16 transition-all duration-300 ${
+        isScrolled 
+          ? 'bg-[#0B0F19]/90 backdrop-blur-md border-b border-slate-800 shadow-xl shadow-[#04060b]/30' 
+          : 'bg-[#0B0F19]/40 backdrop-blur-xs border-b border-slate-800/40'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
           
           {/* Logo */}
@@ -193,6 +300,22 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
                 عربي
               </button>
             </div>
+
+            {!isStandalone && (
+              <button
+                onClick={() => {
+                  if (isInstallable && onInstallPWA) {
+                    onInstallPWA();
+                  } else {
+                    setIsInstallGuideOpen(true);
+                  }
+                }}
+                className="bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl border border-emerald-500/30 hover:border-emerald-500/60 shadow-md shadow-emerald-950/20 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-emerald-300" />
+                <span>{language === 'ar' ? 'تثبيت التطبيق' : 'Install App'}</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenAuth}
@@ -289,7 +412,24 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-3">
+                {!isStandalone && (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      if (isInstallable && onInstallPWA) {
+                        onInstallPWA();
+                      } else {
+                        setIsInstallGuideOpen(true);
+                      }
+                    }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Smartphone className="w-4 h-4 text-emerald-300" />
+                    {language === 'ar' ? 'تثبيت التطبيق على جهازك' : 'Install App on Your Device'}
+                  </button>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
                   <button
                     onClick={() => {
                       setIsMobileMenuOpen(false);
@@ -979,6 +1119,111 @@ export default function LandingPage({ onOpenAuth, onLaunchDemo, config }: Landin
           </div>
         </div>
       </footer>
+
+      {/* PWA Guidance Modal */}
+      <AnimatePresence>
+        {isInstallGuideOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsInstallGuideOpen(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md bg-[#0F1424] border border-slate-800 rounded-3xl p-6 shadow-2xl z-10 text-slate-100 overflow-hidden"
+              dir={dir}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsInstallGuideOpen(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 hover:bg-slate-800/60 rounded-xl transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">
+                      {language === 'ar' ? 'تثبيت التطبيق على جهازك' : 'Install bProp App'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                      {language === 'ar' ? 'احصل على تجربة سريعة، مريحة، وتعمل بلا إنترنت.' : 'Enjoy a lightning-fast, native property portal directly on your screen.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Dynamic Instructions based on device type */}
+                <div className="space-y-4 border-t border-b border-slate-800/80 py-4 font-sans text-xs">
+                  {/* iOS / iPhone instructions */}
+                  <div className="space-y-2.5">
+                    <span className="text-[10px] uppercase font-mono font-black text-blue-400 tracking-wider">
+                      {language === 'ar' ? 'لأجهزة آيفون وآيباد (iOS):' : 'For iPhone & iPad (iOS):'}
+                    </span>
+                    <ol className="space-y-2 text-slate-300 font-medium pl-4 list-decimal list-inside">
+                      <li>
+                        {language === 'ar' ? 'افتح هذا الموقع في متصفح Safari الخاص بجهازك.' : 'Open this website in your Safari browser.'}
+                      </li>
+                      <li className="flex items-center gap-1.5 flex-wrap">
+                        {language === 'ar' ? 'اضغط على زر المشاركة' : 'Tap the Share button'}
+                        <Share2 className="w-3.5 h-3.5 inline text-blue-400" />
+                        {language === 'ar' ? 'في شريط التنقل السفلي.' : 'in the browser toolbar.'}
+                      </li>
+                      <li className="flex items-center gap-1.5 flex-wrap">
+                        {language === 'ar' ? 'اختر "إضافة إلى الشاشة الرئيسية"' : 'Select "Add to Home Screen"'}
+                        <Plus className="w-3.5 h-3.5 inline text-emerald-400" />
+                        {language === 'ar' ? 'من القائمة المنسدلة.' : 'from the option list.'}
+                      </li>
+                    </ol>
+                  </div>
+
+                  {/* Android / Chrome instructions */}
+                  <div className="space-y-2.5 border-t border-slate-850 pt-4">
+                    <span className="text-[10px] uppercase font-mono font-black text-emerald-400 tracking-wider">
+                      {language === 'ar' ? 'لأجهزة أندرويد والكمبيوتر (Chrome/Edge):' : 'For Android, PC & Mac (Chrome/Edge/Firefox):'}
+                    </span>
+                    <ol className="space-y-2 text-slate-300 font-medium pl-4 list-decimal list-inside">
+                      <li>
+                        {language === 'ar' ? 'اضغط على رمز الخيارات (أو النقاط الثلاث) في أعلى المتصفح.' : 'Click the browser menu options (three dots icon).'}
+                      </li>
+                      <li>
+                        {language === 'ar' ? 'اختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية".' : 'Click "Install" or "Add to Home Screen".'}
+                      </li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Footer and Launch Dashboard option */}
+                <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium font-sans">
+                  <span>
+                    {language === 'ar' ? 'شعار التطبيق سيكون نفس شعارك المرفوع!' : 'Uses your customized uploaded logo as launcher icon!'}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsInstallGuideOpen(false);
+                      onLaunchDemo();
+                    }}
+                    className="text-blue-400 hover:underline hover:text-blue-300 font-extrabold cursor-pointer"
+                  >
+                    {language === 'ar' ? 'تشغيل التجربة المباشرة ←' : 'Launch Demo instead ←'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
