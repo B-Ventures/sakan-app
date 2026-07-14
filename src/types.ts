@@ -316,6 +316,25 @@ export interface LandingPageConfig {
   auditDesc: string;
   ctaTitle: string;
   ctaDesc: string;
+  // Arabic fields
+  siteNameAr?: string;
+  siteLogoAbbrevAr?: string;
+  heroBadgeAr?: string;
+  heroTitleAr?: string;
+  heroTitleGradientAr?: string;
+  heroDescriptionAr?: string;
+  featuresTitleAr?: string;
+  featuresDescriptionAr?: string;
+  feature1TitleAr?: string;
+  feature1DescAr?: string;
+  feature2TitleAr?: string;
+  feature2DescAr?: string;
+  feature3TitleAr?: string;
+  feature3DescAr?: string;
+  auditTitleAr?: string;
+  auditDescAr?: string;
+  ctaTitleAr?: string;
+  ctaDescAr?: string;
 }
 
 export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
@@ -337,7 +356,26 @@ export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
   auditTitle: "A chronological history log keeps your portfolio accountable.",
   auditDesc: "Every rent transaction registered, utility payment made, or tenant ledger edit is tracked inside our built-in history trail. Maintain absolute clarity between owners, accountants, and on-site staff.",
   ctaTitle: "Stop losing yield. Reclaim your weekends.",
-  ctaDesc: "Join portfolio owners who trust bProp. Start with a risk-free 1-click dashboard test drive, or log in with your Google Account instantly."
+  ctaDesc: "Join portfolio owners who trust bProp. Start with a risk-free 1-click dashboard test drive, or log in with your Google Account instantly.",
+  // Arabic defaults
+  siteNameAr: "بي بروب",
+  siteLogoAbbrevAr: "ب ب",
+  heroBadgeAr: "سجلات عقارية من الجيل القادم",
+  heroTitleAr: "تخلص من فوضى الدفاتر الورقية.",
+  heroTitleGradientAr: "أتمت الحسابات المالية للعقارات.",
+  heroDescriptionAr: "الطريقة الأبسط على الإطلاق لمالكي العقارات لتسجيل الإيجارات المحصلة، وإدخال فواتير الصيانة والخدمات، وتتبع الأقسام - دون الحاجة لجداول بيانات أو حسابات يدوية معقدة.",
+  featuresTitleAr: "مصمم خصيصاً ليناسب واقع إدارة المباني الحديثة.",
+  featuresDescriptionAr: "كل أداة قمنا بتطويرها تحل مشكلة حقيقية على أرض الواقع، مما يلغي تكرار المدخلات، وفقدان الإيصالات، وأخطاء الحساب اليدوي.",
+  feature1TitleAr: "سجل إيرادات ديناميكي وتقسيم تلقائي",
+  feature1DescAr: "حدد ملفات الإيجار مع أجزاء مخصصة (مثل الإيجار الأساسي، وراتب الحارس، وصندوق الصيانة). عند تسجيل أي دفعة، تقوم منصة bProp بتقسيم الدفعة تلقائياً في السجل حتى تعرف بالضبط المبلغ المتوفر لكل غرض.",
+  feature2TitleAr: "تجربة استخدام سلسة على الهواتف الذكية",
+  feature2DescAr: "تصفح bProp بسلاسة تامة من أي هاتف أو جهاز لوحي أو حاسوب محمول. قم بتسجيل الدفعات أو المصروفات أثناء تفقد العقار بواجهة مستخدم مهيأة بالكامل للمس.",
+  feature3TitleAr: "مزامنة سحابية تلقائية وآمنة",
+  feature3DescAr: "تُحفظ سجلاتك بأمان تام في السحابة وتكون محدثة فوراً عبر جميع أجهزتك. تظل دفاتر الأستاذ الخاصة بك خاصة ومشفرة ومحفوظة احتياطياً بدون أي مجهود يدوي.",
+  auditTitleAr: "سجل مراجعة متكامل يحافظ على الشفافية والمسؤولية.",
+  auditDescAr: "يتم تتبع كل معاملة إيجار مسجلة، أو مصروف صيانة مدفوع، أو تعديل في سجلات السكان داخل سجل المراجعة المدمج. حافظ على وضوح مطلق بين الملاك، والمحاسبين، وموظفي الموقع.",
+  ctaTitleAr: "توقف عن خسارة أرباحك وعائداتك. استعد عطلات نهاية الأسبوع.",
+  ctaDescAr: "انضم إلى المئات من ملاك العقارات الذين يثقون في منصة bProp. ابدأ بتجربة لوحة التحكم التجريبية بنقرة واحدة، أو سجل دخولك باستخدام حساب جوجل فوراً."
 };
 
 

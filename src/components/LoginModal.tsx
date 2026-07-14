@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Sparkles, Shield, X, ArrowRight, RefreshCw, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export default function LoginModal({
   onSuperAdminSignIn,
   authLoading,
 }: LoginModalProps) {
+  const { language } = useLanguage();
   const [isAdminFormVisible, setIsAdminFormVisible] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -60,7 +62,7 @@ export default function LoginModal({
           {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+            className="absolute top-4 end-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -72,10 +74,12 @@ export default function LoginModal({
               bP
             </div>
             <h3 className="text-2xl font-extrabold tracking-tight text-slate-900">
-              Access bProp Portal
+              {language === 'ar' ? 'الدخول إلى بوابة bProp' : 'Access bProp Portal'}
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Securely log in to manage rent schedules, occupant ledgers, and property transactions.
+              {language === 'ar' 
+                ? 'سجل الدخول بأمان لإدارة جداول الإيجار ودفاتر الأستاذ للشاغلين والمعاملات العقارية.'
+                : 'Securely log in to manage rent schedules, occupant ledgers, and property transactions.'}
             </p>
           </div>
 
@@ -85,7 +89,7 @@ export default function LoginModal({
               <div className="py-6 text-center space-y-3">
                 <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
                 <p className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest animate-pulse">
-                  Verifying Credentials...
+                  {language === 'ar' ? 'جاري التحقق من الهوية...' : 'Verifying Credentials...'}
                 </p>
               </div>
             ) : (
@@ -96,13 +100,13 @@ export default function LoginModal({
                   id="google-signin-btn"
                 >
                   <Lock className="w-4 h-4" />
-                  Sign In with Google Account
+                  {language === 'ar' ? 'تسجيل الدخول باستخدام حساب Google' : 'Sign In with Google Account'}
                 </button>
 
                 <div className="relative flex py-2 items-center">
                   <div className="flex-grow border-t border-slate-100"></div>
                   <span className="flex-shrink mx-4 text-slate-300 text-[10px] tracking-wider uppercase font-bold font-sans">
-                    Quick Access
+                    {language === 'ar' ? 'وصول سريع' : 'Quick Access'}
                   </span>
                   <div className="flex-grow border-t border-slate-100"></div>
                 </div>
@@ -113,7 +117,7 @@ export default function LoginModal({
                   id="sandbox-demo-signin-btn"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
-                  Explore Live Demo (Read-Only)
+                  {language === 'ar' ? 'استكشف العرض المباشر (للقراءة فقط)' : 'Explore Live Demo (Read-Only)'}
                 </button>
               </>
             )}
@@ -122,7 +126,9 @@ export default function LoginModal({
           {/* Footer Info */}
           <div className="text-center mt-6 pt-4 border-t border-slate-50">
             <p className="text-[10px] text-slate-400 font-medium">
-              Easy-to-use manager dashboard with zero setup time.
+              {language === 'ar' 
+                ? 'لوحة تحكم سهلة الاستخدام للمدير بدون أي وقت إعداد.'
+                : 'Easy-to-use manager dashboard with zero setup time.'}
             </p>
           </div>
 
@@ -134,17 +140,19 @@ export default function LoginModal({
               className="text-slate-400 hover:text-slate-600 transition-colors text-[9px] font-extrabold tracking-wider uppercase font-mono inline-flex items-center gap-1.5 cursor-pointer"
             >
               <Shield className="w-3.5 h-3.5 text-slate-400" />
-              {isAdminFormVisible ? 'Hide Admin Access' : 'SuperAdmin Portal'}
+              {isAdminFormVisible 
+                ? (language === 'ar' ? 'إخفاء بوابة المدير المتميز' : 'Hide Admin Access') 
+                : (language === 'ar' ? 'بوابة المدير المتميز (SuperAdmin)' : 'SuperAdmin Portal')}
             </button>
 
             {isAdminFormVisible && (
               <form
                 onSubmit={handleAdminSubmit}
-                className="mt-4 p-4 bg-slate-50 border border-slate-200/60 rounded-2xl text-left space-y-3 animate-in slide-in-from-top-2 duration-200"
+                className="mt-4 p-4 bg-slate-50 border border-slate-200/60 rounded-2xl text-start space-y-3 animate-in slide-in-from-top-2 duration-200"
               >
                 <div className="space-y-1">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">
-                    SuperAdmin Email
+                    {language === 'ar' ? 'البريد الإلكتروني للمشرف المتميز' : 'SuperAdmin Email'}
                   </label>
                   <input
                     type="email"
@@ -158,14 +166,14 @@ export default function LoginModal({
 
                 <div className="space-y-1">
                   <label className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono">
-                    Secret Passcode
+                    {language === 'ar' ? 'كلمة المرور السرية' : 'Secret Passcode'}
                   </label>
                   <input
                     type="password"
                     required
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Enter password"
+                    placeholder={language === 'ar' ? 'أدخل كلمة المرور' : 'Enter password'}
                     className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
@@ -180,7 +188,7 @@ export default function LoginModal({
                   ) : (
                     <KeyRound className="w-3.5 h-3.5 text-slate-400" />
                   )}
-                  Verify Access
+                  {language === 'ar' ? 'التحقق من الصلاحية' : 'Verify Access'}
                 </button>
               </form>
             )}

@@ -22,6 +22,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { saveTenant, savePayment, saveExpense } from '../firebaseService';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DataImporterProps {
   isOpen: boolean;
@@ -55,6 +56,7 @@ export default function DataImporter({
   isDemoMode,
   onImportComplete
 }: DataImporterProps) {
+  const { t, language } = useLanguage();
   const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'success'>('upload');
   
   const formatVal = (amount: number) => {
@@ -503,6 +505,21 @@ export default function DataImporter({
     onClose();
   };
 
+  const getLocalizedStatusText = (rec: ParsedRecord, lang: string) => {
+    if (lang !== 'ar') return rec.statusText;
+    if (rec.type === 'expense') {
+      return `مصروفات مسجلة تحت فئة "${rec.category || 'أخرى'}"`;
+    }
+    const statusStr = rec.status === 'Paid' ? 'مدفوع' : rec.status === 'Pending' ? 'قيد الانتظار' : 'متأخر';
+    if (rec.statusText.startsWith('Match:')) {
+      return `تطابق الساكن: "${rec.titleOrTenantName}" (${statusStr})`;
+    }
+    if (rec.statusText.startsWith('Unit match:')) {
+      return `تطابق الوحدة: وحدة ${rec.unit} (${statusStr})`;
+    }
+    return `ساكن جديد للوحدة ${rec.unit || 'لم يحدد'} (${statusStr})`;
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200 font-sans" id="data-importer-container">
       <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-100 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden relative animate-in zoom-in-95 duration-200">
@@ -514,8 +531,12 @@ export default function DataImporter({
               <Upload className="w-4 h-4" />
             </div>
             <div>
-              <h4 className="font-extrabold text-slate-800 text-sm">Ledger CSV Account Import</h4>
-              <p className="text-[10px] text-slate-400">Initialize property historical bookkeeping at once</p>
+              <h4 className="font-extrabold text-slate-800 text-sm">
+                {language === 'ar' ? 'استيراد الحسابات التاريخية من ملف CSV' : 'Ledger CSV Account Import'}
+              </h4>
+              <p className="text-[10px] text-slate-400">
+                {language === 'ar' ? 'تهيئة مسك الدفاتر التاريخية للعقار دفعة واحدة' : 'Initialize property historical bookkeeping at once'}
+              </p>
             </div>
           </div>
           <button 
@@ -535,7 +556,9 @@ export default function DataImporter({
                 {activeBuilding?.name}
               </span>
               <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
-                Prepare your calculations in Google Sheets, Apple Numbers or Microsoft Excel, download as standard <b>CSV</b> format, and upload to load all files at once.
+                {language === 'ar' 
+                  ? 'قم بإعداد حساباتك في جداول بيانات Google أو Apple Numbers أو Microsoft Excel، وتنزيلها بصيغة CSV القياسية، وتحميلها لرفع البيانات دفعة واحدة.'
+                  : 'Prepare your calculations in Google Sheets, Apple Numbers or Microsoft Excel, download as standard CSV format, and upload to load all files at once.'}
               </p>
             </div>
 
@@ -546,18 +569,22 @@ export default function DataImporter({
                   CSV
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-800 block truncate">bProp_Bookkeeping_Template.csv</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Includes columns mapping and 4 beautiful demo row entries</span>
+                  <span className="text-xs font-bold text-slate-800 block truncate">
+                    {language === 'ar' ? 'نموذج_مسك_الدفاتر_bP.csv' : 'bProp_Bookkeeping_Template.csv'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
+                    {language === 'ar' ? 'يتضمن تخطيط الأعمدة و 4 صفوف تجريبية منسقة' : 'Includes columns mapping and 4 beautiful demo row entries'}
+                  </span>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={downloadCSVTemplate}
                 id="btn-download-csv-template"
-                className="flex items-center gap-1 bg-white hover:bg-slate-100 text-slate-600 font-bold text-[10.5px] border border-slate-200 px-3 py-2 rounded-xl shrink-0 transition-colors cursor-pointer"
+                className="flex items-center gap-1 bg-white hover:bg-slate-100 text-slate-600 font-bold text-[10.5px] border border-slate-200 px-3 py-2 rounded-xl shrink-0 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Download className="w-3.5 h-3.5 text-blue-500" />
-                Template
+                {language === 'ar' ? 'تحميل النموذج' : 'Template'}
               </button>
             </div>
 
@@ -580,9 +607,11 @@ export default function DataImporter({
                   onClick={() => fileInputRef.current?.click()}
                   className="text-xs font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer inline-block"
                 >
-                  Browse your local files
+                  {language === 'ar' ? 'تصفح ملفاتك المحلية' : 'Browse your local files'}
                 </button>
-                <span className="text-xs text-slate-400 block mt-1.5">or drag & drop historical CSV file here</span>
+                <span className="text-xs text-slate-400 block mt-1.5">
+                  {language === 'ar' ? 'أو قم بسحب وإسقاط ملف CSV التاريخي هنا' : 'or drag & drop historical CSV file here'}
+                </span>
               </div>
               <input
                 ref={fileInputRef}
@@ -608,26 +637,30 @@ export default function DataImporter({
             {/* Split statistics */}
             <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-around items-center shrink-0">
               <div className="text-center">
-                <span className="text-[10px] font-extrabold text-slate-400 block uppercase font-mono">Incomes Found</span>
+                <span className="text-[10px] font-extrabold text-slate-400 block uppercase font-mono">
+                  {language === 'ar' ? 'الإيرادات التي تم العثور عليها' : 'Incomes Found'}
+                </span>
                 <span className="text-sm font-bold text-emerald-600 font-mono mt-0.5 flex items-center justify-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  {parsedRecords.filter(r => r.type === 'income').length} items
+                  {parsedRecords.filter(r => r.type === 'income').length} {language === 'ar' ? 'عناصر' : 'items'}
                 </span>
               </div>
               <div className="border-r border-slate-200 h-6"></div>
               <div className="text-center">
-                <span className="text-[10px] font-extrabold text-slate-400 block uppercase font-mono">Expenses Found</span>
+                <span className="text-[10px] font-extrabold text-slate-400 block uppercase font-mono">
+                  {language === 'ar' ? 'المصروفات التي تم العثور عليها' : 'Expenses Found'}
+                </span>
                 <span className="text-sm font-bold text-rose-600 font-mono mt-0.5 flex items-center justify-center gap-1">
                   <TrendingDown className="w-3.5 h-3.5" />
-                  {parsedRecords.filter(r => r.type === 'expense').length} items
+                  {parsedRecords.filter(r => r.type === 'expense').length} {language === 'ar' ? 'عناصر' : 'items'}
                 </span>
               </div>
             </div>
 
             {/* Scrollable validation checklist */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              <h5 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono pl-1">
-                Parsed Transaction Ledger Preview
+              <h5 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block font-mono pl-1 text-start">
+                {language === 'ar' ? 'معاينة كشف المعاملات المحللة' : 'Parsed Transaction Ledger Preview'}
               </h5>
               
               <div className="space-y-2">
@@ -638,11 +671,11 @@ export default function DataImporter({
                       rec.type === 'income' ? 'bg-emerald-50/20 border-emerald-100/60' : 'bg-red-50/20 border-rose-100/60'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    <div className="flex items-center gap-2.5 min-w-0 text-start">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                         rec.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
                       }`}>
-                        {rec.type === 'income' ? 'IN' : 'EX'}
+                        {rec.type === 'income' ? (language === 'ar' ? 'وارد' : 'IN') : (language === 'ar' ? 'صادر' : 'EX')}
                       </span>
                       <div className="min-w-0">
                         <span className="font-bold text-slate-800 block truncate leading-tight">
@@ -652,14 +685,14 @@ export default function DataImporter({
                           <span className="text-[9px] font-mono text-slate-400 shrink-0 font-medium">{rec.date}</span>
                           {rec.unit && (
                             <span className="text-[8px] bg-slate-150 text-slate-600 px-1 py-0.5 rounded font-mono font-bold uppercase tracking-wide">
-                              Unit {rec.unit}
+                              {language === 'ar' ? 'وحدة' : 'Unit'} {rec.unit}
                             </span>
                           )}
-                          <span className="text-[9px] text-slate-400 italic truncate max-w-[150px]">{rec.statusText}</span>
+                          <span className="text-[9px] text-slate-400 italic truncate max-w-[150px]">{getLocalizedStatusText(rec, language)}</span>
                         </div>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-end shrink-0">
                       <span className={`font-mono font-bold text-[13px] ${
                         rec.type === 'income' ? 'text-emerald-700' : 'text-rose-700'
                       }`}>
@@ -671,7 +704,7 @@ export default function DataImporter({
               </div>
 
               {/* Configurations parameters */}
-              <div className="pt-3 border-t border-slate-100 space-y-2 pl-1 font-sans">
+              <div className="pt-3 border-t border-slate-100 space-y-2 pl-1 font-sans text-start">
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
                   <input
                     type="checkbox"
@@ -680,7 +713,11 @@ export default function DataImporter({
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     id="chk-auto-create-tenants"
                   />
-                  <span>Auto-create tenant profiles if they do not exist in Unit list</span>
+                  <span>
+                    {language === 'ar' 
+                      ? 'إنشاء ملفات تعريف للمستأجرين تلقائياً إذا لم تكن موجودة في قائمة الوحدات' 
+                      : 'Auto-create tenant profiles if they do not exist in Unit list'}
+                  </span>
                 </label>
               </div>
             </div>
@@ -693,7 +730,7 @@ export default function DataImporter({
                 className="bg-white hover:bg-slate-100 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl border border-slate-200 transition-colors"
                 id="btn-import-back"
               >
-                Go Back
+                {language === 'ar' ? 'رجوع' : 'Go Back'}
               </button>
               <button
                 type="button"
@@ -701,7 +738,7 @@ export default function DataImporter({
                 className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm transition-colors cursor-pointer"
                 id="btn-import-confirm"
               >
-                Confirm & Import Records
+                {language === 'ar' ? 'تأكيد واستيراد السجلات' : 'Confirm & Import Records'}
               </button>
             </div>
           </div>
@@ -712,9 +749,13 @@ export default function DataImporter({
           <div className="p-12 text-center space-y-4 flex-1 flex flex-col items-center justify-center">
             <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
             <div>
-              <h5 className="font-bold text-slate-800 text-sm">Synchronizing ledger...</h5>
+              <h5 className="font-bold text-slate-800 text-sm">
+                {language === 'ar' ? 'مزامنة المعاملات...' : 'Synchronizing ledger...'}
+              </h5>
               <p className="text-[10px] text-slate-400 mt-1 max-w-xs mx-auto leading-normal">
-                Connecting to Property database and instantiating secure lease entities. Under Standard tier limits.
+                {language === 'ar' 
+                  ? 'جاري الاتصال بقاعدة بيانات العقارات وإنشاء الكيانات الإيجارية بأمان.' 
+                  : 'Connecting to Property database and instantiating secure lease entities. Under Standard tier limits.'}
               </p>
             </div>
           </div>
@@ -728,28 +769,40 @@ export default function DataImporter({
             </div>
 
             <div className="space-y-1">
-              <h4 className="font-extrabold text-slate-800 text-md">Import Completed Successfully!</h4>
-              <p className="text-xs text-slate-400">Everything has been validated and safely synced down.</p>
+              <h4 className="font-extrabold text-slate-800 text-md">
+                {language === 'ar' ? 'تمت عملية الاستيراد بنجاح!' : 'Import Completed Successfully!'}
+              </h4>
+              <p className="text-xs text-slate-400">
+                {language === 'ar' ? 'تم التحقق من كل شيء ومزامنته بشكل آمن.' : 'Everything has been validated and safely synced down.'}
+              </p>
             </div>
 
             {/* Results distribution metadata */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 text-center">
-                <span className="text-[9px] font-extrabold text-slate-400 block uppercase font-mono">Tenants Built</span>
+                <span className="text-[9px] font-extrabold text-slate-400 block uppercase font-mono">
+                  {language === 'ar' ? 'المستأجرون' : 'Tenants Built'}
+                </span>
                 <span className="text-md font-bold text-slate-850 mt-1 block font-mono">{importSummary.tenantsCreated}</span>
               </div>
               <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 text-center">
-                <span className="text-[9px] font-extrabold text-slate-400 block uppercase font-mono">Paid Receipts</span>
+                <span className="text-[9px] font-extrabold text-slate-400 block uppercase font-mono">
+                  {language === 'ar' ? 'الإيصالات المدفوعة' : 'Paid Receipts'}
+                </span>
                 <span className="text-md font-bold text-emerald-600 mt-1 block font-mono">+{importSummary.paymentsAdded}</span>
               </div>
               <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 text-center">
-                <span className="text-[9px] font-extrabold text-slate-400 block uppercase font-mono">Expenses</span>
+                <span className="text-[9px] font-extrabold text-slate-400 block uppercase font-mono">
+                  {language === 'ar' ? 'المصروفات' : 'Expenses'}
+                </span>
                 <span className="text-md font-bold text-rose-500 mt-1 block font-mono">-{importSummary.expensesAdded}</span>
               </div>
             </div>
 
             <p className="text-[10px] text-slate-400 italic">
-              Your overall Operating Margin and cash balances on the main dashboard have updated in real-time.
+              {language === 'ar'
+                ? 'تم تحديث هامش التشغيل الإجمالي وأرصدة النقدية في لوحة التحكم الرئيسية بالوقت الفعلي.'
+                : 'Your overall Operating Margin and cash balances on the main dashboard have updated in real-time.'}
             </p>
 
             <button
@@ -758,7 +811,7 @@ export default function DataImporter({
               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
               id="btn-import-success-done"
             >
-              Done, Return to Workspace
+              {language === 'ar' ? 'تم، العودة إلى مساحة العمل' : 'Done, Return to Workspace'}
             </button>
           </div>
         )}

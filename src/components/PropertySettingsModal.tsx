@@ -54,6 +54,8 @@ import {
   fetchMultiPropertyConfig 
 } from '../firebaseService';
 
+import { useLanguage } from '../context/LanguageContext';
+
 interface PropertySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -81,6 +83,7 @@ export default function PropertySettingsModal({
   onRestoreBackup,
   buildings = [],
 }: PropertySettingsModalProps) {
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   // SaaS Billing State
@@ -624,7 +627,9 @@ export default function PropertySettingsModal({
                 <Trash2 className="w-5 h-5" />
               </span>
               <div>
-                <h5 className="font-extrabold text-slate-800 text-sm">Confirm Deleting Item</h5>
+                <h5 className="font-extrabold text-slate-800 text-sm">
+                  {language === 'ar' ? 'تأكيد حذف العنصر' : 'Confirm Deleting Item'}
+                </h5>
                 <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
                   {confirmDialog.message}
                 </p>
@@ -635,14 +640,14 @@ export default function PropertySettingsModal({
                   onClick={() => setConfirmDialog(null)}
                   className="px-4 py-2 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="button"
                   onClick={handleExecuteDelete}
                   className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
-                  Confirm Delete
+                  {language === 'ar' ? 'تأكيد الحذف' : 'Confirm Delete'}
                 </button>
               </div>
             </div>
@@ -654,10 +659,12 @@ export default function PropertySettingsModal({
           <div className="space-y-3.5 md:space-y-6 flex-1 flex flex-col justify-center md:justify-start">
             <div className="flex items-center justify-between md:block shrink-0">
               <div>
-                <span className="text-[10px] font-bold font-mono text-blue-600 block uppercase tracking-wider">Property Manager</span>
+                <span className="text-[10px] font-bold font-mono text-blue-600 block uppercase tracking-wider">
+                  {language === 'ar' ? 'مدير العقار' : 'Property Manager'}
+                </span>
                 <h3 className="font-extrabold text-slate-800 text-base mt-1.5 flex items-center gap-2">
                   <Settings className="w-5 h-5 text-slate-500 animate-spin-slow" />
-                  Configurations
+                  {language === 'ar' ? 'إعدادات العقار' : 'Configurations'}
                 </h3>
               </div>
               <button
@@ -680,7 +687,7 @@ export default function PropertySettingsModal({
                 }`}
               >
                 <Home className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
-                General Details
+                {language === 'ar' ? 'التفاصيل العامة' : 'General Details'}
               </button>
 
               <button
@@ -692,7 +699,7 @@ export default function PropertySettingsModal({
                 }`}
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
-                Expense Categories
+                {language === 'ar' ? 'فئات المصروفات' : 'Expense Categories'}
               </button>
 
               <button
@@ -704,7 +711,7 @@ export default function PropertySettingsModal({
                 }`}
               >
                 <Wallet className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
-                Payment Methods
+                {language === 'ar' ? 'طرق الدفع' : 'Payment Methods'}
               </button>
 
               <button
@@ -716,7 +723,7 @@ export default function PropertySettingsModal({
                 }`}
               >
                 <DollarSign className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
-                Income Split Fees
+                {language === 'ar' ? 'تقسيم الإيرادات' : 'Income Split Fees'}
               </button>
 
               <button
@@ -728,7 +735,7 @@ export default function PropertySettingsModal({
                 }`}
               >
                 <CreditCard className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-500 shrink-0" />
-                Billing & Subscription
+                {language === 'ar' ? 'الاشتراكات والفوترة' : 'Billing & Subscription'}
               </button>
 
               <button
@@ -740,7 +747,7 @@ export default function PropertySettingsModal({
                 }`}
               >
                 <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500 shrink-0" />
-                Backup & Recovery
+                {language === 'ar' ? 'النسخ الاحتياطي والاستعادة' : 'Backup & Recovery'}
               </button>
             </nav>
           </div>
@@ -749,7 +756,7 @@ export default function PropertySettingsModal({
             onClick={onClose}
             className="hidden md:flex w-full items-center justify-center p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-colors cursor-pointer"
           >
-            Close Panel
+            {language === 'ar' ? 'إغلاق اللوحة' : 'Close Panel'}
           </button>
         </div>
 
@@ -760,20 +767,20 @@ export default function PropertySettingsModal({
             <div className="flex items-center justify-between border-b pb-4 border-slate-200/60 font-sans shrink-0">
               <div>
                 <h4 className="text-base font-bold text-slate-800">
-                  {activeTab === 'general' && 'General Property Details'}
-                  {activeTab === 'expenses' && 'Manage Expense Categories'}
-                  {activeTab === 'paymentMethods' && 'Manage Rent Payment Methods'}
-                  {activeTab === 'incomeSplits' && 'Manage Income Split Fields'}
-                  {activeTab === 'billing' && 'Property Subscription'}
-                  {activeTab === 'backup' && 'Data Sovereignty & Active Dev Stack'}
+                  {activeTab === 'general' && (language === 'ar' ? 'تفاصيل العقار العامة' : 'General Property Details')}
+                  {activeTab === 'expenses' && (language === 'ar' ? 'إدارة فئات المصروفات' : 'Manage Expense Categories')}
+                  {activeTab === 'paymentMethods' && (language === 'ar' ? 'إدارة طرق دفع الإيجار' : 'Manage Rent Payment Methods')}
+                  {activeTab === 'incomeSplits' && (language === 'ar' ? 'إدارة حقول تقسيم الإيرادات' : 'Manage Income Split Fields')}
+                  {activeTab === 'billing' && (language === 'ar' ? 'اشتراك العقار' : 'Property Subscription')}
+                  {activeTab === 'backup' && (language === 'ar' ? 'سيادة البيانات واستعادة النسخ الاحتياطي' : 'Data Sovereignty & Active Dev Stack')}
                 </h4>
                 <p className="text-xs text-slate-400 mt-1">
-                  {activeTab === 'general' && 'Update the active property name, base rates, and its registered address.'}
-                  {activeTab === 'expenses' && 'Define custom tags for grouping maintenance costs.'}
-                  {activeTab === 'paymentMethods' && 'Add/Remove supported options for receiving rent.'}
-                  {activeTab === 'incomeSplits' && 'Add, edit or rename sub-components for the payment ledger.'}
-                  {activeTab === 'billing' && 'View, renew, or upgrade your monthly or annual property subscription.'}
-                  {activeTab === 'backup' && 'Download JSON backups of all building files, restore states, or examine cloud parameters.'}
+                  {activeTab === 'general' && (language === 'ar' ? 'تحديث اسم العقار الحالي، والمعدلات الأساسية، وعنوانه المسجل.' : 'Update the active property name, base rates, and its registered address.')}
+                  {activeTab === 'expenses' && (language === 'ar' ? 'تحديد تصنيفات مخصصة لتجميع وتصنيف تكاليف الصيانة والمصروفات.' : 'Define custom tags for grouping maintenance costs.')}
+                  {activeTab === 'paymentMethods' && (language === 'ar' ? 'إضافة أو إزالة الخيارات المتاحة لتحصيل الإيجار.' : 'Add/Remove supported options for receiving rent.')}
+                  {activeTab === 'incomeSplits' && (language === 'ar' ? 'إضافة أو تعديل أو إعادة تسمية المكونات الفرعية لدفتر المدفوعات.' : 'Add, edit or rename sub-components for the payment ledger.')}
+                  {activeTab === 'billing' && (language === 'ar' ? 'عرض أو تجديد أو ترقية اشتراك العقار الشهري أو السنوي.' : 'View, renew, or upgrade your monthly or annual property subscription.')}
+                  {activeTab === 'backup' && (language === 'ar' ? 'تحميل نسخ احتياطية بصيغة JSON لجميع ملفات البناء، أو استعادتها، أو فحص معلمات السحابة.' : 'Download JSON backups of all building files, restore states, or examine cloud parameters.')}
                 </p>
               </div>
               <button onClick={onClose} className="hidden md:block text-slate-300 hover:text-slate-500 font-bold transition-colors">
@@ -788,24 +795,28 @@ export default function PropertySettingsModal({
                   <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b pb-2.5 border-slate-100">
                       <Home className="w-4 h-4 text-blue-500" />
-                      Property Identity & Locale
+                      {language === 'ar' ? 'هوية العقار والموقع' : 'Property Identity & Locale'}
                     </h4>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">Property Name *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">
+                          {language === 'ar' ? 'اسم العقار *' : 'Property Name *'}
+                        </label>
                         <input
                           type="text"
                           required
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 focus:bg-white font-sans transition-all"
-                          placeholder="e.g. Grandview Residences"
+                          placeholder={language === 'ar' ? 'مثال: أبراج مجمع الصفا' : 'e.g. Grandview Residences'}
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">Rent System Currency *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">
+                          {language === 'ar' ? 'عملة نظام الإيجار *' : 'Rent System Currency *'}
+                        </label>
                         <select
                           value={currency}
                           onChange={(e) => setCurrency(e.target.value)}
@@ -822,13 +833,15 @@ export default function PropertySettingsModal({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">Mailing Address</label>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">
+                        {language === 'ar' ? 'العنوان البريدي' : 'Mailing Address'}
+                      </label>
                       <input
                         type="text"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50 focus:bg-white font-sans transition-all"
-                        placeholder="e.g. 100 Luxury Heights Boulevard"
+                        placeholder={language === 'ar' ? 'مثال: شارع المدينة المنورة، عمان' : 'e.g. 100 Luxury Heights Boulevard'}
                       />
                     </div>
                   </div>
@@ -837,15 +850,19 @@ export default function PropertySettingsModal({
                   <div className="border border-indigo-50 bg-gradient-to-br from-indigo-50/30 to-blue-50/30 p-5 rounded-2xl space-y-3.5">
                     <h5 className="font-extrabold text-indigo-950 text-xs flex items-center gap-2">
                       <Sliders className="w-4 h-4 text-indigo-600" />
-                      Default Tenant Fee Template
+                      {language === 'ar' ? 'نموذج رسوم المستأجر الافتراضي' : 'Default Tenant Fee Template'}
                     </h5>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      When auto-registering unlisted tenants during CSV imports or creating new ones, they will automatically copy these predefined amounts instead of hardcoded developer defaults.
+                      {language === 'ar' 
+                        ? 'عند التسجيل التلقائي للمستأجرين غير المدرجين أثناء استيراد ملفات CSV أو إنشاء مستأجرين جدد، سيتم نسخ هذه المبالغ المحددة مسبقاً تلقائياً.' 
+                        : 'When auto-registering unlisted tenants during CSV imports or creating new ones, they will automatically copy these predefined amounts instead of hardcoded developer defaults.'}
                     </p>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-white p-3 rounded-xl border border-indigo-100">
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Base Rent ({currency})</label>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">
+                          {language === 'ar' ? 'الإيجار الأساسي' : 'Base Rent'} ({currency})
+                        </label>
                         <input
                           type="number"
                           required
@@ -857,7 +874,9 @@ export default function PropertySettingsModal({
                       </div>
 
                       <div className="bg-white p-3 rounded-xl border border-indigo-100">
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Guard Fee ({currency})</label>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">
+                          {language === 'ar' ? 'رسوم الحارس' : 'Guard Fee'} ({currency})
+                        </label>
                         <input
                           type="number"
                           required
@@ -869,7 +888,9 @@ export default function PropertySettingsModal({
                       </div>
 
                       <div className="bg-white p-3 rounded-xl border border-indigo-100">
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Service Box ({currency})</label>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">
+                          {language === 'ar' ? 'صندوق الخدمة' : 'Service Box'} ({currency})
+                        </label>
                         <input
                           type="number"
                           required
@@ -889,7 +910,9 @@ export default function PropertySettingsModal({
                       className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center gap-2 shadow-md transition-colors font-sans cursor-pointer"
                     >
                       <Save className="w-4 h-4" />
-                      {savingLoading ? 'Saving Settings...' : 'Save General Config'}
+                      {savingLoading 
+                        ? (language === 'ar' ? 'جاري حفظ الإعدادات...' : 'Saving Settings...') 
+                        : (language === 'ar' ? 'حفظ التكوين العام' : 'Save General Config')}
                     </button>
                   </div>
                 </form>
@@ -904,16 +927,18 @@ export default function PropertySettingsModal({
                   <div className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-xs space-y-4 font-sans">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b pb-2.5 border-slate-100">
                       <Plus className="w-4 h-4 text-blue-500" />
-                      Add Expense Category
+                      {language === 'ar' ? 'إضافة فئة مصروفات' : 'Add Expense Category'}
                     </h4>
                     
                     <div className="space-y-3">
-                      <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Category Label Name *</label>
+                      <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">
+                        {language === 'ar' ? 'اسم تصنيف الفئة *' : 'Category Label Name *'}
+                      </label>
                       <input
                         type="text"
                         value={newItemText}
                         onChange={(e) => setNewItemText(e.target.value)}
-                        placeholder="e.g. Elevator Maintenance"
+                        placeholder={language === 'ar' ? 'مثال: صيانة المصعد' : 'e.g. Elevator Maintenance'}
                         className="w-full text-xs p-3 bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 font-sans transition-all"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleAddItem('expenses');
@@ -922,7 +947,9 @@ export default function PropertySettingsModal({
                     </div>
 
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-400 uppercase">Default Classification</label>
+                      <label className="block text-xs font-bold text-slate-400 uppercase">
+                        {language === 'ar' ? 'التصنيف الافتراضي' : 'Default Classification'}
+                      </label>
                       <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200">
                         <button
                           type="button"
@@ -933,7 +960,7 @@ export default function PropertySettingsModal({
                               : 'text-slate-400 hover:text-slate-600 bg-transparent'
                           }`}
                         >
-                          👤 Per Unit
+                          👤 {language === 'ar' ? 'لكل وحدة' : 'Per Unit'}
                         </button>
                         <button
                           type="button"
@@ -944,7 +971,7 @@ export default function PropertySettingsModal({
                               : 'text-slate-400 hover:text-slate-600 bg-transparent'
                           }`}
                         >
-                          🏢 Common Cost
+                          🏢 {language === 'ar' ? 'تكلفة مشتركة' : 'Common Cost'}
                         </button>
                       </div>
                     </div>
@@ -954,7 +981,7 @@ export default function PropertySettingsModal({
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer uppercase tracking-wider"
                     >
                       <Plus className="w-4 h-4" />
-                      Save & Add Category
+                      {language === 'ar' ? 'حفظ وإضافة الفئة' : 'Save & Add Category'}
                     </button>
                   </div>
                 </div>
@@ -962,8 +989,12 @@ export default function PropertySettingsModal({
                 {/* Right: Scrollable List */}
                 <div className="lg:col-span-7 flex flex-col overflow-hidden bg-white rounded-2xl border border-slate-200/60 shadow-xs h-fit lg:h-full">
                   <div className="bg-slate-50/50 p-3 px-4 border-b border-slate-200/60 flex items-center justify-between font-sans shrink-0">
-                    <span className="text-xs font-bold text-slate-500">Configured Categories</span>
-                    <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded-full">{expenseCategories.length} Categories</span>
+                    <span className="text-xs font-bold text-slate-500">
+                      {language === 'ar' ? 'الفئات المهيأة' : 'Configured Categories'}
+                    </span>
+                    <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded-full">
+                      {expenseCategories.length} {language === 'ar' ? 'فئات' : 'Categories'}
+                    </span>
                   </div>
 
                   <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[300px] lg:max-h-none">
@@ -1356,13 +1387,13 @@ export default function PropertySettingsModal({
                                   onClick={() => handleSaveEdit('paymentMethods', idx)}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-[10px] uppercase transition-colors flex items-center gap-1 cursor-pointer"
                                 >
-                                  <Save className="w-3.5 h-3.5" /> Save
+                                  <Save className="w-3.5 h-3.5" /> {language === 'ar' ? 'حفظ' : 'Save'}
                                 </button>
                                 <button
                                   onClick={() => setEditingIndex(null)}
                                   className="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold px-4 py-2 rounded-xl text-[10px] uppercase transition-colors cursor-pointer"
                                 >
-                                  Cancel
+                                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
                                 </button>
                               </div>
                             </div>
@@ -1597,17 +1628,27 @@ export default function PropertySettingsModal({
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-extrabold text-slate-800">Monthly Plan</span>
-                                <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-md">Cancel Anytime</span>
+                                <span className="text-xs font-extrabold text-slate-800">
+                                  {language === 'ar' ? 'الخطة الشهرية' : 'Monthly Plan'}
+                                </span>
+                                <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-md">
+                                  {language === 'ar' ? 'إلغاء في أي وقت' : 'Cancel Anytime'}
+                                </span>
                               </div>
                               <div>
                                 <div className="flex items-baseline gap-1">
                                   <span className="text-2xl font-black text-slate-900 font-mono">
                                     {getPlanBasePrice('monthly')} {getPlanCurrency()}
                                   </span>
-                                  <span className="text-[10px] font-semibold text-slate-400">/ month</span>
+                                  <span className="text-[10px] font-semibold text-slate-400">
+                                    {language === 'ar' ? '/ شهرياً' : '/ month'}
+                                  </span>
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">Best for small committees starting off with single-building accounting.</p>
+                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                                  {language === 'ar' 
+                                    ? 'الأفضل للجان الصغيرة التي تبدأ بمحاسبة مبنى واحد.' 
+                                    : 'Best for small committees starting off with single-building accounting.'}
+                                </p>
                               </div>
                               {billingPlan === 'monthly' && (
                                 <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
@@ -1625,19 +1666,31 @@ export default function PropertySettingsModal({
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs font-extrabold text-slate-800">Annual Plan</span>
-                                  <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[8px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Save 20%</span>
+                                  <span className="text-xs font-extrabold text-slate-800">
+                                    {language === 'ar' ? 'الخطة السنوية' : 'Annual Plan'}
+                                  </span>
+                                  <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 text-[8px] font-mono font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                    {language === 'ar' ? 'وفر ٢٠٪' : 'Save 20%'}
+                                  </span>
                                 </div>
-                                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-extrabold px-2 py-0.5 rounded-md">Best Value</span>
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-extrabold px-2 py-0.5 rounded-md">
+                                  {language === 'ar' ? 'أفضل قيمة' : 'Best Value'}
+                                </span>
                               </div>
                               <div>
                                 <div className="flex items-baseline gap-1">
                                   <span className="text-2xl font-black text-slate-900 font-mono">
                                     {getPlanBasePrice('annually')} {getPlanCurrency()}
                                   </span>
-                                  <span className="text-[10px] font-semibold text-slate-400">/ year</span>
+                                  <span className="text-[10px] font-semibold text-slate-400">
+                                    {language === 'ar' ? '/ سنوياً' : '/ year'}
+                                  </span>
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">Equivalent to {(getPlanBasePrice('annually') / 12).toFixed(1)} {getPlanCurrency()}/month. Perfect for long-term committee boards.</p>
+                                <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                                  {language === 'ar' 
+                                    ? `يعادل ${(getPlanBasePrice('annually') / 12).toFixed(1)} ${getPlanCurrency()}/شهرياً. مثالي لمجالس اللجان طويلة المدى.` 
+                                    : `Equivalent to ${(getPlanBasePrice('annually') / 12).toFixed(1)} ${getPlanCurrency()}/month. Perfect for long-term committee boards.`}
+                                </p>
                               </div>
                               {billingPlan === 'annually' && (
                                 <span className="absolute top-4 right-4 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
@@ -1649,11 +1702,13 @@ export default function PropertySettingsModal({
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-5">
                         <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1.5">Have a Promotion Coupon?</label>
+                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block mb-1.5">
+                            {language === 'ar' ? 'هل لديك كوبون خصم؟' : 'Have a Promotion Coupon?'}
+                          </label>
                           <div className="flex gap-2">
                             <input 
                               type="text" 
-                              placeholder={coupons.length > 0 ? `e.g. ${coupons[0].code}` : "ENTER COUPON CODE"} 
+                              placeholder={coupons.length > 0 ? `e.g. ${coupons[0].code}` : (language === 'ar' ? 'أدخل رمز الكوبون' : "ENTER COUPON CODE")} 
                               value={couponCode}
                               onChange={(e) => setCouponCode(e.target.value)}
                               className="flex-1 text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-sans uppercase placeholder-slate-400 text-slate-800 bg-slate-50 focus:bg-white transition-all"
@@ -1663,16 +1718,17 @@ export default function PropertySettingsModal({
                               onClick={handleApplyCoupon}
                               className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] px-5 rounded-xl shadow-xs transition-colors cursor-pointer shrink-0 uppercase tracking-wide"
                             >
-                              Apply
+                              {language === 'ar' ? 'تطبيق' : 'Apply'}
                             </button>
                           </div>
-                          <span className="text-[9px] text-slate-400 block mt-1.5">Try coupon codes {(() => {
+                          <span className="text-[9px] text-slate-400 block mt-1.5">
+                            {language === 'ar' ? 'جرب رموز الكوبونات ' : 'Try coupon codes '} {(() => {
                             const activeCoupons = coupons.filter(c => c.isActive !== false);
-                            if (activeCoupons.length === 0) return "none available.";
+                            if (activeCoupons.length === 0) return language === 'ar' ? "لا يوجد حالياً." : "none available.";
                             return activeCoupons.map((c, idx) => (
                               <React.Fragment key={c.id}>
-                                <strong>{c.code}</strong> ({c.discountPercent}% off)
-                                {idx < activeCoupons.length - 1 ? (idx === activeCoupons.length - 2 ? " or " : ", ") : ""}
+                                <strong>{c.code}</strong> ({c.discountPercent}% {language === 'ar' ? 'خصم' : 'off'})
+                                {idx < activeCoupons.length - 1 ? (idx === activeCoupons.length - 2 ? (language === 'ar' ? " أو " : " or ") : ", ") : ""}
                               </React.Fragment>
                             ));
                           })()}</span>

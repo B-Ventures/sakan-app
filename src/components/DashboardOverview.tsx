@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { Tenant, Payment, Expense, ExpenseCategory, formatCurrency, isMonthCovered } from '../types';
 import { TrendingUp, TrendingDown, DollarSign, Building, Percent, AlertCircle, Calendar, ArrowUpRight, ArrowDownRight, Send, Upload, Search } from 'lucide-react';
 import { getReminderWhatsAppLink } from '../utils/whatsapp';
@@ -26,6 +27,7 @@ export default function DashboardOverview({
   onOpenImportModal,
   activeBuilding,
 }: DashboardOverviewProps) {
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = React.useState('');
   const [reminderTab, setReminderTab] = React.useState<'rent' | 'expenses'>('rent');
 
@@ -229,7 +231,7 @@ export default function DashboardOverview({
         {/* Net Flow */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-net">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Net Balance</span>
+            <span className="text-sm font-medium text-slate-500">{t('netBalance')}</span>
             <div className={`p-2 rounded-xl ${netProfit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
               <DollarSign className="w-5 h-5" />
             </div>
@@ -240,7 +242,7 @@ export default function DashboardOverview({
             </h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Projected (After Bills):</span>
+                <span>{t('projectedAfterBills')}</span>
                 <span className={`font-semibold ${(netProfit - totalDueExpenses) >= 0 ? 'text-emerald-650' : 'text-rose-650'}`}>
                   {formatCurrency(netProfit - totalDueExpenses, activeBuilding?.currency || 'JOD')}
                 </span>
@@ -252,7 +254,7 @@ export default function DashboardOverview({
         {/* Total Rent Income Received */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-income">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Collected Income</span>
+            <span className="text-sm font-medium text-slate-500">{t('collectedIncome')}</span>
             <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
               <TrendingUp className="w-5 h-5" />
             </div>
@@ -261,7 +263,7 @@ export default function DashboardOverview({
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Uncollected (Due):</span>
+                <span>{t('uncollectedDue')}</span>
                 <span className="text-rose-600 font-semibold">{formatCurrency(totalDueIncome, activeBuilding?.currency || 'JOD')}</span>
               </div>
             </div>
@@ -271,7 +273,7 @@ export default function DashboardOverview({
         {/* Total Expenses */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-expenses">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Expenses Logged</span>
+            <span className="text-sm font-medium text-slate-500">{t('expensesLogged')}</span>
             <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
               <TrendingDown className="w-5 h-5" />
             </div>
@@ -280,7 +282,7 @@ export default function DashboardOverview({
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Unpaid (Due):</span>
+                <span>{t('unpaidDue')}</span>
                 <span className="text-orange-600 font-semibold">{formatCurrency(totalDueExpenses, activeBuilding?.currency || 'JOD')}</span>
               </div>
             </div>
@@ -290,7 +292,7 @@ export default function DashboardOverview({
         {/* Occupancy Rate */}
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between" id="kpi-occupancy">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Occupancy Rate</span>
+            <span className="text-sm font-medium text-slate-500">{t('occupancyRate')}</span>
             <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
               <Building className="w-5 h-5" />
             </div>
@@ -299,7 +301,7 @@ export default function DashboardOverview({
             <h3 className="text-2xl font-bold text-slate-900">{occupancyRate}%</h3>
             <div className="text-xs text-slate-400 mt-2.5 space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span>Occupied / Total:</span>
+                <span>{t('occupiedTotal')}</span>
                 <span className="text-slate-700 font-semibold">{occupiedUnits}/{totalUnits}</span>
               </div>
             </div>
@@ -315,15 +317,15 @@ export default function DashboardOverview({
           <div>
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h3 className="font-bold text-slate-800 text-sm">Financial Performance</h3>
-                <p className="text-[11px] text-slate-400">Collected income vs costs</p>
+                <h3 className="font-bold text-slate-800 text-sm">{t('financialPerformance')}</h3>
+                <p className="text-[11px] text-slate-400">{t('collectedIncomeVsCosts')}</p>
               </div>
               <div className="flex gap-2.5 text-[10px] shrink-0">
                 <span className="flex items-center gap-1 font-medium text-slate-600">
-                  <span className="w-2.5 h-2.5 bg-blue-500 rounded-xs"></span>In
+                  <span className="w-2.5 h-2.5 bg-blue-500 rounded-xs"></span>{t('received')}
                 </span>
                 <span className="flex items-center gap-1 font-medium text-slate-600">
-                  <span className="w-2.5 h-2.5 bg-orange-500 rounded-xs"></span>Out
+                  <span className="w-2.5 h-2.5 bg-orange-500 rounded-xs"></span>{t('costs')}
                 </span>
               </div>
             </div>
@@ -371,7 +373,7 @@ export default function DashboardOverview({
                     style={{ height: `${(totalIncomePaid / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104}px` }}
                   />
                   {/* Label */}
-                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Received</span>
+                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">{t('received')}</span>
                 </div>
 
                 {/* Bar 2: Total Operational Costs (Paid) */}
@@ -391,7 +393,7 @@ export default function DashboardOverview({
                     style={{ height: `${(totalExpensesPaid / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104}px` }}
                   />
                   {/* Label */}
-                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Costs</span>
+                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">{t('costs')}</span>
                 </div>
 
                 {/* Bar 3: Net Cash Flow */}
@@ -419,15 +421,15 @@ export default function DashboardOverview({
                     style={{ height: `${(Math.abs(netProfit) / Math.max(totalIncomePaid, totalExpensesPaid, 1000)) * 104}px` }}
                   />
                   {/* Label */}
-                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">Net Flow</span>
+                  <span className="absolute -bottom-7 text-[10.5px] font-extrabold text-slate-500 whitespace-nowrap text-center">{t('netFlow')}</span>
                 </div>
               </div>
             </div>
           </div>
           <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-50 flex justify-between items-center bg-slate-50/50 p-2 rounded-xl mt-3">
-            <span>Performance Status:</span>
+            <span>{t('performanceStatus')}:</span>
             <span className={`font-extrabold uppercase text-[10.5px] tracking-wider ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-              {netProfit >= 0 ? 'Surplus' : 'Deficit'}
+              {netProfit >= 0 ? t('surplus') : t('deficit')}
             </span>
           </div>
         </div>
@@ -435,14 +437,14 @@ export default function DashboardOverview({
         {/* 2. Income Distribution Progressive Breakdown */}
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-[390px] hover:shadow-md transition-shadow" id="income-distribution-card">
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Income Distribution</h3>
-            <p className="text-[11px] text-slate-400 mb-5">Breakdown of collected income components</p>
+            <h3 className="font-bold text-slate-800 text-sm">{t('incomeDistribution')}</h3>
+            <p className="text-[11px] text-slate-400 mb-5">{t('breakdownOfIncomeComponents')}</p>
 
             <div className="space-y-4">
               {[
-                { name: 'Base Share', amount: totalRentPaid },
-                { name: 'Guard Share', amount: totalGuardPaid },
-                { name: 'Svc Box Share', amount: totalMaintenancePaid }
+                { name: 'Base Share', key: 'baseShare', amount: totalRentPaid },
+                { name: 'Guard Share', key: 'guardShare', amount: totalGuardPaid },
+                { name: 'Svc Box Share', key: 'svcBoxShare', amount: totalMaintenancePaid }
               ].map(source => {
                 const percentage = totalIncomePaid > 0 ? Math.round((source.amount / totalIncomePaid) * 105) : 0;
                 const maxSourceAmount = Math.max(totalRentPaid, totalGuardPaid, totalMaintenancePaid, 1);
@@ -450,7 +452,7 @@ export default function DashboardOverview({
                 return (
                   <div key={source.name} className="space-y-1.5 p-1 rounded-lg hover:bg-slate-50/50 transition-colors">
                     <div className="flex justify-between text-[11px] font-semibold text-slate-700">
-                      <span>{source.name}</span>
+                      <span>{t(source.key as any)}</span>
                       <span className="text-slate-500 font-mono text-[10px]">{formatCurrency(source.amount, activeBuilding?.currency || 'JOD')} ({Math.min(100, percentage)}%)</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -464,13 +466,13 @@ export default function DashboardOverview({
               })}
               {totalIncomePaid === 0 && (
                 <div className="text-center text-xs py-10 text-slate-400">
-                  No collected income registered yet.
+                  {t('noIncomeRegistered')}
                 </div>
               )}
             </div>
           </div>
           <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-50 flex justify-between items-center bg-blue-50/20 p-2 rounded-xl mt-3">
-            <span>Collected Realized:</span>
+            <span>{t('collectedRealized')}:</span>
             <span className="font-mono font-extrabold text-slate-800">{formatCurrency(totalIncomePaid, activeBuilding?.currency || 'JOD')}</span>
           </div>
         </div>
@@ -478,8 +480,8 @@ export default function DashboardOverview({
         {/* 3. Expense Distribution Progressive Breakdown */}
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between h-[390px] hover:shadow-md transition-shadow">
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Expense Distribution</h3>
-            <p className="text-[11px] text-slate-400 mb-5">Breakdown of operational categories</p>
+            <h3 className="font-bold text-slate-800 text-sm">{t('expenseDistribution')}</h3>
+            <p className="text-[11px] text-slate-400 mb-5">{t('breakdownOfOperationalCategories')}</p>
 
             <div className="space-y-3.5 overflow-y-auto max-h-[200px] pr-0.5">
               {categoriesList.map(cat => {
@@ -504,13 +506,13 @@ export default function DashboardOverview({
               })}
               {totalExpenses === 0 && (
                 <div className="text-center text-xs py-10 text-slate-400">
-                  No operational expenses logged.
+                  {t('noExpensesLogged')}
                 </div>
               )}
             </div>
           </div>
           <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-50 flex justify-between items-center bg-orange-50/20 p-2 rounded-xl mt-3">
-            <span>Total Operational Out:</span>
+            <span>{t('totalOperationalOut')}:</span>
             <span className="font-mono font-extrabold text-slate-800">{formatCurrency(totalExpenses, activeBuilding?.currency || 'JOD')}</span>
           </div>
         </div>
@@ -525,7 +527,7 @@ export default function DashboardOverview({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100">
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h3 className="font-bold text-slate-800 text-base">Reminders Center</h3>
+                <h3 className="font-bold text-slate-800 text-base">{t('remindersCenter')}</h3>
                 
                 {/* Rent vs Expenses Toggle Buttons */}
                 <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/50">
@@ -538,7 +540,7 @@ export default function DashboardOverview({
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
-                    Tenant Dues ({groupedUnpaidDues.length})
+                    {t('tenantDues')} ({groupedUnpaidDues.length})
                   </button>
                   <button
                     type="button"
@@ -549,14 +551,14 @@ export default function DashboardOverview({
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
-                    Expense Bills ({expenses.filter(e => e.status === 'Pending' || e.status === 'Overdue').length})
+                    {t('expenseBills')} ({expenses.filter(e => e.status === 'Pending' || e.status === 'Overdue').length})
                   </button>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-1">
                 {reminderTab === 'rent' 
-                  ? 'Contact outstanding rent accounts & send customized billing statements'
-                  : 'Track and update payment status for pending contractor or maintenance vendor costs'
+                  ? t('tenantDuesSub')
+                  : t('expenseBillsSub')
                 }
               </p>
             </div>
@@ -568,7 +570,7 @@ export default function DashboardOverview({
               </span>
               <input
                 type="text"
-                placeholder={reminderTab === 'rent' ? 'Search unit or tenant...' : 'Search category or cost...'}
+                placeholder={reminderTab === 'rent' ? t('searchUnitOrTenant') : t('searchCategoryOrCost')}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 text-xs pl-9 pr-3 py-2 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-150 rounded-xl transition-all font-medium outline-hidden"
@@ -578,7 +580,7 @@ export default function DashboardOverview({
                   onClick={() => setSearchQuery('')}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-[10px] font-bold text-slate-400 hover:text-slate-600"
                 >
-                  Clear
+                  {t('clear')}
                 </button>
               )}
             </div>
@@ -601,8 +603,8 @@ export default function DashboardOverview({
                       <div className="w-12 h-12 bg-white shadow-xs rounded-full flex items-center justify-center mx-auto mb-3">
                         <Search className="w-5 h-5 text-slate-350" />
                       </div>
-                      <p className="text-sm font-semibold text-slate-500 font-sans">No outstanding expenses match your filter</p>
-                      <p className="text-xs text-slate-400 mt-1 font-sans">All recorded costs are settled!</p>
+                      <p className="text-sm font-semibold text-slate-500 font-sans">{t('noExpensesMatch')}</p>
+                      <p className="text-xs text-slate-400 mt-1 font-sans">{t('allCostsSettled')}</p>
                     </div>
                   );
                 }
@@ -617,7 +619,7 @@ export default function DashboardOverview({
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className="w-9 h-9 bg-orange-50 group-hover:bg-orange-100/50 text-orange-600 font-extrabold text-[10px] uppercase flex items-center justify-center rounded-lg transition-colors border border-orange-100/30 font-mono shrink-0">
-                                OUT
+                                {t('out')}
                               </div>
                               <div className="min-w-0">
                                 <span className="font-bold text-slate-800 text-xs block tracking-tight truncate max-w-[150px]" title={exp.title}>{exp.title}</span>
@@ -629,33 +631,33 @@ export default function DashboardOverview({
                               <span className={`inline-block text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded mt-0.5 ${
                                 isOverdue ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
                               }`}>
-                                {isOverdue ? 'Overdue' : (exp.status || 'Pending')}
+                                {isOverdue ? t('overdue') : (exp.status === 'Paid' ? t('paid') : t('pending'))}
                               </span>
                             </div>
                           </div>
 
                           <div className="bg-slate-50 p-2 rounded-lg text-xs space-y-1 text-slate-600 border border-slate-100/50 font-sans">
                             <div className="flex justify-between items-center text-[10px]">
-                              <span className="text-slate-400 font-semibold">Log Date:</span>
+                              <span className="text-slate-400 font-semibold">{t('logDate')}</span>
                               <span className="font-mono font-medium text-slate-700">{exp.date}</span>
                             </div>
                             <div className="flex justify-between items-center text-[10px]">
-                              <span className="text-slate-400 font-semibold">Due Date:</span>
+                              <span className="text-slate-400 font-semibold">{t('dueDate')}</span>
                               <span className={`font-mono font-medium ${isOverdue ? 'text-rose-600 font-bold' : 'text-slate-700'}`}>
-                                {exp.dueDate || 'No deadline'}
+                                {exp.dueDate || t('noDeadline')}
                               </span>
                             </div>
                           </div>
 
                           <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 mt-0.5 shrink-0 font-sans">
                             <span className="text-[10px] text-slate-400 font-medium truncate flex-1" title={exp.notes}>
-                              {exp.notes ? `Memo: ${exp.notes}` : 'No notes'}
+                              {exp.notes ? `${t('memo')} ${exp.notes}` : t('noNotes')}
                             </span>
                             <button
                               onClick={() => onNavigateToTab('reminders')}
                               className="bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shrink-0 active:scale-95"
                             >
-                              Update Status
+                              {t('updateStatus')}
                             </button>
                           </div>
                         </div>
@@ -678,8 +680,8 @@ export default function DashboardOverview({
                     <div className="w-12 h-12 bg-white shadow-xs rounded-full flex items-center justify-center mx-auto mb-3">
                       <Search className="w-5 h-5 text-slate-350" />
                     </div>
-                    <p className="text-sm font-semibold text-slate-500">No outstanding dues match your filter</p>
-                    <p className="text-xs text-slate-400 mt-1">Try searching a different unit code or tenant name</p>
+                    <p className="text-sm font-semibold text-slate-500">{t('noDuesMatch')}</p>
+                    <p className="text-xs text-slate-400 mt-1">{t('noDuesMatchSub')}</p>
                   </div>
                 );
               }
@@ -733,7 +735,7 @@ export default function DashboardOverview({
                             </div>
                             <div>
                               <span className="font-bold text-slate-800 text-sm block tracking-tight line-clamp-1">{group.tenantName}</span>
-                              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Unpaid: {combinedMonths}</span>
+                              <span className="text-[10px] text-slate-400 font-semibold block uppercase">{t('unpaid')} {combinedMonths}</span>
                             </div>
                           </div>
                           <div className="text-right">
@@ -741,7 +743,7 @@ export default function DashboardOverview({
                             <span className={`inline-block text-[9px] uppercase font-bold px-1.5 py-0.5 rounded mt-1 ${
                               isOverdue ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
                             }`}>
-                              {isOverdue ? 'Overdue' : 'Pending'}
+                              {isOverdue ? t('overdue') : t('pending')}
                             </span>
                           </div>
                         </div>
@@ -749,15 +751,15 @@ export default function DashboardOverview({
                         {/* Detailed Split Breakdown Box */}
                         <div className="grid grid-cols-3 gap-1 bg-slate-50 p-2.5 rounded-lg text-center border border-slate-100/50">
                           <div>
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">Base rent</span>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">{t('baseShare')}</span>
                             <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(baseRentTotal, activeBuilding?.currency || 'JOD')}</span>
                           </div>
                           <div className="border-x border-slate-150">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">Guard</span>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">{t('guardShare')}</span>
                             <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(guardFeeTotal, activeBuilding?.currency || 'JOD')}</span>
                           </div>
                           <div>
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">Svc Box</span>
+                            <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider font-sans">{t('svcBoxShare')}</span>
                             <span className="block text-[10px] font-semibold text-slate-700 font-mono mt-0.5">{formatCurrency(maintenanceFeeTotal, activeBuilding?.currency || 'JOD')}</span>
                           </div>
                         </div>
@@ -766,7 +768,7 @@ export default function DashboardOverview({
                         <div className="flex items-center justify-between pt-1 border-t border-slate-50">
                           <span className="text-[10px] text-slate-450 font-semibold flex items-center gap-1 mt-1">
                             <Calendar className="w-3 h-3 text-slate-400" />
-                            Due: Day {tenant?.rentDueDateDay || '5'} of month
+                            {t('dueDay')} {tenant?.rentDueDateDay || '5'} {t('ofMonth')}
                           </span>
 
                           {hasPhone ? (
@@ -777,10 +779,10 @@ export default function DashboardOverview({
                               className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-white bg-emerald-50 hover:bg-emerald-600 rounded-xl px-3 py-2 transition-all duration-250 shrink-0 hover:shadow-xs focus:ring-1 focus:ring-emerald-200 cursor-pointer"
                             >
                               <Send className="w-3 h-3" />
-                              Send Reminder
+                              {t('sendReminder')}
                             </a>
                           ) : (
-                            <span className="text-[10px] text-slate-400 italic font-medium">No contact attached</span>
+                            <span className="text-[10px] text-slate-400 italic font-medium">{t('noContactAttached')}</span>
                           )}
                         </div>
                       </div>
@@ -795,7 +797,7 @@ export default function DashboardOverview({
             onClick={() => onNavigateToTab('reminders')}
             className="w-full text-center py-2.5 mt-5 text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/85 rounded-xl transition-all duration-200 focus:outline-hidden"
           >
-            Go to Reminder Settings & System Automations &rarr;
+            {t('goToReminderSettings')}
           </button>
         </div>
 
@@ -804,14 +806,14 @@ export default function DashboardOverview({
           <div>
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50">
               <div>
-                <h3 className="font-bold text-slate-800 text-sm">Union Ledger Overview</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">Chronological record of building cashflow</p>
+                <h3 className="font-bold text-slate-800 text-sm">{t('unionLedgerOverview')}</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">{t('unionLedgerOverviewSub')}</p>
               </div>
               <button 
                 onClick={() => onNavigateToTab('payments')}
                 className="text-[11px] font-bold text-blue-600 hover:text-blue-700 shrink-0 uppercase tracking-wider"
               >
-                Full Trail
+                {t('fullTrail')}
               </button>
             </div>
 
@@ -859,15 +861,15 @@ export default function DashboardOverview({
 
               {recentTransactions.length === 0 && (
                 <div className="text-center py-12 text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-150">
-                  <p className="text-xs font-medium">No recorded audit transactions yet.</p>
+                  <p className="text-xs font-medium">{t('noTransactions')}</p>
                 </div>
               )}
             </div>
           </div>
 
           <div className="mt-5 pt-3 border-t border-slate-50/80 flex items-center justify-between text-[11px] text-slate-400 bg-slate-50/50 p-2.5 rounded-xl">
-            <span>Recent ledger entries:</span>
-            <span className="font-bold text-slate-700 font-mono">{recentTransactions.length} items</span>
+            <span>{t('recentLedgerEntries')}</span>
+            <span className="font-bold text-slate-700 font-mono">{recentTransactions.length} {t('items')}</span>
           </div>
         </div>
 

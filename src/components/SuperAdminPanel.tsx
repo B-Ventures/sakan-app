@@ -52,6 +52,7 @@ import {
   saveMultiPropertyConfig
 } from '../firebaseService';
 import ConfirmationDialog from './ConfirmationDialog';
+import { useLanguage } from '../context/LanguageContext';
 
 interface SuperAdminPanelProps {
   customers: UserRecord[];
@@ -86,6 +87,7 @@ export default function SuperAdminPanel({
   landingConfig,
   onSaveLandingConfig
 }: SuperAdminPanelProps) {
+  const { t, language } = useLanguage();
   const [localSubTab, setLocalSubTab] = useState<'directory' | 'analytics' | 'subscriptions' | 'packages' | 'landing_page'>('analytics');
   
   const activeSubTab = propActiveSubTab !== undefined ? propActiveSubTab : localSubTab;
@@ -200,10 +202,14 @@ export default function SuperAdminPanel({
   // Landing Page Editor State
   const [savingConfig, setSavingConfig] = useState(false);
   const [landingConfigForm, setLandingConfigForm] = useState<LandingPageConfig>(DEFAULT_LANDING_CONFIG);
+  const [editorLang, setEditorLang] = useState<'en' | 'ar'>('en');
 
   useEffect(() => {
     if (landingConfig) {
-      setLandingConfigForm(landingConfig);
+      setLandingConfigForm({
+        ...DEFAULT_LANDING_CONFIG,
+        ...landingConfig
+      });
     }
   }, [landingConfig]);
 
@@ -902,20 +908,20 @@ export default function SuperAdminPanel({
           </div>
 
           <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-start">
               <div className="space-y-1">
-                <h3 className="text-sm font-black text-slate-800">Master Directory Index</h3>
-                <p className="text-xs text-slate-400">Click on any user row to update profile details, inject assets, or download/restore snapshot backups.</p>
+                <h3 className="text-sm font-black text-slate-800">{language === 'ar' ? 'فهرس الدليل الرئيسي' : 'Master Directory Index'}</h3>
+                <p className="text-xs text-slate-400">{language === 'ar' ? 'انقر فوق أي صف مستخدم لتحديث تفاصيل الملف الشخصي أو حقن الأصول أو تنزيل/استعادة النسخ الاحتياطية.' : 'Click on any user row to update profile details, inject assets, or download/restore snapshot backups.'}</p>
               </div>
               
               <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-400 absolute start-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Filter customers or buildings..."
+                  placeholder={language === 'ar' ? 'تصفية العملاء أو الأبنية...' : 'Filter customers or buildings...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-red-500 focus:bg-white transition-all text-slate-800 placeholder-slate-400"
+                  className="w-full ps-9 pe-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-red-500 focus:bg-white transition-all text-slate-800 placeholder-slate-400"
                 />
               </div>
             </div>
@@ -1259,33 +1265,33 @@ export default function SuperAdminPanel({
             {/* Left Side: platform units and occupy metrics index */}
             <div className="lg:col-span-7 space-y-4">
               <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-start">
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-sm">Platform Property Occupancy & Units Statistics</h4>
-                    <p className="text-[11px] text-slate-400 font-medium">Aggregated occupancy stats across registered buildings.</p>
+                    <h4 className="font-extrabold text-slate-800 text-sm">{language === 'ar' ? 'إحصائيات إشغال عقارات المنصة والوحدات' : 'Platform Property Occupancy & Units Statistics'}</h4>
+                    <p className="text-[11px] text-slate-400 font-medium">{language === 'ar' ? 'إحصائيات الإشغال المجمعة عبر المباني المسجلة.' : 'Aggregated occupancy stats across registered buildings.'}</p>
                   </div>
                   <div className="relative w-full sm:w-52">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
                     <input 
                       type="text" 
-                      placeholder="Filter by property name..."
+                      placeholder={language === 'ar' ? 'تصفية باسم العقار...' : 'Filter by property name...'}
                       value={tenantSearch}
                       onChange={(e) => setTenantSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 focus:bg-white focus:outline-hidden rounded-xl transition-all"
+                      className="w-full ps-8 pe-3 py-1.5 text-xs bg-slate-50 border border-slate-200 focus:bg-white focus:outline-hidden rounded-xl transition-all"
                     />
                   </div>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs font-sans">
+                  <table className="w-full text-start text-xs font-sans">
                     <thead className="bg-slate-50 border-b border-slate-100 uppercase tracking-widest text-[9px] text-slate-400 font-semibold">
                       <tr>
-                        <th className="px-4 py-3">Property / Portfolio</th>
-                        <th className="px-4 py-3 text-center">Total Units</th>
-                        <th className="px-4 py-3 text-center">Occupied (Active)</th>
-                        <th className="px-4 py-3 text-center">Vacant</th>
-                        <th className="px-4 py-3 text-center">License Plan</th>
-                        <th className="px-4 py-3 text-right">Avg Rent (JOD)</th>
+                        <th className="px-4 py-3 text-start">{language === 'ar' ? 'العقار / المحفظة' : 'Property / Portfolio'}</th>
+                        <th className="px-4 py-3 text-center">{language === 'ar' ? 'إجمالي الوحدات' : 'Total Units'}</th>
+                        <th className="px-4 py-3 text-center">{language === 'ar' ? 'مشغول (نشط)' : 'Occupied (Active)'}</th>
+                        <th className="px-4 py-3 text-center">{language === 'ar' ? 'شاغر' : 'Vacant'}</th>
+                        <th className="px-4 py-3 text-center">{language === 'ar' ? 'خطة الترخيص' : 'License Plan'}</th>
+                        <th className="px-4 py-3 text-end">{language === 'ar' ? 'متوسط الإيجار' : 'Avg Rent (JOD)'}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
@@ -1303,9 +1309,9 @@ export default function SuperAdminPanel({
 
                         return (
                           <tr key={b.id} className="hover:bg-slate-50/50">
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 text-start">
                               <span className="font-extrabold text-slate-800 block">{b.name}</span>
-                              <span className="text-[10px] text-slate-400 block truncate max-w-xs">{b.address || 'Address unassigned'}</span>
+                              <span className="text-[10px] text-slate-400 block truncate max-w-xs">{b.address || (language === 'ar' ? 'العنوان غير محدد' : 'Address unassigned')}</span>
                             </td>
                             <td className="px-4 py-3 text-center font-mono font-bold text-slate-700">{totalUnits}</td>
                             <td className="px-4 py-3 text-center">
@@ -1328,11 +1334,11 @@ export default function SuperAdminPanel({
                                   ? 'bg-rose-50 text-rose-700 border-rose-100'
                                   : 'bg-amber-50 text-amber-700 border-amber-100'
                               }`}>
-                                {b.subscriptionStatus || 'trial'}
+                                {b.subscriptionStatus === 'active' ? (language === 'ar' ? 'نشط' : 'active') : b.subscriptionStatus === 'expired' ? (language === 'ar' ? 'منتهي' : 'expired') : (language === 'ar' ? 'تجريبي' : 'trial')}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">
-                              JOD {avgRent.toLocaleString()}
+                            <td className="px-4 py-3 text-end font-mono font-bold text-slate-800">
+                              {language === 'ar' ? 'د.أ ' : 'JOD '} {avgRent.toLocaleString()}
                             </td>
                           </tr>
                         );
@@ -1341,7 +1347,7 @@ export default function SuperAdminPanel({
                   </table>
                   {buildings.length === 0 && (
                     <div className="text-center py-6">
-                      <span className="text-xs text-slate-400 italic">No building assets records available.</span>
+                      <span className="text-xs text-slate-400 italic">{language === 'ar' ? 'لا توجد سجلات أصول عقارية متاحة.' : 'No building assets records available.'}</span>
                     </div>
                   )}
                 </div>
@@ -1560,21 +1566,21 @@ export default function SuperAdminPanel({
           {/* Filter & Subscriptions Table Card */}
           <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden">
             {/* Header and Controls */}
-            <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-start">
               <div>
-                <h3 className="text-sm font-black text-slate-800">Platform License Directory</h3>
-                <p className="text-xs text-slate-400 mt-0.5">List of all registered properties, their subscription plans, expiration counts, and cumulative fees collected.</p>
+                <h3 className="text-sm font-black text-slate-800">{language === 'ar' ? 'دليل تراخيص المنصة' : 'Platform License Directory'}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{language === 'ar' ? 'قائمة بجميع العقارات المسجلة، وخطط الاشتراك الخاصة بها، وتواريخ انتهاء الصلاحية، والرسوم المتراكمة المحصلة.' : 'List of all registered properties, their subscription plans, expiration counts, and cumulative fees collected.'}</p>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                 <div className="relative w-full sm:w-60">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search building or owner..."
+                    placeholder={language === 'ar' ? 'البحث عن مبنى أو مالك...' : 'Search building or owner...'}
                     value={subSearch}
                     onChange={(e) => setSubSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-red-500 focus:bg-white transition-all text-slate-800 placeholder-slate-400"
+                    className="w-full ps-9 pe-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-red-500 focus:bg-white transition-all text-slate-800 placeholder-slate-400"
                     id="saas-sub-search-input"
                   />
                 </div>
@@ -1585,10 +1591,10 @@ export default function SuperAdminPanel({
                     onChange={(e) => setPlanFilter(e.target.value as any)}
                     className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white transition-colors font-semibold text-slate-700 min-w-[100px]"
                   >
-                    <option value="all">All Plans</option>
-                    <option value="trial">Free Trial</option>
-                    <option value="monthly">Monthly Plan</option>
-                    <option value="annually">Annual Plan</option>
+                    <option value="all">{language === 'ar' ? 'جميع الخطط' : 'All Plans'}</option>
+                    <option value="trial">{language === 'ar' ? 'فترة تجريبية مجانية' : 'Free Trial'}</option>
+                    <option value="monthly">{language === 'ar' ? 'الخطة الشهرية' : 'Monthly Plan'}</option>
+                    <option value="annually">{language === 'ar' ? 'الخطة السنوية' : 'Annual Plan'}</option>
                   </select>
 
                   <select
@@ -1596,11 +1602,11 @@ export default function SuperAdminPanel({
                     onChange={(e) => setStatusFilter(e.target.value as any)}
                     className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white transition-colors font-semibold text-slate-700 min-w-[120px]"
                   >
-                    <option value="all">All Statuses</option>
-                    <option value="active">Active</option>
-                    <option value="near_expiry">Near Expiry</option>
-                    <option value="trial">Trial</option>
-                    <option value="expired">Expired</option>
+                    <option value="all">{language === 'ar' ? 'جميع الحالات' : 'All Statuses'}</option>
+                    <option value="active">{language === 'ar' ? 'نشط' : 'Active'}</option>
+                    <option value="near_expiry">{language === 'ar' ? 'قريب الانتهاء' : 'Near Expiry'}</option>
+                    <option value="trial">{language === 'ar' ? 'تجريبي' : 'Trial'}</option>
+                    <option value="expired">{language === 'ar' ? 'منتهي الصلاحية' : 'Expired'}</option>
                   </select>
                 </div>
               </div>
@@ -1608,16 +1614,16 @@ export default function SuperAdminPanel({
 
             {/* Subscriptions Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs font-sans" id="saas-subscriptions-table">
+              <table className="w-full text-start text-xs font-sans" id="saas-subscriptions-table">
                 <thead className="bg-slate-50 border-b border-slate-100 uppercase tracking-widest text-[9px] text-slate-400 font-semibold">
                   <tr>
-                    <th className="px-5 py-3">Property / Owner Details</th>
-                    <th className="px-5 py-3 text-center">Plan Tier</th>
-                    <th className="px-5 py-3 text-center">Discount Level</th>
-                    <th className="px-5 py-3 text-center">Status</th>
-                    <th className="px-5 py-3">License Expiration</th>
-                    <th className="px-5 py-3 text-right">Cumulative JOD</th>
-                    <th className="px-5 py-3 text-center">Actions</th>
+                    <th className="px-5 py-3 text-start">{language === 'ar' ? 'تفاصيل العقار / المالك' : 'Property / Owner Details'}</th>
+                    <th className="px-5 py-3 text-center">{language === 'ar' ? 'فئة الخطة' : 'Plan Tier'}</th>
+                    <th className="px-5 py-3 text-center">{language === 'ar' ? 'مستوى الخصم' : 'Discount Level'}</th>
+                    <th className="px-5 py-3 text-center">{language === 'ar' ? 'الحالة' : 'Status'}</th>
+                    <th className="px-5 py-3 text-start">{language === 'ar' ? 'انتهاء رخصة التشغيل' : 'License Expiration'}</th>
+                    <th className="px-5 py-3 text-end">{language === 'ar' ? 'الرسوم المتراكمة' : 'Cumulative JOD'}</th>
+                    <th className="px-5 py-3 text-center">{language === 'ar' ? 'العمليات' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
@@ -1653,7 +1659,7 @@ export default function SuperAdminPanel({
                       return (
                         <tr>
                           <td colSpan={7} className="text-center py-12 text-slate-400 text-xs italic">
-                            No property subscriptions match the selected filters.
+                            {language === 'ar' ? 'لا توجد اشتراكات عقارية تطابق الفلاتر المحددة.' : 'No property subscriptions match the selected filters.'}
                           </td>
                         </tr>
                       );
@@ -1666,18 +1672,18 @@ export default function SuperAdminPanel({
                       
                       const dbPlan = saasPlans.find(p => p.id === b.subscriptionPlan);
                       let planLabel = dbPlan 
-                        ? dbPlan.name 
+                        ? (language === 'ar' && dbPlan.name === 'Premium Monthly Plan' ? 'الخطة الشهرية المميزة' : language === 'ar' && dbPlan.name === 'Premium Annual Plan' ? 'الخطة السنوية المميزة' : dbPlan.name) 
                         : (b.subscriptionPlan && b.subscriptionPlan !== 'none' 
                             ? `${b.subscriptionPlan.charAt(0).toUpperCase() + b.subscriptionPlan.slice(1)} Plan` 
-                            : 'Trial License');
+                            : (language === 'ar' ? 'رخصة تجريبية' : 'Trial License'));
 
                       return (
                         <tr key={b.id} className="hover:bg-slate-50/50 transition-all">
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 text-start">
                             <span className="font-extrabold text-slate-800 block text-xs">{b.name}</span>
-                            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">{b.address || 'No Address'}</span>
+                            <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">{b.address || (language === 'ar' ? 'بدون عنوان' : 'No Address')}</span>
                             <span className="inline-block mt-1 text-[9px] font-mono font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md">
-                              Owner: {ownerName}
+                              {language === 'ar' ? 'المالك:' : 'Owner:'} {ownerName}
                             </span>
                           </td>
                           <td className="px-5 py-3.5 text-center">
@@ -1694,26 +1700,26 @@ export default function SuperAdminPanel({
                           <td className="px-5 py-3.5 text-center">
                             {isAddon ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 border border-emerald-100 text-emerald-700">
-                                Portfolio Discount ({multiPropCurrency} {multiPropAdditionalRate})
+                                {language === 'ar' ? `خصم المحفظة (${multiPropCurrency} ${multiPropAdditionalRate})` : `Portfolio Discount (${multiPropCurrency} ${multiPropAdditionalRate})`}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-50 text-slate-400">
-                                Primary Building Rate
+                                {language === 'ar' ? 'سعر المبنى الأساسي' : 'Primary Building Rate'}
                               </span>
                             )}
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
                               b.subscriptionStatus === 'active'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                : b.subscriptionStatus === 'expired'
-                                ? 'bg-rose-50 text-rose-700 border-rose-100'
-                                : 'bg-amber-50 text-amber-700 border-amber-100'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : b.subscriptionStatus === 'expired'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                  : 'bg-amber-50 text-amber-700 border-amber-100'
                             }`}>
-                              {b.subscriptionStatus || 'trial'}
+                              {b.subscriptionStatus === 'active' ? (language === 'ar' ? 'نشط' : 'active') : b.subscriptionStatus === 'expired' ? (language === 'ar' ? 'منتهي' : 'expired') : (language === 'ar' ? 'تجريبي' : 'trial')}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 text-start">
                             {b.subscriptionEndDate ? (
                               <div className="space-y-0.5">
                                 <span className="font-mono font-bold text-slate-700 block text-[11px]">
@@ -1728,19 +1734,19 @@ export default function SuperAdminPanel({
                                       : 'text-emerald-600'
                                   }`}>
                                     {daysRemaining < 0
-                                      ? `Expired ${Math.abs(daysRemaining)} days ago`
+                                      ? (language === 'ar' ? `انتهت الصلاحية منذ ${Math.abs(daysRemaining)} أيام` : `Expired ${Math.abs(daysRemaining)} days ago`)
                                       : daysRemaining === 0
-                                      ? 'Expires today!'
-                                      : `${daysRemaining} days remaining`}
+                                      ? (language === 'ar' ? 'تنتهي اليوم!' : 'Expires today!')
+                                      : (language === 'ar' ? `متبقي ${daysRemaining} يوم` : `${daysRemaining} days remaining`)}
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[10px] text-slate-400 italic">No expiration recorded</span>
+                              <span className="text-[10px] text-slate-400 italic">{language === 'ar' ? 'لم يسجل انتهاء للصلاحية' : 'No expiration recorded'}</span>
                             )}
                           </td>
-                          <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-800">
-                            JOD { (b.subscriptionAmountPaid || 0).toLocaleString() }
+                          <td className="px-5 py-3.5 text-end font-mono font-bold text-slate-800">
+                            {language === 'ar' ? 'د.أ ' : 'JOD '} { (b.subscriptionAmountPaid || 0).toLocaleString() }
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-1.5">
@@ -2849,179 +2855,260 @@ export default function SuperAdminPanel({
               </button>
             </div>
 
+            {/* Bilingual Editor Switcher Tabs */}
+            <div className="flex bg-slate-50 border border-slate-200/60 p-1.5 rounded-2xl max-w-sm gap-1.5">
+              <button
+                type="button"
+                onClick={() => setEditorLang('en')}
+                className={`flex-1 py-2 text-center text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                  editorLang === 'en'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                🇺🇸 English (Default)
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditorLang('ar')}
+                className={`flex-1 py-2 text-center text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                  editorLang === 'ar'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                🇯🇴 Arabic (المحتوى العربي)
+              </button>
+            </div>
+
+            {/* Global Visual Assets (Logo) */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+              <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Logo Image (Optional)</label>
+              <p className="text-[10px] text-slate-400 mb-3 font-medium">Upload a custom logo image. If provided, it will replace the text abbreviation on the landing page.</p>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                {landingConfigForm.siteLogoUrl ? (
+                  <div className="relative w-16 h-16 bg-slate-900 rounded-xl border border-slate-200 overflow-hidden group shrink-0">
+                    <img src={landingConfigForm.siteLogoUrl} className="w-full h-full object-contain" alt="Custom Logo" referrerPolicy="no-referrer" />
+                    <button
+                      type="button"
+                      onClick={() => setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: "" })}
+                      className="absolute inset-0 bg-red-600/90 text-white font-extrabold text-[9px] uppercase flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 bg-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">
+                    None
+                  </div>
+                )}
+                <div className="flex-1 w-full space-y-3">
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: reader.result as string });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-1">Or direct logo URL:</span>
+                    <input
+                      type="text"
+                      value={landingConfigForm.siteLogoUrl || ''}
+                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-hidden text-slate-600 font-medium"
+                      placeholder="https://example.com/logo.png"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Content Fields Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Site Name & Abbreviation */}
               <div>
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Name</label>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                  {editorLang === 'en' ? 'Site Name' : 'اسم الموقع (العربية)'}
+                </label>
                 <input
                   type="text"
                   required
-                  value={landingConfigForm.siteName || ''}
-                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteName: e.target.value })}
+                  value={editorLang === 'en' ? (landingConfigForm.siteName || '') : (landingConfigForm.siteNameAr || '')}
+                  onChange={(e) => setLandingConfigForm({ 
+                    ...landingConfigForm, 
+                    [editorLang === 'en' ? 'siteName' : 'siteNameAr']: e.target.value 
+                  })}
                   className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-bold"
-                  placeholder="e.g. bProp"
+                  placeholder={editorLang === 'en' ? 'e.g. bProp' : 'مثال: بي بروب'}
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Logo Abbreviation</label>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                  {editorLang === 'en' ? 'Site Logo Abbreviation' : 'اختصار شعار الموقع (العربية)'}
+                </label>
                 <input
                   type="text"
                   required
-                  value={landingConfigForm.siteLogoAbbrev || ''}
-                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteLogoAbbrev: e.target.value })}
+                  value={editorLang === 'en' ? (landingConfigForm.siteLogoAbbrev || '') : (landingConfigForm.siteLogoAbbrevAr || '')}
+                  onChange={(e) => setLandingConfigForm({ 
+                    ...landingConfigForm, 
+                    [editorLang === 'en' ? 'siteLogoAbbrev' : 'siteLogoAbbrevAr']: e.target.value 
+                  })}
                   className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-bold"
-                  placeholder="e.g. bP"
+                  placeholder={editorLang === 'en' ? 'e.g. bP' : 'مثال: ب ب'}
                 />
-              </div>
-
-              <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Site Logo Image (Optional)</label>
-                <p className="text-[10px] text-slate-400 mb-3 font-medium">Upload a custom logo image. If provided, it will replace the text abbreviation on the landing page.</p>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  {landingConfigForm.siteLogoUrl ? (
-                    <div className="relative w-16 h-16 bg-slate-900 rounded-xl border border-slate-200 overflow-hidden group shrink-0">
-                      <img src={landingConfigForm.siteLogoUrl} className="w-full h-full object-contain" alt="Custom Logo" referrerPolicy="no-referrer" />
-                      <button
-                        type="button"
-                        onClick={() => setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: "" })}
-                        className="absolute inset-0 bg-red-600/90 text-white font-extrabold text-[9px] uppercase flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 bg-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">
-                      None
-                    </div>
-                  )}
-                  <div className="flex-1 w-full space-y-3">
-                    <div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: reader.result as string });
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-1">Or direct logo URL:</span>
-                      <input
-                        type="text"
-                        value={landingConfigForm.siteLogoUrl || ''}
-                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, siteLogoUrl: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-hidden text-slate-600 font-medium"
-                        placeholder="https://example.com/logo.png"
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Hero Badge & Headline */}
               <div>
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Badge Text</label>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                  {editorLang === 'en' ? 'Hero Badge Text' : 'نص شارة الهيرو (العربية)'}
+                </label>
                 <input
                   type="text"
                   required
-                  value={landingConfigForm.heroBadge || ''}
-                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroBadge: e.target.value })}
+                  value={editorLang === 'en' ? (landingConfigForm.heroBadge || '') : (landingConfigForm.heroBadgeAr || '')}
+                  onChange={(e) => setLandingConfigForm({ 
+                    ...landingConfigForm, 
+                    [editorLang === 'en' ? 'heroBadge' : 'heroBadgeAr']: e.target.value 
+                  })}
                   className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
-                  placeholder="e.g. Next-Gen Property Ledgers"
+                  placeholder={editorLang === 'en' ? 'e.g. Next-Gen Property Ledgers' : 'مثال: سجلات عقارية من الجيل القادم'}
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Bold Title</label>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                  {editorLang === 'en' ? 'Hero Bold Title' : 'العنوان العريض للهيرو (العربية)'}
+                </label>
                 <input
                   type="text"
                   required
-                  value={landingConfigForm.heroTitle || ''}
-                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroTitle: e.target.value })}
+                  value={editorLang === 'en' ? (landingConfigForm.heroTitle || '') : (landingConfigForm.heroTitleAr || '')}
+                  onChange={(e) => setLandingConfigForm({ 
+                    ...landingConfigForm, 
+                    [editorLang === 'en' ? 'heroTitle' : 'heroTitleAr']: e.target.value 
+                  })}
                   className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
-                  placeholder="e.g. Ditch the Ledger Chaos."
+                  placeholder={editorLang === 'en' ? 'e.g. Ditch the Ledger Chaos.' : 'مثال: تخلص من فوضى الدفاتر الورقية.'}
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Title Gradient Phrase</label>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                  {editorLang === 'en' ? 'Hero Title Gradient Phrase' : 'عبارة العنوان الملون بالتدريج (العربية)'}
+                </label>
                 <input
                   type="text"
                   required
-                  value={landingConfigForm.heroTitleGradient || ''}
-                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroTitleGradient: e.target.value })}
+                  value={editorLang === 'en' ? (landingConfigForm.heroTitleGradient || '') : (landingConfigForm.heroTitleGradientAr || '')}
+                  onChange={(e) => setLandingConfigForm({ 
+                    ...landingConfigForm, 
+                    [editorLang === 'en' ? 'heroTitleGradient' : 'heroTitleGradientAr']: e.target.value 
+                  })}
                   className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 font-semibold"
-                  placeholder="e.g. Automate Property Financials."
+                  placeholder={editorLang === 'en' ? 'e.g. Automate Property Financials.' : 'مثال: أتمت الحسابات المالية للعقارات.'}
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Hero Description Text</label>
+                <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                  {editorLang === 'en' ? 'Hero Description Text' : 'نص وصف الهيرو (العربية)'}
+                </label>
                 <textarea
                   rows={3}
                   required
-                  value={landingConfigForm.heroDescription || ''}
-                  onChange={(e) => setLandingConfigForm({ ...landingConfigForm, heroDescription: e.target.value })}
+                  value={editorLang === 'en' ? (landingConfigForm.heroDescription || '') : (landingConfigForm.heroDescriptionAr || '')}
+                  onChange={(e) => setLandingConfigForm({ 
+                    ...landingConfigForm, 
+                    [editorLang === 'en' ? 'heroDescription' : 'heroDescriptionAr']: e.target.value 
+                  })}
                   className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 leading-relaxed"
-                  placeholder="Enter high-impact marketing value description..."
+                  placeholder={editorLang === 'en' ? 'Enter description...' : 'أدخل نص الوصف...'}
                 />
               </div>
             </div>
 
             <div className="border-t border-slate-100 pt-6">
-              <h4 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Features Section Copy</h4>
+              <h4 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">
+                {editorLang === 'en' ? 'Features Section Copy' : 'نصوص قسم الميزات (العربية)'}
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Features Main Title</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                    {editorLang === 'en' ? 'Features Main Title' : 'العنوان الرئيسي لقسم الميزات (العربية)'}
+                  </label>
                   <input
                     type="text"
                     required
-                    value={landingConfigForm.featuresTitle || ''}
-                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, featuresTitle: e.target.value })}
+                    value={editorLang === 'en' ? (landingConfigForm.featuresTitle || '') : (landingConfigForm.featuresTitleAr || '')}
+                    onChange={(e) => setLandingConfigForm({ 
+                      ...landingConfigForm, 
+                      [editorLang === 'en' ? 'featuresTitle' : 'featuresTitleAr']: e.target.value 
+                    })}
                     className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Features Sub-Description</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                    {editorLang === 'en' ? 'Features Sub-Description' : 'الوصف الفرعي لقسم الميزات (العربية)'}
+                  </label>
                   <input
                     type="text"
                     required
-                    value={landingConfigForm.featuresDescription || ''}
-                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, featuresDescription: e.target.value })}
+                    value={editorLang === 'en' ? (landingConfigForm.featuresDescription || '') : (landingConfigForm.featuresDescriptionAr || '')}
+                    onChange={(e) => setLandingConfigForm({ 
+                      ...landingConfigForm, 
+                      [editorLang === 'en' ? 'featuresDescription' : 'featuresDescriptionAr']: e.target.value 
+                    })}
                     className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
                   />
                 </div>
 
                 {/* Feature 1 */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
-                  <span className="text-[9px] font-extrabold font-mono text-blue-600 uppercase">FEATURE CARD #1 (Ledger)</span>
+                  <span className="text-[9px] font-extrabold font-mono text-blue-600 uppercase">
+                    {editorLang === 'en' ? 'FEATURE CARD #1 (Ledger)' : 'بطاقة الميزة الأولى (سجل الإيرادات)'}
+                  </span>
                   <div>
-                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Title</label>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">
+                      {editorLang === 'en' ? 'Title' : 'العنوان'}
+                    </label>
                     <input
                       type="text"
                       required
-                      value={landingConfigForm.feature1Title || ''}
-                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature1Title: e.target.value })}
+                      value={editorLang === 'en' ? (landingConfigForm.feature1Title || '') : (landingConfigForm.feature1TitleAr || '')}
+                      onChange={(e) => setLandingConfigForm({ 
+                        ...landingConfigForm, 
+                        [editorLang === 'en' ? 'feature1Title' : 'feature1TitleAr']: e.target.value 
+                      })}
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
                     />
                   </div>
                   <div>
-                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Description</label>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">
+                      {editorLang === 'en' ? 'Description' : 'الوصف'}
+                    </label>
                     <textarea
                       rows={2}
                       required
-                      value={landingConfigForm.feature1Desc || ''}
-                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature1Desc: e.target.value })}
+                      value={editorLang === 'en' ? (landingConfigForm.feature1Desc || '') : (landingConfigForm.feature1DescAr || '')}
+                      onChange={(e) => setLandingConfigForm({ 
+                        ...landingConfigForm, 
+                        [editorLang === 'en' ? 'feature1Desc' : 'feature1DescAr']: e.target.value 
+                      })}
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
                     />
                   </div>
@@ -3029,24 +3116,36 @@ export default function SuperAdminPanel({
 
                 {/* Feature 2 */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
-                  <span className="text-[9px] font-extrabold font-mono text-indigo-600 uppercase">FEATURE CARD #2 (Mobile optimized)</span>
+                  <span className="text-[9px] font-extrabold font-mono text-indigo-600 uppercase">
+                    {editorLang === 'en' ? 'FEATURE CARD #2 (Mobile optimized)' : 'بطاقة الميزة الثانية (الهواتف الذكية)'}
+                  </span>
                   <div>
-                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Title</label>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">
+                      {editorLang === 'en' ? 'Title' : 'العنوان'}
+                    </label>
                     <input
                       type="text"
                       required
-                      value={landingConfigForm.feature2Title || ''}
-                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature2Title: e.target.value })}
+                      value={editorLang === 'en' ? (landingConfigForm.feature2Title || '') : (landingConfigForm.feature2TitleAr || '')}
+                      onChange={(e) => setLandingConfigForm({ 
+                        ...landingConfigForm, 
+                        [editorLang === 'en' ? 'feature2Title' : 'feature2TitleAr']: e.target.value 
+                      })}
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
                     />
                   </div>
                   <div>
-                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Description</label>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">
+                      {editorLang === 'en' ? 'Description' : 'الوصف'}
+                    </label>
                     <textarea
                       rows={2}
                       required
-                      value={landingConfigForm.feature2Desc || ''}
-                      onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature2Desc: e.target.value })}
+                      value={editorLang === 'en' ? (landingConfigForm.feature2Desc || '') : (landingConfigForm.feature2DescAr || '')}
+                      onChange={(e) => setLandingConfigForm({ 
+                        ...landingConfigForm, 
+                        [editorLang === 'en' ? 'feature2Desc' : 'feature2DescAr']: e.target.value 
+                      })}
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
                     />
                   </div>
@@ -3054,25 +3153,37 @@ export default function SuperAdminPanel({
 
                 {/* Feature 3 */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3 md:col-span-2">
-                  <span className="text-[9px] font-extrabold font-mono text-emerald-600 uppercase">FEATURE CARD #3 (Secure Cloud Sync)</span>
+                  <span className="text-[9px] font-extrabold font-mono text-emerald-600 uppercase">
+                    {editorLang === 'en' ? 'FEATURE CARD #3 (Secure Cloud Sync)' : 'بطاقة الميزة الثالثة (المزامنة السحابية)'}
+                  </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Title</label>
+                      <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">
+                        {editorLang === 'en' ? 'Title' : 'العنوان'}
+                      </label>
                       <input
                         type="text"
                         required
-                        value={landingConfigForm.feature3Title || ''}
-                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature3Title: e.target.value })}
+                        value={editorLang === 'en' ? (landingConfigForm.feature3Title || '') : (landingConfigForm.feature3TitleAr || '')}
+                        onChange={(e) => setLandingConfigForm({ 
+                          ...landingConfigForm, 
+                          [editorLang === 'en' ? 'feature3Title' : 'feature3TitleAr']: e.target.value 
+                        })}
                         className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">Description</label>
+                      <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase">
+                        {editorLang === 'en' ? 'Description' : 'الوصف'}
+                      </label>
                       <textarea
                         rows={2}
                         required
-                        value={landingConfigForm.feature3Desc || ''}
-                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, feature3Desc: e.target.value })}
+                        value={editorLang === 'en' ? (landingConfigForm.feature3Desc || '') : (landingConfigForm.feature3DescAr || '')}
+                        onChange={(e) => setLandingConfigForm({ 
+                          ...landingConfigForm, 
+                          [editorLang === 'en' ? 'feature3Desc' : 'feature3DescAr']: e.target.value 
+                        })}
                         className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
                       />
                     </div>
@@ -3082,49 +3193,73 @@ export default function SuperAdminPanel({
             </div>
 
             <div className="border-t border-slate-100 pt-6">
-              <h4 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">Audit & Conversion Copy</h4>
+              <h4 className="text-xs font-bold text-slate-700 mb-4 uppercase tracking-wider">
+                {editorLang === 'en' ? 'Audit & Conversion Copy' : 'سجل المراجعة ونصوص الإجراء (العربية)'}
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Audit History Title</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                    {editorLang === 'en' ? 'Audit History Title' : 'عنوان سجل المراجعة (العربية)'}
+                  </label>
                   <input
                     type="text"
                     required
-                    value={landingConfigForm.auditTitle || ''}
-                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, auditTitle: e.target.value })}
+                    value={editorLang === 'en' ? (landingConfigForm.auditTitle || '') : (landingConfigForm.auditTitleAr || '')}
+                    onChange={(e) => setLandingConfigForm({ 
+                      ...landingConfigForm, 
+                      [editorLang === 'en' ? 'auditTitle' : 'auditTitleAr']: e.target.value 
+                    })}
                     className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">Audit History Description</label>
+                  <label className="text-[10px] font-extrabold text-slate-500 block mb-1 uppercase tracking-wider">
+                    {editorLang === 'en' ? 'Audit History Description' : 'وصف سجل المراجعة (العربية)'}
+                  </label>
                   <textarea
                     rows={2}
                     required
-                    value={landingConfigForm.auditDesc || ''}
-                    onChange={(e) => setLandingConfigForm({ ...landingConfigForm, auditDesc: e.target.value })}
+                    value={editorLang === 'en' ? (landingConfigForm.auditDesc || '') : (landingConfigForm.auditDescAr || '')}
+                    onChange={(e) => setLandingConfigForm({ 
+                      ...landingConfigForm, 
+                      [editorLang === 'en' ? 'auditDesc' : 'auditDescAr']: e.target.value 
+                    })}
                     className="w-full px-4 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:bg-white focus:border-red-500 text-slate-800 leading-relaxed"
                   />
                 </div>
 
                 <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-150 space-y-4">
-                  <span className="text-[9px] font-extrabold font-mono text-red-700 uppercase">Bottom Conversion CTA Card</span>
+                  <span className="text-[9px] font-extrabold font-mono text-red-700 uppercase">
+                    {editorLang === 'en' ? 'Bottom Conversion CTA Card' : 'بطاقة الدعوة للإجراء السفلية (العربية)'}
+                  </span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] font-extrabold text-slate-500 block mb-1 uppercase">CTA Card Title</label>
+                      <label className="text-[9px] font-extrabold text-slate-500 block mb-1 uppercase">
+                        {editorLang === 'en' ? 'CTA Card Title' : 'العنوان'}
+                      </label>
                       <input
                         type="text"
                         required
-                        value={landingConfigForm.ctaTitle || ''}
-                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, ctaTitle: e.target.value })}
+                        value={editorLang === 'en' ? (landingConfigForm.ctaTitle || '') : (landingConfigForm.ctaTitleAr || '')}
+                        onChange={(e) => setLandingConfigForm({ 
+                          ...landingConfigForm, 
+                          [editorLang === 'en' ? 'ctaTitle' : 'ctaTitleAr']: e.target.value 
+                        })}
                         className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-extrabold text-slate-500 block mb-1 uppercase">CTA Card Description</label>
+                      <label className="text-[9px] font-extrabold text-slate-500 block mb-1 uppercase">
+                        {editorLang === 'en' ? 'CTA Card Description' : 'الوصف'}
+                      </label>
                       <textarea
                         rows={2}
                         required
-                        value={landingConfigForm.ctaDesc || ''}
-                        onChange={(e) => setLandingConfigForm({ ...landingConfigForm, ctaDesc: e.target.value })}
+                        value={editorLang === 'en' ? (landingConfigForm.ctaDesc || '') : (landingConfigForm.ctaDescAr || '')}
+                        onChange={(e) => setLandingConfigForm({ 
+                          ...landingConfigForm, 
+                          [editorLang === 'en' ? 'ctaDesc' : 'ctaDescAr']: e.target.value 
+                        })}
                         className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-800 leading-normal"
                       />
                     </div>

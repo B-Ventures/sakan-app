@@ -9,6 +9,7 @@ import { Plus, Check, Clock, AlertTriangle, Search, Send, Receipt, Printer, Tras
 import { getReceiptWhatsAppLink } from '../utils/whatsapp';
 import html2canvas from 'html2canvas';
 import ConfirmationDialog from './ConfirmationDialog';
+import { useLanguage } from '../context/LanguageContext';
 
 interface PaymentHistoryProps {
   payments: Payment[];
@@ -33,6 +34,7 @@ export default function PaymentHistory({
   customIncomeCategories,
   activeBuilding,
 }: PaymentHistoryProps) {
+  const { t, language } = useLanguage();
   const normalizedMethods = React.useMemo(() => {
     return normalizePaymentMethods(customPaymentMethods, activeBuilding?.bankTransferId);
   }, [customPaymentMethods, activeBuilding]);
@@ -683,15 +685,19 @@ export default function PaymentHistory({
       {/* Header sections */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Income Collections Ledger</h2>
-          <p className="text-xs text-slate-400">Track invoices, pending balances, and distribute WhatsApp Receipts</p>
+          <h2 className="text-xl font-bold text-slate-800">
+            {language === 'ar' ? 'سجل تحصيل الإيرادات' : 'Income Collections Ledger'}
+          </h2>
+          <p className="text-xs text-slate-400">
+            {language === 'ar' ? 'تتبع الفواتير والأرصدة المعلقة وتوزيع إيصالات واتساب' : 'Track invoices, pending balances, and distribute WhatsApp Receipts'}
+          </p>
         </div>
         <button
           onClick={openAddForm}
           className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Log Payment
+          {language === 'ar' ? 'تسجيل دفعة إيراد' : 'Log Payment'}
         </button>
       </div>
 
@@ -709,7 +715,11 @@ export default function PaymentHistory({
                   filterStatus === st ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                {st === 'all' ? 'All Statuses' : st}
+                {st === 'all' 
+                  ? (language === 'ar' ? 'جميع الحالات' : 'All Statuses') 
+                  : (st === 'Paid' ? (language === 'ar' ? 'مدفوع' : 'Paid')
+                     : st === 'Pending' ? (language === 'ar' ? 'قيد الانتظار' : 'Pending')
+                     : (language === 'ar' ? 'متأخر' : 'Overdue'))}
               </button>
             ))}
           </div>
@@ -717,7 +727,9 @@ export default function PaymentHistory({
           {/* Proper Date Filter Inputs */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">From:</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                {language === 'ar' ? 'من:' : 'From:'}
+              </span>
               <input
                 type="date"
                 value={filterStartDate}
@@ -727,7 +739,9 @@ export default function PaymentHistory({
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">To:</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                {language === 'ar' ? 'إلى:' : 'To:'}
+              </span>
               <input
                 type="date"
                 value={filterEndDate}
@@ -744,7 +758,7 @@ export default function PaymentHistory({
                 }}
                 className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider cursor-pointer"
               >
-                Clear Dates
+                {language === 'ar' ? 'مسح التواريخ' : 'Clear Dates'}
               </button>
             )}
           </div>
@@ -752,15 +766,15 @@ export default function PaymentHistory({
 
         {/* Search */}
         <div className="relative w-full xl:w-80">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">
+          <span className="absolute inset-y-0 start-0 flex items-center ps-3 text-slate-400 pointer-events-none">
             <Search className="w-4 h-4" />
           </span>
           <input
             type="text"
-            placeholder="Search occupant, unit, receipt no..."
+            placeholder={language === 'ar' ? 'البحث عن الساكن، الوحدة، رقم الإيصال...' : 'Search occupant, unit, receipt no...'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full text-xs py-2 pl-9 pr-4 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50/50"
+            className="w-full text-xs py-2 ps-9 pe-4 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50/50"
           />
         </div>
       </div>
@@ -768,41 +782,41 @@ export default function PaymentHistory({
       {/* Ledger list */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden" id="payments-table-container">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-start border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50 select-none">
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('tenantName')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('tenantName')}>
                   <div className="flex items-center gap-1">
-                    Receipt No & Beneficiary
+                    {language === 'ar' ? 'رقم الإيصال والمستفيد' : 'Receipt No & Beneficiary'}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'tenantName' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
                 <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('unit')}>
                   <div className="flex items-center justify-center gap-1">
-                    Unit
+                    {language === 'ar' ? 'الوحدة' : 'Unit'}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'unit' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('monthPaidFor')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('monthPaidFor')}>
                   <div className="flex items-center gap-1">
-                    Period
+                    {language === 'ar' ? 'الفترة' : 'Period'}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'monthPaidFor' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('amount')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('amount')}>
                   <div className="flex items-center gap-1">
-                    Financial Amount
+                    {language === 'ar' ? 'المبلغ المالي' : 'Financial Amount'}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'amount' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('date')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('date')}>
                   <div className="flex items-center gap-1">
-                    Method & Date
+                    {language === 'ar' ? 'الطريقة والتاريخ' : 'Method & Date'}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'date' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-4 text-center">{language === 'ar' ? 'الحالة' : 'Status'}</th>
+                <th className="py-3.5 px-4 text-end">{language === 'ar' ? 'العمليات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/50">
@@ -880,10 +894,14 @@ export default function PaymentHistory({
                         ) : (
                           <AlertTriangle className="w-2.5 h-2.5" />
                         )}
-                        {p.status}
+                        {p.status === 'Paid' 
+                          ? (language === 'ar' ? 'مدفوع' : 'Paid') 
+                          : p.status === 'Pending' 
+                          ? (language === 'ar' ? 'قيد الانتظار' : 'Pending') 
+                          : (language === 'ar' ? 'متأخر' : 'Overdue')}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-right">
+                    <td className="py-4 px-4 text-end">
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Edit entry */}
                         <button
@@ -902,10 +920,10 @@ export default function PaymentHistory({
                               onUpdatePaymentStatus(p.id, 'Paid', today);
                             }}
                             className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
-                            title="Mark as Paid"
+                            title={language === 'ar' ? 'تعيين كمدفوع' : 'Mark as Paid'}
                           >
                             <Check className="w-3.5 h-3.5" />
-                            Settle
+                            {language === 'ar' ? 'تسوية' : 'Settle'}
                           </button>
                         )}
 
@@ -961,8 +979,12 @@ export default function PaymentHistory({
                 <tr>
                   <td colSpan={7} className="text-center py-16 text-slate-400 bg-white">
                     <Receipt className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-slate-600">No income statements registered</p>
-                    <p className="text-xs text-slate-400 mt-1">Try resetting filter or record a new receipt.</p>
+                    <p className="text-sm font-semibold text-slate-600">
+                      {language === 'ar' ? 'لا يوجد قيود إيرادات مسجلة' : 'No income statements registered'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {language === 'ar' ? 'يرجى تعديل معايير البحث أو تسجيل دفعة جديدة.' : 'Try resetting filter or record a new receipt.'}
+                    </p>
                   </td>
                 </tr>
               )}
@@ -975,7 +997,7 @@ export default function PaymentHistory({
       {totalPages > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs text-slate-500 font-sans" id="payment-history-pagination">
           <div className="flex items-center gap-2">
-            <span>Show</span>
+            <span>{language === 'ar' ? 'عرض' : 'Show'}</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
@@ -985,13 +1007,25 @@ export default function PaymentHistory({
               className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold focus:outline-none cursor-pointer"
             >
               {[5, 10, 15, 25, 50, 100].map(sz => (
-                <option key={sz} value={sz}>{sz} rows</option>
+                <option key={sz} value={sz}>
+                  {language === 'ar' ? `${sz} صفوف` : `${sz} rows`}
+                </option>
               ))}
             </select>
             <span>
-              Showing <strong className="text-slate-700">{sortedPayments.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
-              <strong className="text-slate-700">{Math.min(sortedPayments.length, currentPage * itemsPerPage)}</strong> of{" "}
-              <strong className="text-slate-700">{sortedPayments.length}</strong> statements
+              {language === 'ar' ? (
+                <>
+                  عرض <strong className="text-slate-700">{sortedPayments.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> إلى{" "}
+                  <strong className="text-slate-700">{Math.min(sortedPayments.length, currentPage * itemsPerPage)}</strong> من إجمالي{" "}
+                  <strong className="text-slate-700">{sortedPayments.length}</strong> قيود
+                </>
+              ) : (
+                <>
+                  Showing <strong className="text-slate-700">{sortedPayments.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
+                  <strong className="text-slate-700">{Math.min(sortedPayments.length, currentPage * itemsPerPage)}</strong> of{" "}
+                  <strong className="text-slate-700">{sortedPayments.length}</strong> statements
+                </>
+              )}
             </span>
           </div>
 
@@ -1073,7 +1107,9 @@ export default function PaymentHistory({
           <div className="bg-white rounded-2xl max-w-md w-full border shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in-50 duration-200">
             <div className="bg-slate-50 border-b p-5 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-slate-800">
-                {editingPayment ? 'Edit Payment Log' : 'Log Payment'}
+                {editingPayment 
+                  ? (language === 'ar' ? 'تعديل سجل الدفعة' : 'Edit Payment Log') 
+                  : (language === 'ar' ? 'تسجيل دفعة جديدة' : 'Log Payment')}
               </h3>
               <button
                 onClick={closeForm}
@@ -1085,25 +1121,33 @@ export default function PaymentHistory({
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Select Unit & Resident *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
+                  {language === 'ar' ? 'اختر الوحدة والمستأجر *' : 'Select Unit & Resident *'}
+                </label>
                 <select
                   required
                   value={selectedTenantId}
                   onChange={(e) => handleTenantSelectChange(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-violet-500 bg-white"
                 >
-                  <option value="">-- Choose Resident / Reference --</option>
+                  <option value="">
+                    {language === 'ar' ? '-- اختر المستأجر / المرجع --' : '-- Choose Resident / Reference --'}
+                  </option>
                   {tenants
                     .map(t => (
                       <option key={t.id} value={t.id}>
-                        Unit {t.unit} - {t.name} (Share: {formatCurrency(t.monthlyRent, activeBuilding?.currency || 'JOD')})
+                        {language === 'ar' 
+                          ? `وحدة ${t.unit} - ${t.name} (الحصة: ${formatCurrency(t.monthlyRent, activeBuilding?.currency || 'JOD')})` 
+                          : `Unit ${t.unit} - ${t.name} (Share: ${formatCurrency(t.monthlyRent, activeBuilding?.currency || 'JOD')})`}
                       </option>
                     ))}
                 </select>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Period Duration</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {language === 'ar' ? 'فترة الدفع' : 'Period Duration'}
+                </label>
                 <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded-xl">
                   <button
                     type="button"
@@ -1114,7 +1158,7 @@ export default function PaymentHistory({
                         : 'text-slate-400 hover:text-slate-600'
                     }`}
                   >
-                    Single Month
+                    {language === 'ar' ? 'شهر واحد' : 'Single Month'}
                   </button>
                   <button
                     type="button"
@@ -1125,7 +1169,7 @@ export default function PaymentHistory({
                         : 'text-slate-400 hover:text-slate-600'
                     }`}
                   >
-                    Multiple Months
+                    {language === 'ar' ? 'أشهر متعددة' : 'Multiple Months'}
                   </button>
                 </div>
               </div>
@@ -1133,7 +1177,9 @@ export default function PaymentHistory({
               {billingMonthType === 'single' ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Billing Month *</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      {language === 'ar' ? 'شهر الفوترة *' : 'Billing Month *'}
+                    </label>
                     <input
                        type="month"
                        required
@@ -1147,7 +1193,9 @@ export default function PaymentHistory({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Total Dynamic Sum</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      {language === 'ar' ? 'المجموع الإجمالي' : 'Total Dynamic Sum'}
+                    </label>
                     <div className="w-full text-xs p-2.5 rounded-xl border bg-slate-50 text-slate-700 font-mono font-bold">
                       {formatCurrency(amount, activeBuilding?.currency || 'JOD')}
                     </div>
@@ -1156,7 +1204,9 @@ export default function PaymentHistory({
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 truncate mb-1">Start Month *</label>
+                    <label className="block text-[11px] font-semibold text-slate-500 truncate mb-1">
+                      {language === 'ar' ? 'شهر البدء *' : 'Start Month *'}
+                    </label>
                     <input
                        type="month"
                        required
@@ -1166,7 +1216,9 @@ export default function PaymentHistory({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 truncate mb-1">End Month *</label>
+                    <label className="block text-[11px] font-semibold text-slate-500 truncate mb-1">
+                      {language === 'ar' ? 'شهر الانتهاء *' : 'End Month *'}
+                    </label>
                     <input
                        type="month"
                        required
@@ -1176,7 +1228,9 @@ export default function PaymentHistory({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 truncate mb-1">Total</label>
+                    <label className="block text-[11px] font-semibold text-slate-500 truncate mb-1">
+                      {language === 'ar' ? 'الإجمالي' : 'Total'}
+                    </label>
                     <div className="w-full text-[11px] p-2 border bg-slate-50 text-slate-700 font-mono font-bold flex items-center justify-center rounded-xl">
                       {formatCurrency(amount, activeBuilding?.currency || 'JOD')}
                     </div>
@@ -1186,7 +1240,9 @@ export default function PaymentHistory({
 
               {/* Dynamic Itemized Split Formulary */}
               <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Income Categories Covered by Payment</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">
+                  {language === 'ar' ? 'فئات الإيرادات المشمولة بالدفع' : 'Income Categories Covered by Payment'}
+                </span>
                 
                 <div className="space-y-2">
                   {customIncomeCategories.map(cat => (
@@ -1212,7 +1268,9 @@ export default function PaymentHistory({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Method</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {language === 'ar' ? 'الطريقة' : 'Method'}
+                  </label>
                   <select
                     value={method}
                     onChange={(e) => {
@@ -1241,22 +1299,26 @@ export default function PaymentHistory({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {language === 'ar' ? 'الحالة' : 'Status'}
+                  </label>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as any)}
                     className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
                   >
-                    <option value="Paid">Paid</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Overdue">Overdue</option>
+                    <option value="Paid">{language === 'ar' ? 'مدفوع' : 'Paid'}</option>
+                    <option value="Pending">{language === 'ar' ? 'قيد الانتظار' : 'Pending'}</option>
+                    <option value="Overdue">{language === 'ar' ? 'متأخر' : 'Overdue'}</option>
                   </select>
                 </div>
               </div>
 
               {status === 'Paid' && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Payment Date</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {language === 'ar' ? 'تاريخ الدفع' : 'Payment Date'}
+                  </label>
                   <input
                     type="date"
                     required
@@ -1268,9 +1330,11 @@ export default function PaymentHistory({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Internal Notes</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
+                  {language === 'ar' ? 'ملاحظات داخلية' : 'Internal Notes'}
+                </label>
                 <textarea
-                  placeholder="Memo, check number, bank auth reference ID..."
+                  placeholder={language === 'ar' ? 'مذكرة، رقم الشيك، المرجع البنكي...' : 'Memo, check number, bank auth reference ID...'}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 h-16 resize-none"
@@ -1283,14 +1347,16 @@ export default function PaymentHistory({
                   onClick={closeForm}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-colors"
                 >
-                  Cancel
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   disabled={!selectedTenantId}
                   className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
                 >
-                  {editingPayment ? 'Save Transaction Changes' : 'Log Payment Statement'}
+                  {editingPayment 
+                    ? (language === 'ar' ? 'حفظ التغييرات' : 'Save Transaction Changes') 
+                    : (language === 'ar' ? 'تسجيل بيان الدفعة' : 'Log Payment Statement')}
                 </button>
               </div>
             </form>
@@ -1375,25 +1441,29 @@ export default function PaymentHistory({
             </div>
 
             {/* Printable Receipt Paper */}
-            <div className="p-6 bg-white space-y-6 overflow-y-auto flex-1" id="receipt-print-area">
+            <div className="p-6 bg-white space-y-6 overflow-y-auto flex-1 text-start" id="receipt-print-area">
               <div className="text-center">
-                <h4 className="text-md font-extrabold text-slate-900 uppercase tracking-widest">{viewingReceipt.tenantName ? (activeBuilding?.name || 'Grandview Residences') : 'Property Receipt'}</h4>
-                <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">{activeBuilding?.address || 'Premium Building Management'}</p>
+                <h4 className="text-md font-extrabold text-slate-900 uppercase tracking-widest">
+                  {viewingReceipt.tenantName 
+                    ? (activeBuilding?.name || (language === 'ar' ? 'أبراج المجمع السكني' : 'Grandview Residences')) 
+                    : (language === 'ar' ? 'إيصال مالي' : 'Property Receipt')}
+                </h4>
+                <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">{activeBuilding?.address || (language === 'ar' ? 'إدارة العقارات المتميزة' : 'Premium Building Management')}</p>
                 <div className="w-12 h-1 bg-blue-500 mx-auto mt-3 rounded-full"></div>
               </div>
 
               {/* Receipt Code and stamp */}
               <div className="border border-slate-100 p-3 rounded-xl bg-slate-50/50 flex justify-between items-center text-xs">
                 <div>
-                  <span className="text-slate-400 block font-medium">Receipt Code</span>
+                  <span className="text-slate-400 block font-medium">{language === 'ar' ? 'رمز الإيصال' : 'Receipt Code'}</span>
                   <span className="font-mono font-bold text-slate-800">{viewingReceipt.receiptNumber}</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-slate-400 block font-medium">Status</span>
+                <div className="text-end">
+                  <span className="text-slate-400 block font-medium">{language === 'ar' ? 'الحالة' : 'Status'}</span>
                   <span className={`font-bold uppercase text-[9px] px-2 py-0.5 rounded-full ${
                     viewingReceipt.status === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-500'
                   }`}>
-                    {viewingReceipt.status}
+                    {viewingReceipt.status === 'Paid' ? (language === 'ar' ? 'مدفوع' : 'Paid') : (language === 'ar' ? 'قيد الانتظار' : viewingReceipt.status)}
                   </span>
                 </div>
               </div>
@@ -1401,21 +1471,21 @@ export default function PaymentHistory({
               {/* Invoice Lines */}
               <div className="space-y-3.5 text-xs text-slate-700">
                 <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
-                  <span className="text-slate-400">Received From</span>
+                  <span className="text-slate-400">{language === 'ar' ? 'استلم من السيد/ة' : 'Received From'}</span>
                   <span className="font-bold text-slate-800">{viewingReceipt.tenantName}</span>
                 </div>
                 <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
-                  <span className="text-slate-400">Rental Unit</span>
-                  <span className="font-bold text-slate-800 font-mono">Unit {viewingReceipt.unit}</span>
+                  <span className="text-slate-400">{language === 'ar' ? 'الوحدة الإيجارية' : 'Rental Unit'}</span>
+                  <span className="font-bold text-slate-800 font-mono">{language === 'ar' ? 'وحدة' : 'Unit'} {viewingReceipt.unit}</span>
                 </div>
                 <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
-                  <span className="text-slate-400">Statement Month</span>
+                  <span className="text-slate-400">{language === 'ar' ? 'شهر المطالبة' : 'Statement Month'}</span>
                   <span className="font-bold text-slate-800">{viewingReceipt.monthPaidFor}</span>
                 </div>
                 
                 {/* Itemized Splits display */}
                 <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2 mt-2">
-                  <div className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-1">Income Breakdown</div>
+                  <div className="font-bold text-[10px] text-slate-400 uppercase tracking-wider mb-1">{language === 'ar' ? 'تفصيل الدفعات' : 'Income Breakdown'}</div>
                   {customIncomeCategories.map((cat, idx) => {
                     const defaultG = activeBuilding?.defaultGuardFee ?? 50;
                     const defaultM = activeBuilding?.defaultMaintenanceFee ?? 30;
@@ -1436,13 +1506,13 @@ export default function PaymentHistory({
                 </div>
 
                 <div className="flex justify-between border-b border-dashed border-slate-100 pb-2 pt-1">
-                  <span className="text-slate-400">Payment Option</span>
+                  <span className="text-slate-400">{language === 'ar' ? 'طريقة الدفع' : 'Payment Option'}</span>
                   <span className="font-bold text-slate-800">{viewingReceipt.method}</span>
                 </div>
 
                 {viewingReceipt.method === 'Bank Transfer' && viewingReceipt.transferId && (
                   <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
-                    <span className="text-slate-400">Transfer ID / ALIAS</span>
+                    <span className="text-slate-400">{language === 'ar' ? 'رقم التحويل / الاسم المستعار' : 'Transfer ID / ALIAS'}</span>
                     <span className="font-bold text-slate-800 font-mono text-xs">{viewingReceipt.transferId}</span>
                   </div>
                 )}
@@ -1450,7 +1520,7 @@ export default function PaymentHistory({
                 {viewingReceipt.method === 'Credit Card' && viewingReceipt.paymentLink && (
                   <div className="flex flex-col gap-1 border-b border-dashed border-slate-100 pb-2">
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Card Payment Link</span>
+                      <span className="text-slate-400">{language === 'ar' ? 'رابط الدفع بالبطاقة' : 'Card Payment Link'}</span>
                       <span className="font-bold text-purple-750 text-xs font-mono select-all truncate max-w-[150px]" title={viewingReceipt.paymentLink}>
                         {viewingReceipt.paymentLink}
                       </span>
@@ -1461,13 +1531,13 @@ export default function PaymentHistory({
                       rel="noopener noreferrer"
                       className="text-center bg-violet-50 hover:bg-violet-100 text-violet-750 font-bold text-[10px] py-1.5 rounded-lg border border-violet-200/50 mt-1 uppercase tracking-wide no-print"
                     >
-                      💳 Go to Payment Page (Phase 2 Preview)
+                      💳 {language === 'ar' ? 'اذهب إلى صفحة الدفع (معاينة المرحلة الثانية)' : 'Go to Payment Page (Phase 2 Preview)'}
                     </a>
                   </div>
                 )}
                 {viewingReceipt.date && (
                   <div className="flex justify-between border-b border-dashed border-slate-100 pb-2">
-                    <span className="text-slate-400">Settled Date</span>
+                    <span className="text-slate-400">{language === 'ar' ? 'تاريخ السداد' : 'Settled Date'}</span>
                     <span className="font-bold text-slate-800 font-mono">{viewingReceipt.date}</span>
                   </div>
                 )}
@@ -1475,7 +1545,7 @@ export default function PaymentHistory({
 
               {/* Grand Total section */}
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center">
-                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider">Total Amount Cleared</span>
+                <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider">{language === 'ar' ? 'إجمالي المبلغ المقبوض' : 'Total Amount Cleared'}</span>
                 <div className="text-2xl font-extrabold text-slate-900 mt-1 font-mono">
                   {formatCurrency(viewingReceipt.amount, activeBuilding?.currency || 'JOD')}
                 </div>
@@ -1497,32 +1567,36 @@ export default function PaymentHistory({
             {/* Digital Share & Screenshot Helpers (No Print) */}
             <div className="bg-slate-50 border-t px-5 py-4 space-y-3.5 no-print text-xs shrink-0">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-700 tracking-wide uppercase text-[10px]">Digital Share Panel</span>
+                <span className="font-bold text-slate-700 tracking-wide uppercase text-[10px]">
+                  {language === 'ar' ? 'لوحة المشاركة الرقمية' : 'Digital Share Panel'}
+                </span>
                 
                 {/* Image status dynamic badge */}
                 {imageStatus === 'rendering' && (
                   <span className="text-[10px] text-blue-600 font-semibold animate-pulse flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
-                    Generating Receipt Image...
+                    {language === 'ar' ? 'جاري توليد صورة الإيصال...' : 'Generating Receipt Image...'}
                   </span>
                 )}
                 {imageStatus === 'copied' && (
                   <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 animate-none">
-                    ✓ Image copied!
+                    {language === 'ar' ? '✓ تم نسخ الصورة!' : '✓ Image copied!'}
                   </span>
                 )}
                 {imageStatus === 'downloaded' && (
                   <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 animate-none">
-                    ✓ Downloaded PNG
+                    {language === 'ar' ? '✓ تم تحميل PNG' : '✓ Downloaded PNG'}
                   </span>
                 )}
                 {imageStatus === 'error' && (
                   <span className="text-[10px] text-rose-600 font-semibold animate-none">
-                    ⚠ Failed to capture receipt
+                    {language === 'ar' ? '⚠ فشل التقاط الإيصال' : '⚠ Failed to capture receipt'}
                   </span>
                 )}
                 {imageStatus === 'idle' && (
-                  <span className="text-[9.5px] text-slate-400">Attach receipt photo instantly</span>
+                  <span className="text-[9.5px] text-slate-400">
+                    {language === 'ar' ? 'إرفاق صورة الإيصال فورًا' : 'Attach receipt photo instantly'}
+                  </span>
                 )}
               </div>
 
@@ -1532,32 +1606,42 @@ export default function PaymentHistory({
                   onClick={handleCopyImageToClipboard}
                   disabled={imageStatus === 'rendering'}
                   className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
-                  title="Render receipt as PNG and copy to keyboard"
+                  title={language === 'ar' ? 'عرض الإيصال كصورة ونسخه' : 'Render receipt as PNG and copy to keyboard'}
                 >
                   <Copy className="w-3.5 h-3.5 text-blue-500" />
-                  Copy Image
+                  {language === 'ar' ? 'نسخ الصورة' : 'Copy Image'}
                 </button>
 
                 <button
                   onClick={handleDownloadPNG}
                   disabled={imageStatus === 'rendering'}
                   className="flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
-                  title="Download receipt as PNG image to device"
+                  title={language === 'ar' ? 'تحميل صورة الإيصال إلى جهازك' : 'Download receipt as PNG image to device'}
                 >
                   <Download className="w-3.5 h-3.5 text-slate-500" />
-                  Download PNG
+                  {language === 'ar' ? 'تحميل PNG' : 'Download PNG'}
                 </button>
               </div>
 
               {/* Explain explicit instruction to send with image */}
               <div className="bg-blue-50/40 border border-blue-100/30 p-2.5 rounded-xl space-y-1 text-[10.5px] leading-relaxed text-slate-500">
                 <p className="text-slate-600 font-medium">
-                  💡 How to send on WhatsApp with the Receipt Image:
+                  {language === 'ar' ? '💡 كيفية الإرسال عبر واتساب مع صورة الإيصال:' : '💡 How to send on WhatsApp with the Receipt Image:'}
                 </p>
                 <ol className="list-decimal list-inside space-y-0.5 text-[10px] pl-0.5">
-                  <li>Click <strong className="text-slate-700">Copy Image</strong> (saves PNG to keyboard clipboard).</li>
-                  <li>Click <strong className="text-slate-700">Send to WhatsApp</strong> below (opens the chat).</li>
-                  <li>Simply <strong className="text-slate-700">Paste (Ctrl+V / Cmd+V)</strong> in WhatsApp to send image!</li>
+                  {language === 'ar' ? (
+                    <>
+                      <li>اضغط على <strong className="text-slate-700">نسخ الصورة</strong> (لحفظ صورة PNG في الحافظة).</li>
+                      <li>اضغط على <strong className="text-slate-700">الإرسال إلى واتساب</strong> أدناه (لفتح المحادثة).</li>
+                      <li>ما عليك سوى عمل <strong className="text-slate-700">لصق (Ctrl+V / Cmd+V)</strong> في واتساب لإرسال الصورة!</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>Click <strong className="text-slate-700">Copy Image</strong> (saves PNG to keyboard clipboard).</li>
+                      <li>Click <strong className="text-slate-700">Send to WhatsApp</strong> below (opens the chat).</li>
+                      <li>Simply <strong className="text-slate-700">Paste (Ctrl+V / Cmd+V)</strong> in WhatsApp to send image!</li>
+                    </>
+                  )}
                 </ol>
               </div>
 
@@ -1570,11 +1654,13 @@ export default function PaymentHistory({
                   className="w-full flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 text-emerald-700 font-bold py-2 text-center rounded-xl transition-all font-sans cursor-pointer shadow-2xs"
                 >
                   <Send className="w-3.5 h-3.5 text-emerald-600" />
-                  Send to WhatsApp ({viewerTenant.phone})
+                  {language === 'ar' ? `إرسال إلى واتساب (${viewerTenant.phone})` : `Send to WhatsApp (${viewerTenant.phone})`}
                 </a>
               ) : (
                 <div className="bg-amber-50 border border-amber-100 p-2 rounded-xl text-center text-[10px] text-amber-700 font-medium">
-                  No phone contact on record for {viewingReceipt.tenantName} to send via WhatsApp.
+                  {language === 'ar' 
+                    ? `لا يوجد رقم هاتف مسجل للمستفيد ${viewingReceipt.tenantName} للإرسال عبر واتساب.` 
+                    : `No phone contact on record for ${viewingReceipt.tenantName} to send via WhatsApp.`}
                 </div>
               )}
             </div>
@@ -1589,13 +1675,13 @@ export default function PaymentHistory({
                 className="flex-1 flex justify-center items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors"
               >
                 <Printer className="w-4 h-4" />
-                Print Receipt
+                {language === 'ar' ? 'طباعة الإيصال' : 'Print Receipt'}
               </button>
               <button
                 onClick={() => setViewingReceipt(null)}
                 className="flex-1 flex justify-center items-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-colors animate-none"
               >
-                Done
+                {language === 'ar' ? 'تم' : 'Done'}
               </button>
             </div>
           </div>
@@ -1605,10 +1691,12 @@ export default function PaymentHistory({
       {/* Custom Confirmation Overlay */}
       <ConfirmationDialog
         isOpen={deleteConfirmId !== null}
-        title="Delete Income record?"
-        message="Are you sure you want to delete this payment receipt log? This will adjust the unit dashboard calculation accordingly."
-        confirmLabel="Delete Log"
-        cancelLabel="Discard"
+        title={language === 'ar' ? 'حذف سجل الإيراد؟' : 'Delete Income record?'}
+        message={language === 'ar' 
+          ? 'هل أنت متأكد من رغبتك في حذف سجل المقبوضات هذا؟ سيؤدي هذا إلى تعديل حسابات لوحة معلومات الوحدات تلقائيًا.' 
+          : 'Are you sure you want to delete this payment receipt log? This will adjust the unit dashboard calculation accordingly.'}
+        confirmLabel={language === 'ar' ? 'حذف السجل' : 'Delete Log'}
+        cancelLabel={language === 'ar' ? 'إلغاء' : 'Discard'}
         onConfirm={() => {
           if (deleteConfirmId) {
             onDeletePayment(deleteConfirmId);

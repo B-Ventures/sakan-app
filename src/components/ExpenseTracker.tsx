@@ -7,6 +7,7 @@ import React, { useState, useRef } from 'react';
 import { Expense, ExpenseCategory, formatCurrency } from '../types';
 import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import ConfirmationDialog from './ConfirmationDialog';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ExpenseTrackerProps {
   expenses: Expense[];
@@ -25,6 +26,7 @@ export default function ExpenseTracker({
   customExpenseCategories,
   activeBuilding,
 }: ExpenseTrackerProps) {
+  const { t, language } = useLanguage();
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -288,15 +290,15 @@ export default function ExpenseTracker({
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Building Outflow & Expenses</h2>
-          <p className="text-xs text-slate-400">Track structural repairs, cleanouts, insurance and tax with receipt logs</p>
+          <h2 className="text-xl font-bold text-slate-800">{t('outflowExpensesTitle')}</h2>
+          <p className="text-xs text-slate-400">{t('outflowExpensesSub')}</p>
         </div>
         <button
           onClick={openAddForm}
           className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors animate-none"
         >
           <Plus className="w-4 h-4" />
-          Log Maintenance/Expense
+          {t('logMaintenanceExpense')}
         </button>
       </div>
 
@@ -307,13 +309,13 @@ export default function ExpenseTracker({
           {/* Category, Status & Month dropdown filters */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Category:</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t('categoryFilterLabel')}</span>
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
                 className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
               >
-                <option value="all">All Categories ({expenses.length})</option>
+                <option value="all">{t('allCategories')} ({expenses.length})</option>
                 {customExpenseCategories.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat} ({expenses.filter(e => e.category === cat).length})
@@ -323,27 +325,27 @@ export default function ExpenseTracker({
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Status:</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t('statusFilterLabel')}</span>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
               >
-                <option value="all">All Statuses</option>
-                <option value="Paid">Paid</option>
-                <option value="Pending">Pending</option>
-                <option value="Overdue">Overdue</option>
+                <option value="all">{t('allStatuses')}</option>
+                <option value="Paid">{t('paid')}</option>
+                <option value="Pending">{t('pending')}</option>
+                <option value="Overdue">{t('overdue')}</option>
               </select>
             </div>
 
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Month:</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{t('monthFilterLabel')}</span>
               <select
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(e.target.value)}
                 className="text-xs p-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:border-blue-500 font-semibold cursor-pointer"
               >
-                <option value="all">All Months</option>
+                <option value="all">{t('allMonths')}</option>
                 {uniqueMonths.map(m => (
                   <option key={m} value={m}>{m}</option>
                 ))}
@@ -359,7 +361,7 @@ export default function ExpenseTracker({
           </span>
           <input
             type="text"
-            placeholder="Search keywords, bills..."
+            placeholder={language === 'ar' ? "ابحث عن كلمات دليلة، فواتير..." : "Search keywords, bills..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-xs py-2 pl-9 pr-4 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 bg-slate-50/50"
@@ -370,42 +372,42 @@ export default function ExpenseTracker({
       {/* Expense ledger list / Table view similar to ledger */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden" id="expenses-table-container">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-start border-collapse">
             <thead>
               <tr className="border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider bg-slate-50/50 select-none">
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('title')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('title')}>
                   <div className="flex items-center gap-1">
-                    Expense Details & Category
+                    {t('expenseDetailsCol')}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'title' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('status')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('status')}>
                   <div className="flex items-center gap-1">
-                    Status
+                    {t('statusCol')}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'status' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('date')}>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('date')}>
                   <div className="flex items-center gap-1">
-                    Log / Due Date
+                    {t('logDueDateCol')}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'date' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4">Additional Notes</th>
-                <th className="py-3.5 px-4">Invoice / Receipt</th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('amount')}>
+                <th className="py-3.5 px-4 text-start">{t('additionalNotesCol')}</th>
+                <th className="py-3.5 px-4 text-start">{t('invoiceReceiptCol')}</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-100/50 transition-colors text-start" onClick={() => handleSort('amount')}>
                   <div className="flex items-center gap-1">
-                    Outflow Cost
+                    {t('outflowCostCol')}
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortField === 'amount' ? 'text-blue-500 font-bold' : 'text-slate-300'}`} />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-4 text-end">{t('actionsCol')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/50">
               {paginatedExpenses.map((exp) => (
                 <tr key={exp.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-4">
+                  <td className="py-4 px-4 text-start">
                     <div>
                       <span className="bg-orange-50 text-orange-600 font-extrabold px-2.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-mono">
                         {exp.category}
@@ -413,7 +415,7 @@ export default function ExpenseTracker({
                       <div className="font-bold text-slate-800 text-sm mt-1.5">{exp.title}</div>
                     </div>
                   </td>
-                  <td className="py-4 px-4">
+                  <td className="py-4 px-4 text-start">
                     <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
                       exp.status === 'Paid' 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
@@ -421,28 +423,28 @@ export default function ExpenseTracker({
                         ? 'bg-rose-50 text-rose-700 border-rose-100'
                         : 'bg-amber-50 text-amber-700 border-amber-100'
                     }`}>
-                      {exp.status || 'Paid'}
+                      {exp.status === 'Paid' ? t('paid') : exp.status === 'Overdue' ? t('overdue') : t('pending')}
                     </span>
                   </td>
-                  <td className="py-4 px-4 whitespace-nowrap">
+                  <td className="py-4 px-4 whitespace-nowrap text-start">
                     <div className="text-xs font-mono text-slate-500">{exp.date}</div>
                     {exp.dueDate && (
                       <div className="text-[10px] text-slate-400 font-sans mt-0.5 flex items-center gap-1">
-                        <span className="font-semibold text-slate-500">Due:</span>
+                        <span className="font-semibold text-slate-500">{language === 'ar' ? 'مستحق:' : 'Due:'}</span>
                         <span className="font-mono text-slate-500">{exp.dueDate}</span>
                       </div>
                     )}
                   </td>
-                  <td className="py-4 px-4 text-xs text-slate-500 max-w-xs truncate" title={exp.notes}>
-                    {exp.notes || <span className="text-slate-300 italic">No notes</span>}
+                  <td className="py-4 px-4 text-xs text-slate-500 max-w-xs truncate text-start" title={exp.notes}>
+                    {exp.notes || <span className="text-slate-300 italic">{t('noNotesPlaceholder')}</span>}
                   </td>
-                  <td className="py-4 px-4">
+                  <td className="py-4 px-4 text-start">
                     {exp.attachmentUrl ? (
                       <div className="flex items-center gap-2 overflow-hidden max-w-[180px]">
                         <div 
                           className="w-8 h-8 rounded border bg-slate-50 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                           onClick={() => setZoomedAttachment({ url: exp.attachmentUrl!, title: exp.title })}
-                          title="Click to view full receipt"
+                          title={language === 'ar' ? "انقر لعرض الإيصال كاملاً" : "Click to view full receipt"}
                         >
                           {exp.attachmentUrl.startsWith('data:application/pdf') ? (
                             <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-600 font-extrabold text-[8px] uppercase font-mono">
@@ -459,33 +461,33 @@ export default function ExpenseTracker({
                         </div>
                         <div className="overflow-hidden">
                           <span className="text-[10px] font-semibold text-slate-600 block truncate" title={exp.attachmentName}>
-                            {exp.attachmentName || 'Attachment'}
+                            {exp.attachmentName || (language === 'ar' ? 'مرفق' : 'Attachment')}
                           </span>
-                          <span className="text-[8px] text-blue-500 font-bold uppercase block tracking-tight">Receipt Verified</span>
+                          <span className="text-[8px] text-blue-500 font-bold uppercase block tracking-tight">{t('receiptVerifiedLabel')}</span>
                         </div>
                       </div>
                     ) : (
-                      <span className="text-slate-300 text-xs italic">No attachment</span>
+                      <span className="text-slate-300 text-xs italic">{t('noAttachmentPlaceholder')}</span>
                     )}
                   </td>
-                  <td className="py-4 px-4">
+                  <td className="py-4 px-4 text-start">
                     <span className="font-mono font-extrabold text-sm text-slate-900">
                       {formatCurrency(exp.amount, activeBuilding?.currency || 'JOD')}
                     </span>
                   </td>
-                  <td className="py-4 px-4 text-right">
+                  <td className="py-4 px-4 text-end">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => openEditForm(exp)}
                         className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition-colors animate-none"
-                        title="Edit entry"
+                        title={language === 'ar' ? "تعديل السجل" : "Edit entry"}
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(exp.id)}
                         className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-lg transition-colors"
-                        title="Remove entry"
+                        title={language === 'ar' ? "إزالة السجل" : "Remove entry"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -500,8 +502,8 @@ export default function ExpenseTracker({
         {sortedExpenses.length === 0 && (
           <div className="text-center py-16 bg-white border-t border-slate-100" id="empty-expenses-state">
             <UploadCloud className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-600">No expenses recorded for filters</p>
-            <p className="text-xs text-slate-400 mt-1">Try resetting parameters or log a new building cost breakdown.</p>
+            <p className="text-sm font-semibold text-slate-600">{t('noExpensesRecorded')}</p>
+            <p className="text-xs text-slate-400 mt-1">{t('noExpensesRecordedSub')}</p>
           </div>
         )}
       </div>
@@ -510,7 +512,7 @@ export default function ExpenseTracker({
       {totalPages > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-xs text-slate-500 font-sans" id="expenses-pagination">
           <div className="flex items-center gap-2">
-            <span>Show</span>
+            <span>{language === 'ar' ? 'عرض' : 'Show'}</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
@@ -520,13 +522,13 @@ export default function ExpenseTracker({
               className="p-1.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold focus:outline-none cursor-pointer"
             >
               {[5, 10, 15, 25, 50, 100].map(sz => (
-                <option key={sz} value={sz}>{sz} rows</option>
+                <option key={sz} value={sz}>{sz} {t('rowsLabel')}</option>
               ))}
             </select>
             <span>
-              Showing <strong className="text-slate-700">{sortedExpenses.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> to{" "}
-              <strong className="text-slate-700">{Math.min(sortedExpenses.length, currentPage * itemsPerPage)}</strong> of{" "}
-              <strong className="text-slate-700">{sortedExpenses.length}</strong> expenses
+              {t('showingRows')} <strong className="text-slate-700">{sortedExpenses.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</strong> {t('toPage')}{" "}
+              <strong className="text-slate-700">{Math.min(sortedExpenses.length, currentPage * itemsPerPage)}</strong> {t('ofPage')}{" "}
+              <strong className="text-slate-700">{sortedExpenses.length}</strong> {t('expensesLabel')}
             </span>
           </div>
 
@@ -536,7 +538,7 @@ export default function ExpenseTracker({
                 onClick={() => setCurrentPage(1)}
                 disabled={currentPage === 1}
                 className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
-                title="First Page"
+                title={language === 'ar' ? "الصفحة الأولى" : "First Page"}
               >
                 <ChevronLeft className="w-3.5 h-3.5 -mr-1 inline-block" />
                 <ChevronLeft className="w-3.5 h-3.5 inline-block" />
@@ -545,7 +547,7 @@ export default function ExpenseTracker({
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
                 className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
-                title="Previous Page"
+                title={language === 'ar' ? "الصفحة السابقة" : "Previous Page"}
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -583,7 +585,7 @@ export default function ExpenseTracker({
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
                 className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
-                title="Next Page"
+                title={language === 'ar' ? "الصفحة التالية" : "Next Page"}
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -591,7 +593,7 @@ export default function ExpenseTracker({
                 onClick={() => setCurrentPage(totalPages)}
                 disabled={currentPage === totalPages}
                 className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
-                title="Last Page"
+                title={language === 'ar' ? "الصفحة الأخيرة" : "Last Page"}
               >
                 <ChevronRight className="w-3.5 h-3.5 inline-block" />
                 <ChevronRight className="w-3.5 h-3.5 -ml-1 inline-block" />
@@ -607,7 +609,7 @@ export default function ExpenseTracker({
           <div className="bg-white rounded-2xl max-w-md w-full border shadow-xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200">
             <div className="bg-slate-50 border-b p-5 flex items-center justify-between">
               <h3 className="font-bold text-slate-800">
-                {editingExpense ? 'Edit Maintenance / Building Expense' : 'Log Maintenance / Building Expense'}
+                {editingExpense ? t('editMaintenanceTitle') : t('logMaintenanceTitle')}
               </h3>
               <button
                 onClick={() => setIsFormOpen(false)}
@@ -620,11 +622,11 @@ export default function ExpenseTracker({
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               {/* Expense Title */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Expense Title / Item Name *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">{t('expenseTitleLabel')}</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Roof tile repairs, water utility"
+                  placeholder={language === 'ar' ? "مثال: صيانة السطح، فاتورة المياه" : "e.g., Roof tile repairs, water utility"}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
@@ -634,7 +636,7 @@ export default function ExpenseTracker({
               <div className="grid grid-cols-2 gap-4">
                 {/* Category dropdown */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Outflow Category *</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">{t('outflowCategoryLabel')}</label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
@@ -648,12 +650,12 @@ export default function ExpenseTracker({
 
                 {/* Amount */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Cost Amount ({activeBuilding?.currency || 'JOD'}) *</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">{t('costAmountLabel')} ({activeBuilding?.currency || 'JOD'}) *</label>
                   <input
                     type="number"
                     required
                     min={1}
-                    placeholder="e.g. 500"
+                    placeholder={language === 'ar' ? 'مثال: 500' : 'e.g. 500'}
                     value={amount || ''}
                     onChange={(e) => setAmount(Number(e.target.value))}
                     className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
@@ -664,7 +666,7 @@ export default function ExpenseTracker({
               {/* Date & Due Date and Status */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Expense Log Date *</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">{t('expenseLogDateLabel')}</label>
                   <input
                     type="date"
                     required
@@ -675,7 +677,7 @@ export default function ExpenseTracker({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Due Date (Optional)</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">{t('dueDateOptionalLabel')}</label>
                   <input
                     type="date"
                     value={dueDate}
@@ -686,21 +688,21 @@ export default function ExpenseTracker({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Payment Status *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">{t('paymentStatusLabel')}</label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as 'Paid' | 'Pending' | 'Overdue')}
                   className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 bg-white"
                 >
-                  <option value="Paid">Paid</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Overdue">Overdue</option>
+                  <option value="Paid">{t('paid')}</option>
+                  <option value="Pending">{t('pending')}</option>
+                  <option value="Overdue">{t('overdue')}</option>
                 </select>
               </div>
 
               {/* Document/Receipt PDF Image File Input */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Attach Original Invoice / Receipt (Optional)</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t('attachInvoiceLabel')}</label>
                 
                 {attachmentUrl ? (
                   <div className="border border-slate-100 rounded-xl p-3 bg-slate-50 flex items-center justify-between">
@@ -709,8 +711,8 @@ export default function ExpenseTracker({
                         {attachmentUrl.startsWith('data:application/pdf') ? 'PDF' : <img referrerPolicy="no-referrer" src={attachmentUrl} className="w-full h-full object-cover" />}
                       </div>
                       <div className="overflow-hidden">
-                        <span className="text-xs font-semibold text-slate-700 block truncate">{attachmentName || 'attachment.png'}</span>
-                        <span className="text-[10px] text-emerald-600 font-bold block">✓ Attachment Loaded</span>
+                        <span className="text-xs font-semibold text-slate-700 block truncate">{attachmentName || (language === 'ar' ? 'مرفق' : 'attachment.png')}</span>
+                        <span className="text-[10px] text-emerald-600 font-bold block">✓ {t('attachmentLoaded')}</span>
                       </div>
                     </div>
                     <button 
@@ -718,7 +720,7 @@ export default function ExpenseTracker({
                       onClick={removeAttachedFile} 
                       className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-white border px-2.5 py-1.5 rounded-lg hover:bg-slate-50"
                     >
-                      Remove
+                      {t('removeLabel')}
                     </button>
                   </div>
                 ) : (
@@ -732,8 +734,11 @@ export default function ExpenseTracker({
                     }`}
                   >
                     <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-600">Drag & drop invoice here, or <span className="text-blue-500">browse</span></p>
-                    <p className="text-[10px] text-slate-400 mt-1">Supports images or PDF up to 5MB</p>
+                    <p className="text-xs font-semibold text-slate-600">
+                      {language === 'ar' ? 'اسحب وأفلت الفاتورة هنا، أو ' : 'Drag & drop invoice here, or '}
+                      <span className="text-blue-500">{language === 'ar' ? 'تصفح ملفاتك' : 'browse'}</span>
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">{t('fileSupportHelp')}</p>
                     
                     <input 
                       type="file" 
@@ -748,9 +753,9 @@ export default function ExpenseTracker({
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Additional description & Notes</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">{t('additionalNotesLabel')}</label>
                 <textarea
-                  placeholder="Memo, repairs contractor, check code, extra specifics if needed..."
+                  placeholder={language === 'ar' ? "مذكرة، مقاول الإصلاحات، رقم الشيك، تفاصيل إضافية..." : "Memo, repairs contractor, check code, extra specifics if needed..."}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 h-16 resize-none"
@@ -763,13 +768,13 @@ export default function ExpenseTracker({
                   onClick={() => setIsFormOpen(false)}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-colors"
                 >
-                  {editingExpense ? 'Save Expense Changes' : 'Log Maintenance/Expense'}
+                  {editingExpense ? t('saveExpenseChanges') : t('logMaintenanceExpense')}
                 </button>
               </div>
             </form>
@@ -782,7 +787,9 @@ export default function ExpenseTracker({
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full border shadow-2xl overflow-hidden animate-zoom-in">
             <div className="p-4 bg-slate-50 border-b flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-800 truncate max-w-sm">Receipt Image: {zoomedAttachment.title}</span>
+              <span className="font-bold text-slate-800 truncate max-w-sm">
+                {language === 'ar' ? 'صورة الإيصال: ' : 'Receipt Image: '} {zoomedAttachment.title}
+              </span>
               <button onClick={() => setZoomedAttachment(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
             </div>
             
@@ -800,10 +807,10 @@ export default function ExpenseTracker({
       {/* Custom Confirmation Overlay */}
       <ConfirmationDialog
         isOpen={deleteConfirmId !== null}
-        title="Delete Expense Record?"
-        message="Are you sure you want to permanently delete this expense log? This will adjust your overall building expense balances and cash calculation accordingly."
-        confirmLabel="Permanently Delete"
-        cancelLabel="Discard"
+        title={t('deleteExpenseConfirmTitle')}
+        message={t('deleteExpenseConfirmMessage')}
+        confirmLabel={t('permanentlyDelete')}
+        cancelLabel={t('keepRecord')}
         onConfirm={() => {
           if (deleteConfirmId) {
             onDeleteExpense(deleteConfirmId);

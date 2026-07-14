@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { AlertTriangle, Trash2, ShieldAlert } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -21,13 +22,17 @@ export default function ConfirmationDialog({
   isOpen,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   isDestructive = true,
   onConfirm,
   onCancel
 }: ConfirmationDialogProps) {
+  const { language } = useLanguage();
   if (!isOpen) return null;
+
+  const defaultCancel = cancelLabel || (language === 'ar' ? 'إلغاء' : 'Cancel');
+  const defaultConfirm = confirmLabel || (language === 'ar' ? 'تأكيد' : 'Confirm');
 
   return (
     <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" id="custom-confirmation-portal">
@@ -60,7 +65,7 @@ export default function ConfirmationDialog({
             className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-colors cursor-pointer"
             id="confirmation-cancel-btn"
           >
-            {cancelLabel}
+            {defaultCancel}
           </button>
           <button
             type="button"
@@ -75,7 +80,7 @@ export default function ConfirmationDialog({
             }`}
             id="confirmation-confirm-btn"
           >
-            {confirmLabel}
+            {defaultConfirm}
           </button>
         </div>
 
@@ -83,3 +88,4 @@ export default function ConfirmationDialog({
     </div>
   );
 }
+

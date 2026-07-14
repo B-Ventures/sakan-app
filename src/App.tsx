@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from './context/LanguageContext';
 import { Tenant, Payment, Expense, Building as BuildingType, UserRecord, LandingPageConfig, DEFAULT_LANDING_CONFIG } from './types';
 import { INITIAL_TENANTS, INITIAL_PAYMENTS, INITIAL_EXPENSES } from './mockData';
 import DashboardOverview from './components/DashboardOverview';
@@ -79,6 +80,7 @@ import {
 } from './types';
 
 export default function App() {
+  const { t, language, setLanguage, dir, isRtl } = useLanguage();
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
@@ -740,7 +742,7 @@ export default function App() {
       const errorMessage = error?.message || '';
       
       if (errorCode === 'auth/unauthorized-domain') {
-        showGlobalToast("Unauthorized Domain! Add 'prop.bventures.me' to Authorized Domains in your Firebase Console (Authentication -> Settings).", 'error');
+        showGlobalToast("Unauthorized Domain! Add 'amra.bventures.me' to Authorized Domains in your Firebase Console (Authentication -> Settings).", 'error');
       } else if (errorCode === 'auth/popup-closed-by-user') {
         showGlobalToast('Sign in popup was closed. Please try again.', 'info');
       } else {
@@ -1729,7 +1731,9 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
         <div className="flex flex-col items-center gap-4 text-center">
           <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-          <span className="text-xs font-bold font-mono tracking-widest text-slate-400">LOADING PROPMANAGE WORKSPACE...</span>
+          <span className="text-xs font-bold font-mono tracking-widest text-slate-400">
+            {language === 'ar' ? 'جاري تحميل لوحة التحكم بي بروب...' : 'LOADING PROPMANAGE WORKSPACE...'}
+          </span>
         </div>
       </div>
     );
@@ -1759,35 +1763,49 @@ export default function App() {
   // RENDER PROPERTY MANAGEMENT ONBOARDING (IF REGISTERS ZERO BUILDINGS)
   if (buildings.length === 0 && !(isSuperAdminSession && !impersonatedUser)) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 sm:p-6 font-sans select-none">
+      <div className={`min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 sm:p-6 select-none ${language === 'ar' ? 'font-arabic' : 'font-sans'}`} dir={dir}>
         <div className="max-w-3xl w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-10 shadow-xl space-y-8 animate-in fade-in-50 zoom-in-95 duration-300">
           <div className="text-center space-y-2 pb-5 border-b border-slate-100">
             <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold shadow-xs">🏢</div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-slate-800">No properties initialized yet</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight text-slate-800 font-sans">
+              {language === 'ar' ? 'لم يتم تهيئة أي عقارات بعد' : 'No properties initialized yet'}
+            </h2>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Welcome, <span className="font-bold text-slate-600">{activeUserName}</span>! Select an option below to set up your interface.
+              {language === 'ar' ? (
+                <>أهلاً بك، <span className="font-bold text-slate-600">{activeUserName}</span>! اختر أحد الخيارات أدناه لتهيئة واجهتك عقارياً.</>
+              ) : (
+                <>Welcome, <span className="font-bold text-slate-600">{activeUserName}</span>! Select an option below to set up your interface.</>
+              )}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 pt-2">
             {/* Column 1: Manual Registration */}
-            <form onSubmit={handleCreateBuilding} className="space-y-5 flex flex-col justify-between md:pr-10 md:border-r md:border-slate-100">
+            <form onSubmit={handleCreateBuilding} className={`space-y-5 flex flex-col justify-between ${language === 'ar' ? 'md:pl-10 md:border-l md:border-slate-100' : 'md:pr-10 md:border-r md:border-slate-100'}`}>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="p-1 px-1.5 bg-blue-100 text-blue-700 font-mono text-[9px] font-black rounded uppercase">Option A</span>
-                  <h3 className="text-sm font-extrabold text-slate-800">Register New Property</h3>
+                  <span className="p-1 px-1.5 bg-blue-100 text-blue-700 font-mono text-[9px] font-black rounded uppercase">
+                    {language === 'ar' ? 'الخيار أ' : 'Option A'}
+                  </span>
+                  <h3 className="text-sm font-extrabold text-slate-800">
+                    {language === 'ar' ? 'تسجيل عقار جديد' : 'Register New Property'}
+                  </h3>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Specify details manually to configure custom apartment units, monthly rent limits, billing triggers, and receipt invoices.
+                  {language === 'ar' 
+                    ? 'حدد التفاصيل يدوياً لتكوين الشقق السكنية المخصصة وقيم الإيجار الشهرية والتحصيلات وفواتير الإيصالات.'
+                    : 'Specify details manually to configure custom apartment units, monthly rent limits, billing triggers, and receipt invoices.'}
                 </p>
                 
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider leading-none">Building Name</label>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider leading-none">
+                      {language === 'ar' ? 'اسم المبنى' : 'Building Name'}
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g., Grandview Heights Apartments"
+                      placeholder={language === 'ar' ? 'مثال: عمارة اللويبدة السكنية' : 'e.g., Grandview Heights Apartments'}
                       value={newBuildingName}
                       onChange={(e) => setNewBuildingName(e.target.value)}
                       className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500 font-sans"
@@ -1795,10 +1813,12 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider leading-none">Street Address</label>
+                    <label className="text-[9px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider leading-none">
+                      {language === 'ar' ? 'عنوان الشارع / الموقع' : 'Street Address'}
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g., 401 Grandview Ave, CA"
+                      placeholder={language === 'ar' ? 'مثال: شارع اللويبدة، عمان' : 'e.g., 401 Grandview Ave, CA'}
                       value={newBuildingAddress}
                       onChange={(e) => setNewBuildingAddress(e.target.value)}
                       className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500 font-sans"
@@ -1814,7 +1834,9 @@ export default function App() {
                         className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
                       />
                       <div className="min-w-0">
-                        <span className="text-[11px] font-bold text-slate-750 block">Pre-populate with sample listings</span>
+                        <span className="text-[11px] font-bold text-slate-750 block">
+                          {language === 'ar' ? 'ملء تلقائي ببيانات تجريبية أولية' : 'Pre-populate with sample listings'}
+                        </span>
                       </div>
                     </label>
                   </div>
@@ -1830,12 +1852,12 @@ export default function App() {
                   {creatingBuilding ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Registering...
+                      {language === 'ar' ? 'جاري التسجيل...' : 'Registering...'}
                     </>
                   ) : (
                     <>
-                      Create Property Profile
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      {language === 'ar' ? 'إنشاء الملف التعريفي للعقار' : 'Create Property Profile'}
+                      <ArrowRight className={`w-3.5 h-3.5 ${language === 'ar' ? 'rotate-180' : ''}`} />
                     </>
                   )}
                 </button>
@@ -1846,22 +1868,28 @@ export default function App() {
             <div className="space-y-5 flex flex-col justify-between">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="p-1 px-1.5 bg-amber-100 text-amber-700 font-mono text-[9px] font-black rounded uppercase">Option B</span>
-                  <h3 className="text-sm font-extrabold text-slate-800">Demo Test Drive</h3>
+                  <span className="p-1 px-1.5 bg-amber-100 text-amber-700 font-mono text-[9px] font-black rounded uppercase">
+                    {language === 'ar' ? 'الخيار ب' : 'Option B'}
+                  </span>
+                  <h3 className="text-sm font-extrabold text-slate-800">
+                    {language === 'ar' ? 'جولة تجريبية سريعة' : 'Demo Test Drive'}
+                  </h3>
                 </div>
                 
                 <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-800 space-y-2">
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-[8px] font-black font-mono text-amber-700">
-                    ⚡ INSTANT TOUR TEMPLATE
+                    {language === 'ar' ? '⚡ جولة سريعة فورية' : '⚡ INSTANT TOUR TEMPLATE'}
                   </span>
                   <p className="text-xs leading-relaxed text-slate-600">
-                    Skip building registration entirely. Click below to instantly launch our fully pre-loaded demo workspace under a tour account.
+                    {language === 'ar' 
+                      ? 'تخطي تسجيل العقار بالكامل. انقر أدناه لبدء تشغيل مساحة عمل تجريبية محملة مسبقاً بالكامل على الفور.'
+                      : 'Skip building registration entirely. Click below to instantly launch our fully pre-loaded demo workspace under a tour account.'}
                   </p>
                   <div className="text-[10px] text-slate-500 font-medium space-y-1">
-                    <p>• Automated 1-click test drive setup</p>
-                    <p>• Pre-seeded workspace tenants, ledgers & expenses</p>
-                    <p>• Cleanly isolated from main directories</p>
-                    <p>• Subject to daily resets for evaluation safety</p>
+                    <p>{language === 'ar' ? '• تهيئة فورية لمساحة عمل تجريبية بنقرة واحدة' : '• Automated 1-click test drive setup'}</p>
+                    <p>{language === 'ar' ? '• سكان، سجلات، ومصروفات تجريبية مسبقة' : '• Pre-seeded workspace tenants, ledgers & expenses'}</p>
+                    <p>{language === 'ar' ? '• معزول بالكامل عن السجلات الرئيسية' : '• Cleanly isolated from main directories'}</p>
+                    <p>{language === 'ar' ? '• يخضع لإعادة ضبط يومية لأمان التقييم' : '• Subject to daily resets for evaluation safety'}</p>
                   </div>
                 </div>
               </div>
@@ -1875,7 +1903,7 @@ export default function App() {
                   id="sandbox-demo-signin-btn"
                 >
                   <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                  START INSTANT TOUR
+                  {language === 'ar' ? 'ابدأ الجولة الفورية الآن' : 'START INSTANT TOUR'}
                 </button>
                 
                 <button
@@ -1883,7 +1911,7 @@ export default function App() {
                   onClick={handleSignOut}
                   className="w-full bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold text-xs py-2 px-4 rounded-xl transition-colors text-center cursor-pointer border border-slate-150/50"
                 >
-                  Sign Out of Account
+                  {language === 'ar' ? 'تسجيل الخروج من الحساب' : 'Sign Out of Account'}
                 </button>
               </div>
             </div>
@@ -2019,7 +2047,7 @@ export default function App() {
                   }`}
                 >
                   <LayoutDashboard className="w-4 h-4" />
-                  Overview
+                  {t('overview')}
                 </button>
 
                 <button
@@ -2032,7 +2060,7 @@ export default function App() {
                   id="tab-btn-tenants"
                 >
                   <Users className="w-4 h-4" />
-                  Units & Beneficiaries
+                  {t('unitsAndBeneficiaries')}
                 </button>
 
                 <button
@@ -2045,7 +2073,7 @@ export default function App() {
                   id="tab-btn-payments"
                 >
                   <CreditCard className="w-4 h-4" />
-                  Income Collections
+                  {t('incomeCollections')}
                 </button>
 
                 <button
@@ -2058,7 +2086,7 @@ export default function App() {
                   id="tab-btn-expenses"
                 >
                   <DollarSign className="w-4 h-4" />
-                  Expense Ledger
+                  {t('expenseLedger')}
                 </button>
 
                 <button
@@ -2071,7 +2099,7 @@ export default function App() {
                   id="tab-btn-reminders"
                 >
                   <FileText className="w-4 h-4" />
-                  Statements & Alerts
+                  {t('statementsAndAlerts')}
                 </button>
 
                 <button
@@ -2084,7 +2112,7 @@ export default function App() {
                   id="tab-btn-audit"
                 >
                   <Shield className="w-4 h-4" />
-                  Security Audit Trail
+                  {t('securityAudit')}
                 </button>
               </div>
             )}
@@ -2092,7 +2120,7 @@ export default function App() {
             {isSuperAdminSession && !impersonatedUser && (
               <div className="pt-4 mt-4 border-t border-slate-100 space-y-1">
                 <div className="px-4 mb-2">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-mono">System Admin Tools</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-mono">{t('systemAdminTools')}</span>
                 </div>
                 <button
                   onClick={() => setActiveTab('superadmin_analytics')}
@@ -2104,7 +2132,7 @@ export default function App() {
                   id="tab-btn-superadmin-analytics"
                 >
                   <Activity className="w-4 h-4 text-red-600 animate-pulse" />
-                  Global Platform Analytics
+                  {t('globalAnalytics')}
                 </button>
 
                 <button
@@ -2117,7 +2145,7 @@ export default function App() {
                   id="tab-btn-superadmin-directory"
                 >
                   <Shield className="w-4 h-4 text-red-600" />
-                  SuperAdmin Directory
+                  {t('superAdminDirectory')}
                 </button>
 
                 <button
@@ -2130,7 +2158,7 @@ export default function App() {
                   id="tab-btn-superadmin-subscriptions"
                 >
                   <CreditCard className="w-4 h-4 text-red-600" />
-                  Subscriptions & Licenses
+                  {t('subscriptionsAndLicenses')}
                 </button>
 
                 <button
@@ -2143,7 +2171,7 @@ export default function App() {
                   id="tab-btn-superadmin-packages"
                 >
                   <Sliders className="w-4 h-4 text-red-600" />
-                  Subscription Plans & Stripe
+                  {t('subscriptionPlansAndStripe')}
                 </button>
 
                 <button
@@ -2192,7 +2220,34 @@ export default function App() {
           )}
 
           {/* Connected Profile Details */}
-          <div className="mt-auto pt-4 border-t border-slate-100 space-y-4">
+          <div className="mt-auto pt-4 border-t border-slate-100 space-y-3.5">
+            {/* Language Switcher */}
+            <div className="flex items-center justify-between text-xs text-slate-500 bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <span className="font-bold text-[9px] uppercase tracking-wider text-slate-400 font-mono">{t('languageSelect')}</span>
+              <div className="flex bg-slate-200/80 p-0.5 rounded-lg border border-slate-200/50">
+                <button
+                  onClick={() => setLanguage('en')}
+                  className={`px-2 py-0.5 text-[9px] font-black rounded-md transition-all cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => setLanguage('ar')}
+                  className={`px-2 py-0.5 text-[9px] font-black rounded-md transition-all cursor-pointer ${
+                    language === 'ar'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 font-arabic'
+                  }`}
+                >
+                  العربية
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center gap-3 justify-between">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold uppercase shrink-0 text-xs">
@@ -2299,18 +2354,18 @@ export default function App() {
             </div>
 
             <h1 className="text-lg font-bold text-slate-800 hidden md:block">
-              {activeTab === 'overview' && `${activeBuilding?.name || 'Dashboard'} Overview`}
-              {activeTab === 'tenants' && 'Units & Beneficiaries Registry'}
-              {activeTab === 'payments' && 'Income Collections Ledger'}
-              {activeTab === 'expenses' && 'Building Outflow Expenses'}
-              {activeTab === 'reminders' && 'Statements & Alerts'}
-              {activeTab === 'audit' && 'System Audit Trail Ledger'}
-              {activeTab === 'superadmin_analytics' && '📈 Global Platform Analytics'}
-              {activeTab === 'superadmin_directory' && '🛡️ System SuperAdmin Customer Directory'}
-              {activeTab === 'superadmin_subscriptions' && '💳 Platform Subscriptions & Licenses Console'}
-              {activeTab === 'superadmin_packages' && '⚙️ Subscription Plans & Stripe Integration'}
-              {activeTab === 'superadmin_landing' && '🎨 SuperAdmin Landing Page Editor'}
-              {activeTab === 'superadmin' && '🛡️ System SuperAdmin Customer Directory'}
+              {activeTab === 'overview' && (language === 'ar' ? `نظرة عامة على ${activeBuilding?.name || 'لوحة التحكم'}` : `${activeBuilding?.name || 'Dashboard'} Overview`)}
+              {activeTab === 'tenants' && (language === 'ar' ? 'سجل الوحدات والمستفيدين' : 'Units & Beneficiaries Registry')}
+              {activeTab === 'payments' && (language === 'ar' ? 'دفتر تحصيل المقبوضات والواردات' : 'Income Collections Ledger')}
+              {activeTab === 'expenses' && (language === 'ar' ? 'مصروفات ونفقات المبنى' : 'Building Outflow Expenses')}
+              {activeTab === 'reminders' && (language === 'ar' ? 'كشوفات الحسابات والتنبيهات' : 'Statements & Alerts')}
+              {activeTab === 'audit' && (language === 'ar' ? 'سجل تدقيق الحسابات والعمليات' : 'System Audit Trail Ledger')}
+              {activeTab === 'superadmin_analytics' && (language === 'ar' ? '📈 تحليلات المنصة العامة' : '📈 Global Platform Analytics')}
+              {activeTab === 'superadmin_directory' && (language === 'ar' ? '🛡️ سجل عملاء إدارة المنصة' : '🛡️ System SuperAdmin Customer Directory')}
+              {activeTab === 'superadmin_subscriptions' && (language === 'ar' ? '💳 وحدة تراخيص واشتراكات المنصة' : '💳 Platform Subscriptions & Licenses Console')}
+              {activeTab === 'superadmin_packages' && (language === 'ar' ? '⚙️ باقات الاشتراكات وبوابة الدفع' : '⚙️ Subscription Plans & Stripe Integration')}
+              {activeTab === 'superadmin_landing' && (language === 'ar' ? '🎨 محرر الصفحة التعريفية للمنصة' : '🎨 SuperAdmin Landing Page Editor')}
+              {activeTab === 'superadmin' && (language === 'ar' ? '🛡️ سجل عملاء إدارة المنصة' : '🛡️ System SuperAdmin Customer Directory')}
             </h1>
           </div>
           
@@ -2322,13 +2377,13 @@ export default function App() {
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs text-white rounded transition-colors font-semibold flex items-center gap-1.5"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  Import CSV Ledger
+                  {language === 'ar' ? 'استيراد دفتر الأستاذ' : 'Import CSV Ledger'}
                 </button>
                 <button 
                   onClick={() => setActiveTab('reminders')}
                   className="px-3 py-1.5 border border-slate-200 text-xs text-slate-600 rounded bg-white hover:bg-slate-50 transition-colors font-semibold"
                 >
-                  Export Statement
+                  {language === 'ar' ? 'تصدير كشف حساب' : 'Export Statement'}
                 </button>
               </>
             )}
@@ -2337,7 +2392,7 @@ export default function App() {
                 onClick={() => setActiveTab('reminders')}
                 className="px-3 py-1.5 border border-slate-200 text-xs text-slate-600 rounded bg-white hover:bg-slate-50 transition-colors font-semibold"
               >
-                Send Reminders
+                {language === 'ar' ? 'إرسال التنبيهات' : 'Send Reminders'}
               </button>
             )}
             {isSuperAdminSession && (activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages') && (
@@ -2499,35 +2554,35 @@ export default function App() {
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'overview' ? 'text-blue-600' : 'text-slate-400'}`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            Overview
+            {language === 'ar' ? 'نظرة عامة' : 'Overview'}
           </button>
           <button
             onClick={() => setActiveTab('tenants')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'tenants' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
           >
             <Users className="w-4 h-4" />
-            Units
+            {language === 'ar' ? 'الوحدات' : 'Units'}
           </button>
           <button
             onClick={() => setActiveTab('payments')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'payments' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
           >
             <CreditCard className="w-4 h-4" />
-            Ledger
+            {language === 'ar' ? 'الدفتر' : 'Ledger'}
           </button>
           <button
             onClick={() => setActiveTab('expenses')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'expenses' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
           >
             <DollarSign className="w-4 h-4" />
-            Expenses
+            {language === 'ar' ? 'المصروفات' : 'Expenses'}
           </button>
           <button
             onClick={() => setActiveTab('reminders')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'reminders' ? 'text-blue-600 font-extrabold' : 'text-slate-400'}`}
           >
             <FileText className="w-4 h-4" />
-            Alerts
+            {language === 'ar' ? 'التنبيهات' : 'Alerts'}
           </button>
           {isSuperAdminSession && !impersonatedUser && (
             <button
@@ -2535,7 +2590,7 @@ export default function App() {
               className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${(activeTab === 'superadmin' || activeTab === 'superadmin_analytics' || activeTab === 'superadmin_directory' || activeTab === 'superadmin_subscriptions' || activeTab === 'superadmin_packages' || activeTab === 'superadmin_landing') ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
             >
               <Shield className="w-4 h-4 text-red-500" />
-              Admin
+              {language === 'ar' ? 'لوحة التحكم' : 'Admin'}
             </button>
           )}
         </div>
@@ -2546,35 +2601,35 @@ export default function App() {
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_analytics' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
             <Activity className="w-4.5 h-4.5 text-red-500" />
-            Analytics
+            {language === 'ar' ? 'التحليلات' : 'Analytics'}
           </button>
           <button
             onClick={() => setActiveTab('superadmin_directory')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_directory' ? 'text-red-605 font-extrabold' : 'text-slate-400'}`}
           >
             <Shield className="w-4.5 h-4.5 text-red-500" />
-            Registry
+            {language === 'ar' ? 'السجل' : 'Registry'}
           </button>
           <button
             onClick={() => setActiveTab('superadmin_subscriptions')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_subscriptions' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
             <CreditCard className="w-4.5 h-4.5 text-red-500" />
-            Licenses
+            {language === 'ar' ? 'التراخيص' : 'Licenses'}
           </button>
           <button
             onClick={() => setActiveTab('superadmin_packages')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_packages' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
             <Sliders className="w-4.5 h-4.5 text-red-500" />
-            Plans
+            {language === 'ar' ? 'الخطط' : 'Plans'}
           </button>
           <button
             onClick={() => setActiveTab('superadmin_landing')}
             className={`flex flex-col items-center gap-1 py-1 cursor-pointer select-none ${activeTab === 'superadmin_landing' ? 'text-red-600 font-extrabold' : 'text-slate-400'}`}
           >
             <Settings className="w-4.5 h-4.5 text-red-500" />
-            Landing
+            {language === 'ar' ? 'الصفحة الرئيسية' : 'Landing'}
           </button>
         </div>
       )}
@@ -2583,16 +2638,22 @@ export default function App() {
       {isNewBuildingModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <form onSubmit={handleCreateBuilding} className="bg-white rounded-2xl max-w-sm w-full border border-slate-100 shadow-2xl p-6 relative animate-in fade-in-50 zoom-in-95 duration-200">
-            <h3 className="font-extrabold text-slate-800 text-lg mb-2">Initialize Property</h3>
-            <p className="text-xs text-slate-400 mb-4">Add and manage an additional real estate asset or building portfolio.</p>
+            <h3 className="font-extrabold text-slate-800 text-lg mb-2">
+              {language === 'ar' ? 'تهيئة العقار' : 'Initialize Property'}
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              {language === 'ar' ? 'إضافة وإدارة أصول عقارية إضافية أو محفظة مباني.' : 'Add and manage an additional real estate asset or building portfolio.'}
+            </p>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Property Title / Name</label>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">
+                  {language === 'ar' ? 'عنوان / اسم العقار' : 'Property Title / Name'}
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Summit Hill Court"
+                  placeholder={language === 'ar' ? 'مثال: مجمع تلال عمان' : 'e.g., Summit Hill Court'}
                   value={newBuildingName}
                   onChange={(e) => setNewBuildingName(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-500 font-sans"
@@ -2600,7 +2661,9 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">Property Address</label>
+                <label className="text-[10px] font-extrabold text-slate-400 block mb-1 uppercase tracking-wider">
+                  {language === 'ar' ? 'عنوان العقار' : 'Property Address'}
+                </label>
                 <input
                   type="text"
                   placeholder="e.g., 704 Summit Dr, Seattle WA"
@@ -2619,8 +2682,12 @@ export default function App() {
                     className="rounded text-blue-600 focus:ring-blue-500"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-700 block">Pre-seed starting stats</span>
-                    <span className="text-[9px] text-slate-400 block leading-normal mt-0.5">Loads demo active profiles to start evaluating features.</span>
+                    <span className="text-xs font-bold text-slate-700 block">
+                      {language === 'ar' ? 'تحميل بيانات تجريبية أولية' : 'Pre-seed starting stats'}
+                    </span>
+                    <span className="text-[9px] text-slate-400 block leading-normal mt-0.5">
+                      {language === 'ar' ? 'يقوم بتحميل ملفات تعريف تجريبية نشطة لتقييم الميزات.' : 'Loads demo active profiles to start evaluating features.'}
+                    </span>
                   </div>
                 </label>
               </div>
@@ -2632,14 +2699,16 @@ export default function App() {
                 onClick={() => setIsNewBuildingModalOpen(false)}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-xl"
               >
-                Cancel
+                {language === 'ar' ? 'إلغاء' : 'Cancel'}
               </button>
               <button
                 type="submit"
                 disabled={creatingBuilding}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
               >
-                {creatingBuilding ? 'Initializing...' : 'Add Property'}
+                {creatingBuilding 
+                  ? (language === 'ar' ? 'جاري التهيئة...' : 'Initializing...') 
+                  : (language === 'ar' ? 'إضافة العقار' : 'Add Property')}
               </button>
             </div>
           </form>

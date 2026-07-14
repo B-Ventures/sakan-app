@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { LanguageProvider } from './context/LanguageContext.tsx';
 
 // Conditionally register service worker based on domain type to prevent stale dev caching
 const isDevDomain = 
@@ -49,7 +50,9 @@ if (isDevDomain) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <LanguageProvider>
+        <App />
+      </LanguageProvider>
     </ErrorBoundary>
   </StrictMode>,
 );
