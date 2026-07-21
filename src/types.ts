@@ -279,6 +279,11 @@ export interface SaASCoupon {
   discountPercent: number; // e.g., 50
   description: string;
   isActive: boolean;
+  validPlanId?: string; // e.g., 'all' | 'monthly' | 'annually'
+  maxUses?: number; // total overall usage limit
+  maxUsesPerUser?: number; // usage limit per customer
+  usedCount?: number; // total number of times used
+  userUsage?: Record<string, number>; // tracks user ID -> usage count
 }
 
 export interface StripeConfig {

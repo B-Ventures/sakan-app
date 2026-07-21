@@ -177,6 +177,9 @@ export default function SuperAdminPanel({
   const [newCouponDiscount, setNewCouponDiscount] = useState(10);
   const [newCouponDescription, setNewCouponDescription] = useState('');
   const [newCouponIsActive, setNewCouponIsActive] = useState(true);
+  const [newCouponValidPlanId, setNewCouponValidPlanId] = useState<string>('all');
+  const [newCouponMaxUses, setNewCouponMaxUses] = useState<string>('');
+  const [newCouponMaxUsesPerUser, setNewCouponMaxUsesPerUser] = useState<string>('');
 
   const [newAddonId, setNewAddonId] = useState('');
   const [newAddonName, setNewAddonName] = useState('');
@@ -631,7 +634,12 @@ export default function SuperAdminPanel({
         code,
         discountPercent: Number(newCouponDiscount),
         description: newCouponDescription,
-        isActive: newCouponIsActive
+        isActive: newCouponIsActive,
+        validPlanId: newCouponValidPlanId === 'all' ? undefined : newCouponValidPlanId,
+        maxUses: newCouponMaxUses ? Number(newCouponMaxUses) : undefined,
+        maxUsesPerUser: newCouponMaxUsesPerUser ? Number(newCouponMaxUsesPerUser) : undefined,
+        usedCount: editingCouponItem?.usedCount ?? 0,
+        userUsage: editingCouponItem?.userUsage ?? {}
       };
       await saveSaaSCoupon(payload);
       triggerNotification(`Coupon "${payload.code}" saved!`, 'success');
@@ -642,6 +650,9 @@ export default function SuperAdminPanel({
       setNewCouponDiscount(10);
       setNewCouponDescription('');
       setNewCouponIsActive(true);
+      setNewCouponValidPlanId('all');
+      setNewCouponMaxUses('');
+      setNewCouponMaxUsesPerUser('');
 
       loadSaaSConfigData();
     } catch (err) {
@@ -2489,6 +2500,43 @@ export default function SuperAdminPanel({
                       />
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Applicable Plan Package</label>
+                        <select
+                          value={newCouponValidPlanId}
+                          onChange={(e) => setNewCouponValidPlanId(e.target.value)}
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-bold"
+                        >
+                          <option value="all">Any Premium Package</option>
+                          <option value="monthly">Monthly Plan Only</option>
+                          <option value="annually">Annual Plan Only</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Max Overall Uses (Empty = Unlimited)</label>
+                        <input 
+                          type="number" 
+                          min="1"
+                          value={newCouponMaxUses} 
+                          onChange={(e) => setNewCouponMaxUses(e.target.value)}
+                          placeholder="Unlimited" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500">Max Uses Per Customer (Empty = Unlimited)</label>
+                        <input 
+                          type="number" 
+                          min="1"
+                          value={newCouponMaxUsesPerUser} 
+                          onChange={(e) => setNewCouponMaxUsesPerUser(e.target.value)}
+                          placeholder="Unlimited (e.g. 1)" 
+                          className="w-full p-2 text-xs bg-white rounded-lg border border-slate-200 focus:outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
                       <input 
                         type="checkbox"
@@ -2511,6 +2559,9 @@ export default function SuperAdminPanel({
                           setNewCouponDiscount(10);
                           setNewCouponDescription('');
                           setNewCouponIsActive(true);
+                          setNewCouponValidPlanId('all');
+                          setNewCouponMaxUses('');
+                          setNewCouponMaxUsesPerUser('');
                           setShowAddCoupon(false);
                         }} 
                         className="px-3 py-1.5 text-xs text-slate-600 font-semibold cursor-pointer"
@@ -2535,7 +2586,7 @@ export default function SuperAdminPanel({
                         ? 'bg-indigo-50/40 border-indigo-100/50' 
                         : 'bg-slate-50 border-slate-200 opacity-60'
                     }`}>
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-black text-xs text-indigo-900 font-mono tracking-wide bg-indigo-100 px-2 py-0.5 rounded-md">{c.code}</span>
                           <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded font-mono">-{c.discountPercent}% OFF</span>
@@ -2546,6 +2597,21 @@ export default function SuperAdminPanel({
                           </span>
                         </div>
                         <p className="text-[9px] text-slate-500 leading-snug">{c.description}</p>
+                        
+                        {/* Rules specifications summary badges */}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="bg-slate-100 text-slate-600 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase font-mono">
+                            Plan: {c.validPlanId ? (c.validPlanId === 'monthly' ? 'Monthly Only' : 'Annual Only') : 'All packages'}
+                          </span>
+                          <span className="bg-slate-100 text-slate-600 text-[8px] font-bold px-1.5 py-0.5 rounded font-mono">
+                            Uses: {c.usedCount ?? 0}/{c.maxUses ?? '∞'}
+                          </span>
+                          {c.maxUsesPerUser && (
+                            <span className="bg-amber-50 text-amber-700 text-[8px] font-bold px-1.5 py-0.5 rounded font-mono">
+                              Limit: {c.maxUsesPerUser}/user
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex gap-1 items-center shrink-0">
@@ -2569,6 +2635,9 @@ export default function SuperAdminPanel({
                             setNewCouponDiscount(c.discountPercent);
                             setNewCouponDescription(c.description || '');
                             setNewCouponIsActive(c.isActive !== false);
+                            setNewCouponValidPlanId(c.validPlanId || 'all');
+                            setNewCouponMaxUses(c.maxUses !== undefined ? String(c.maxUses) : '');
+                            setNewCouponMaxUsesPerUser(c.maxUsesPerUser !== undefined ? String(c.maxUsesPerUser) : '');
                             setShowAddCoupon(true);
                           }}
                           className="text-[10px] text-indigo-600 hover:text-indigo-800 p-1 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"

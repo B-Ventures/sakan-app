@@ -51,9 +51,11 @@ import {
   fetchSaaSCoupons, 
   fetchStripeConfig, 
   fetchSaaSAddons, 
-  fetchMultiPropertyConfig 
+  fetchMultiPropertyConfig,
+  saveSaaSCoupon
 } from '../firebaseService';
 
+import { auth } from '../firebase';
 import { useLanguage } from '../context/LanguageContext';
 
 interface PropertySettingsModalProps {
@@ -99,6 +101,23 @@ export default function PropertySettingsModal({
   const [billingPlan, setBillingPlan] = useState<string>('monthly');
   const [couponCode, setCouponCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [appliedCoupon, setAppliedCoupon] = useState<SaASCoupon | null>(null);
+
+  // Re-validate applied coupon if user switches billing plans
+  useEffect(() => {
+    if (appliedCoupon) {
+      if (appliedCoupon.validPlanId && appliedCoupon.validPlanId !== billingPlan) {
+        setAppliedDiscount(0);
+        setAppliedCoupon(null);
+        showToast(
+          `Coupon "${appliedCoupon.code}" removed because it is only valid for the ${
+            appliedCoupon.validPlanId === 'monthly' ? 'Monthly' : 'Annual'
+          } plan.`,
+          "error"
+        );
+      }
+    }
+  }, [billingPlan, appliedCoupon]);
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
@@ -289,12 +308,43 @@ export default function PropertySettingsModal({
   const handleApplyCoupon = () => {
     const cleanCoupon = couponCode.trim().toUpperCase();
     const matched = coupons.find(c => c.code.toUpperCase() === cleanCoupon);
-    if (matched) {
-      setAppliedDiscount(matched.discountPercent);
-      showToast(`Coupon applied! ${matched.code} active (${matched.discountPercent}% off).`, "success");
-    } else {
+    
+    if (!matched) {
       showToast("Invalid or inactive coupon code.", "error");
+      return;
     }
+
+    if (matched.isActive === false) {
+      showToast("This coupon code is currently inactive.", "error");
+      return;
+    }
+
+    // 1. Check plan validation
+    if (matched.validPlanId && matched.validPlanId !== billingPlan) {
+      showToast(`This coupon is only valid for the ${matched.validPlanId === 'monthly' ? 'Monthly' : 'Annual'} plan.`, "error");
+      return;
+    }
+
+    // 2. Check overall usage limit
+    if (matched.maxUses !== undefined && (matched.usedCount ?? 0) >= matched.maxUses) {
+      showToast("This promo code has reached its maximum overall usage limit.", "error");
+      return;
+    }
+
+    // 3. Check per-customer usage limit
+    const uid = auth.currentUser?.uid;
+    if (uid && matched.maxUsesPerUser !== undefined) {
+      const userCount = matched.userUsage?.[uid] ?? 0;
+      if (userCount >= matched.maxUsesPerUser) {
+        showToast(`You have already used this promo code the maximum allowed number of times (${matched.maxUsesPerUser}).`, "error");
+        return;
+      }
+    }
+
+    // All checks passed!
+    setAppliedDiscount(matched.discountPercent);
+    setAppliedCoupon(matched);
+    showToast(`Coupon applied! ${matched.code} active (${matched.discountPercent}% off).`, "success");
   };
 
   const handleSubscribe = async (e: React.FormEvent) => {
@@ -328,7 +378,7 @@ export default function PropertySettingsModal({
           buildingId: building.id,
           itemType: "plan",
           itemId: billingPlan,
-          successUrl: `${window.location.origin}/?stripe_checkout=success&session_id={CHECKOUT_SESSION_ID}&type=plan&itemId=${billingPlan}&buildingId=${building.id}`,
+          successUrl: `${window.location.origin}/?stripe_checkout=success&session_id={CHECKOUT_SESSION_ID}&type=plan&itemId=${billingPlan}&buildingId=${building.id}&appliedCouponCode=${appliedCoupon?.code || ''}`,
           cancelUrl: `${window.location.origin}/?stripe_checkout=cancel`
         };
 
@@ -400,6 +450,22 @@ export default function PropertySettingsModal({
         subscriptionAmountPaid: finalPrice,
       });
 
+      // Update and persist coupon usage metrics
+      if (appliedCoupon) {
+        const uid = auth.currentUser?.uid;
+        const currentUses = appliedCoupon.usedCount ?? 0;
+        const newUserUsage = { ...(appliedCoupon.userUsage || {}) };
+        if (uid) {
+          newUserUsage[uid] = (newUserUsage[uid] ?? 0) + 1;
+        }
+        const updatedCoupon: SaASCoupon = {
+          ...appliedCoupon,
+          usedCount: currentUses + 1,
+          userUsage: newUserUsage
+        };
+        await saveSaaSCoupon(updatedCoupon);
+      }
+
       const planName = selectedPlanObj ? selectedPlanObj.name : billingPlan;
       showToast(`Property successfully subscribed to the ${planName}!`, 'success');
       // Reset forms
@@ -409,6 +475,7 @@ export default function PropertySettingsModal({
       setCardName('');
       setCouponCode('');
       setAppliedDiscount(0);
+      setAppliedCoupon(null);
     } catch (err: any) {
       console.error(err);
       showToast(err.message || "Failed to process subscription settings.", "error");

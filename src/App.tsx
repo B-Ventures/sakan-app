@@ -66,7 +66,9 @@ import {
   fetchAllPayments,
   fetchAllExpenses,
   fetchLandingPageConfig,
-  saveLandingPageConfig
+  saveLandingPageConfig,
+  fetchSaaSCoupons,
+  saveSaaSCoupon
 } from './firebaseService';
 import PropertySettingsModal from './components/PropertySettingsModal';
 import DataImporter from './components/DataImporter';
@@ -455,6 +457,7 @@ export default function App() {
     const type = params.get('type');
     const itemId = params.get('itemId');
     const buildingId = params.get('buildingId');
+    const appliedCouponCode = params.get('appliedCouponCode');
 
     if (stripeCheckout === 'success' && sessionId && type && itemId && buildingId && activeUserId) {
       const verifyStripePayment = async () => {
@@ -494,6 +497,27 @@ export default function App() {
                 setBuildings(prev => prev.map(b => b.id === buildingId ? newB : b));
                 if (activeBuilding?.id === buildingId) {
                   setActiveBuilding(newB);
+                }
+
+                // Increment coupon usage statistics if Stripe succeeded
+                if (appliedCouponCode) {
+                  try {
+                    const allCoupons = await fetchSaaSCoupons();
+                    const matchedCoupon = allCoupons.find(c => c.code.toUpperCase() === appliedCouponCode.toUpperCase());
+                    if (matchedCoupon) {
+                      const currentUses = matchedCoupon.usedCount ?? 0;
+                      const newUserUsage = { ...(matchedCoupon.userUsage || {}) };
+                      newUserUsage[activeUserId] = (newUserUsage[activeUserId] ?? 0) + 1;
+                      const updatedCoupon = {
+                        ...matchedCoupon,
+                        usedCount: currentUses + 1,
+                        userUsage: newUserUsage
+                      };
+                      await saveSaaSCoupon(updatedCoupon);
+                    }
+                  } catch (couponErr) {
+                    console.error("Failed to update coupon usage after Stripe success:", couponErr);
+                  }
                 }
 
                 await logAction(
@@ -552,6 +576,7 @@ export default function App() {
           url.searchParams.delete('type');
           url.searchParams.delete('itemId');
           url.searchParams.delete('buildingId');
+          url.searchParams.delete('appliedCouponCode');
           window.history.replaceState({}, '', url.pathname + url.search);
         }
       };

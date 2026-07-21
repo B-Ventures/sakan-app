@@ -672,7 +672,7 @@ export async function saveSaaSPlan(plan: SaaSPlan): Promise<void> {
 
   const path = `system_configs/billing/saas_plans/${plan.id}`;
   try {
-    await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', plan.id), plan);
+    await setDoc(doc(db, 'system_configs', 'billing', 'saas_plans', plan.id), cleanUndefined(plan));
   } catch (error) {
     console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
@@ -746,7 +746,7 @@ export async function fetchSaaSCoupons(): Promise<SaASCoupon[]> {
       { id: 'BOSSTSC26', code: 'BOSSTSC26', discountPercent: 50, description: 'Exclusive Partner Launch discount coupon.', isActive: true },
       { id: 'WELCOME50', code: 'WELCOME50', discountPercent: 50, description: 'Standard 50% discount for first-time premium upgraders.', isActive: true },
       { id: 'SAASFREE', code: 'SAASFREE', discountPercent: 100, description: '100% discount sandbox trial pass.', isActive: true },
-      { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off full premium pass.', isActive: true }
+      { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off (Monthly Plan Only, Max 1 use per user).', isActive: true, validPlanId: 'monthly', maxUsesPerUser: 1 }
     ];
   }
 }
@@ -771,7 +771,7 @@ export async function saveSaaSCoupon(coupon: SaASCoupon): Promise<void> {
 
   const path = `system_configs/billing/saas_coupons/${coupon.id}`;
   try {
-    await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', coupon.id), coupon);
+    await setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', coupon.id), cleanUndefined(coupon));
   } catch (error) {
     console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
@@ -868,7 +868,7 @@ export async function saveSaaSAddon(addon: SaaSAddon): Promise<void> {
 
   const path = `system_configs/billing/saas_addons/${addon.id}`;
   try {
-    await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', addon.id), addon);
+    await setDoc(doc(db, 'system_configs', 'billing', 'saas_addons', addon.id), cleanUndefined(addon));
   } catch (error) {
     console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
@@ -944,7 +944,7 @@ export async function saveStripeConfig(config: StripeConfig): Promise<void> {
 
   const path = 'system_configs/stripe_config';
   try {
-    await setDoc(doc(db, 'system_configs', 'stripe_config'), config);
+    await setDoc(doc(db, 'system_configs', 'stripe_config'), cleanUndefined(config));
   } catch (error) {
     console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
@@ -998,7 +998,7 @@ export async function saveMultiPropertyConfig(config: MultiPropertyConfig): Prom
 
   const path = 'system_configs/multi_property_config';
   try {
-    await setDoc(doc(db, 'system_configs', 'multi_property_config'), config);
+    await setDoc(doc(db, 'system_configs', 'multi_property_config'), cleanUndefined(config));
   } catch (error) {
     console.warn("Firestore save failed, changes preserved in local storage:", error);
   }
