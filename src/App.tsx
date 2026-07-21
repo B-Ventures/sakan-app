@@ -34,7 +34,10 @@ import {
   Shield,
   Smartphone,
   Monitor,
-  Activity
+  Activity,
+  AlertTriangle,
+  Clock,
+  Eye
 } from 'lucide-react';
 import { auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
@@ -109,6 +112,51 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [triggerRefresh, setTriggerRefresh] = useState(0);
   const [buildingToDeleteId, setBuildingToDeleteId] = useState<string | null>(null);
+
+  // --- SAAS SUBSCRIPTION ENFORCEMENT STATES & UTILITIES ---
+  const [settingsModalInitialTab, setSettingsModalInitialTab] = useState<'general' | 'expenses' | 'paymentMethods' | 'incomeSplits' | 'billing' | 'backup'>('general');
+  const [readOnlyBypass, setReadOnlyBypass] = useState<boolean>(false);
+
+  const getDaysRemaining = (endDateStr?: string) => {
+    if (!endDateStr) return null;
+    const end = new Date(endDateStr);
+    const today = new Date();
+    end.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    const diffTime = end.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const isBuildingExpired = (building: BuildingType | null) => {
+    if (!building) return false;
+    if (building.isSandbox) return false;
+    if (building.subscriptionStatus === 'expired') return true;
+    if (building.subscriptionStatus === 'none') return true;
+    
+    const days = getDaysRemaining(building.subscriptionEndDate);
+    if (days !== null && days < 0) {
+      return true;
+    }
+    return false;
+  };
+
+  const isBuildingNearExpiry = (building: BuildingType | null) => {
+    if (!building) return false;
+    if (building.isSandbox) return false;
+    if (building.subscriptionStatus === 'expired') return false;
+    if (building.subscriptionStatus === 'none') return false;
+    
+    const days = getDaysRemaining(building.subscriptionEndDate);
+    if (days !== null && days >= 0 && days <= 5) {
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    setReadOnlyBypass(false);
+  }, [activeBuilding?.id]);
 
   // --- SUPERADMIN STATES ---
   const [impersonatedUser, setImpersonatedUser] = useState<{ uid: string; email: string; displayName?: string } | null>(null);
@@ -1138,8 +1186,24 @@ export default function App() {
   };
 
   // --- TENANTS METHODS ---
+  const checkSubscriptionBarrier = () => {
+    if (isBuildingExpired(activeBuilding)) {
+      showGlobalToast(
+        language === 'ar' 
+          ? '⚠️ لا يمكن إجراء هذه العملية لأن اشتراك العقار منتهي. يرجى تجديد الاشتراك.' 
+          : '⚠️ Your subscription has expired. Please renew or upgrade your building license to perform modifications.',
+        'error'
+      );
+      setSettingsModalInitialTab('billing');
+      setIsPropertySettingsOpen(true);
+      return true; // blocked
+    }
+    return false; // not blocked
+  };
+
   const handleAddTenant = async (newTenant: Omit<Tenant, 'id'>) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const newId = `demo-t-${Date.now()}`;
@@ -1212,6 +1276,7 @@ export default function App() {
 
   const handleEditTenant = async (updatedTenant: Tenant) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedTenants = tenants.map((t) => t.id === updatedTenant.id ? updatedTenant : t);
@@ -1268,6 +1333,7 @@ export default function App() {
 
   const handleDeleteTenant = async (id: string) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedTenants = tenants.filter((t) => t.id !== id);
@@ -1344,6 +1410,7 @@ export default function App() {
   // --- RESTORE BACKUP SNAPSHOT ---
   const handleRestoreBackup = async (backupData: { tenants: Tenant[], payments: Payment[], expenses: Expense[] }) => {
     if (!activeBuilding || !activeUserId) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const bId = activeBuilding.id;
@@ -1425,6 +1492,7 @@ export default function App() {
   // --- PAYMENTS METHODS ---
   const handleEditPayment = async (updatedPayment: Payment) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedPayments = payments.map((p) => p.id === updatedPayment.id ? updatedPayment : p);
@@ -1453,6 +1521,7 @@ export default function App() {
 
   const handleAddPayment = async (newPaymentArgs: Omit<Payment, 'id' | 'receiptNumber'>) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const existingIdx = payments.findIndex(p => 
@@ -1530,6 +1599,7 @@ export default function App() {
 
   const handleUpdatePaymentStatus = async (id: string, status: Payment['status'], datePaid?: string) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedPayments = payments.map((p) => {
@@ -1574,6 +1644,7 @@ export default function App() {
 
   const handleDeletePayment = async (id: string) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedPayments = payments.filter((p) => p.id !== id);
@@ -1606,6 +1677,7 @@ export default function App() {
     paymentsToUpdate: { id: string; status: Payment['status'] }[]
   ) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       let currentPayments = [...payments];
@@ -1684,6 +1756,7 @@ export default function App() {
   // --- EXPENSES METHODS ---
   const handleEditExpense = async (updatedExpense: Expense) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedExpenses = expenses.map((e) => e.id === updatedExpense.id ? updatedExpense : e);
@@ -1711,6 +1784,7 @@ export default function App() {
 
   const handleAddExpense = async (newExpenseArgs: Omit<Expense, 'id'>) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const newExp: Expense = {
@@ -1742,6 +1816,7 @@ export default function App() {
 
   const handleDeleteExpense = async (id: string) => {
     if (!activeBuilding) return;
+    if (checkSubscriptionBarrier()) return;
 
     if (isDemoMode) {
       const updatedExpenses = expenses.filter((e) => e.id !== id);
@@ -2418,7 +2493,10 @@ export default function App() {
             {activeTab === 'overview' && (
               <>
                 <button 
-                  onClick={() => setIsImportModalOpen(true)}
+                  onClick={() => {
+                    if (checkSubscriptionBarrier()) return;
+                    setIsImportModalOpen(true);
+                  }}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-xs text-white rounded transition-colors font-semibold flex items-center gap-1.5"
                 >
                   <Upload className="w-3.5 h-3.5" />
@@ -2454,7 +2532,7 @@ export default function App() {
         </header>
 
         {/* Inner Scrollable View Containers */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6 pb-24 md:pb-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6 pb-24 md:pb-8 relative">
           {loadingData ? (
             <div className="py-24 text-center">
               <RefreshCw className="w-7 h-7 text-blue-600 animate-spin mx-auto mb-2" />
@@ -2462,13 +2540,122 @@ export default function App() {
             </div>
           ) : (
             <>
+              {/* Subscription Expiry / Warning Banner */}
+              {activeBuilding && isBuildingExpired(activeBuilding) && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                      <AlertTriangle className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div className="text-left">
+                      <h4 className="text-xs font-black text-rose-800 uppercase tracking-wide">
+                        {language === 'ar' ? '🚨 انتهى اشتراك العقار' : '🚨 Property Subscription Expired'}
+                      </h4>
+                      <p className="text-xs text-rose-600/90 mt-0.5">
+                        {language === 'ar' ? `انتهت صلاحية باقة العقار (${activeBuilding.name}) في تاريخ ${activeBuilding.subscriptionEndDate || ''}. تم تعيين الحساب إلى وضع "القراءة فقط".` : `The license for ${activeBuilding.name} expired on ${activeBuilding.subscriptionEndDate || 'N/A'}. All operations are now locked in Read-Only Mode.`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSettingsModalInitialTab('billing');
+                      setIsPropertySettingsOpen(true);
+                    }}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0 uppercase tracking-wider cursor-pointer"
+                  >
+                    {language === 'ar' ? '💳 تجديد الاشتراك الآن' : '💳 Renew Subscription'}
+                  </button>
+                </div>
+              )}
+
+              {activeBuilding && isBuildingNearExpiry(activeBuilding) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0">
+                      <Clock className="w-5 h-5 text-amber-600 animate-pulse" />
+                    </div>
+                    <div className="text-left">
+                      <h4 className="text-xs font-black text-amber-800 uppercase tracking-wide">
+                        {language === 'ar' ? '⚠️ تنبيه: اقترب انتهاء الاشتراك' : '⚠️ Warning: Subscription Expiring Soon'}
+                      </h4>
+                      <p className="text-xs text-amber-600/90 mt-0.5">
+                        {language === 'ar' ? `سينتهي اشتراك العقار بعد ${getDaysRemaining(activeBuilding.subscriptionEndDate)} يوم في تاريخ ${activeBuilding.subscriptionEndDate || ''}. يرجى تجديده لتجنب انقطاع الخدمة.` : `Your license for ${activeBuilding.name} will expire in ${getDaysRemaining(activeBuilding.subscriptionEndDate)} days on ${activeBuilding.subscriptionEndDate || 'N/A'}.`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSettingsModalInitialTab('billing');
+                      setIsPropertySettingsOpen(true);
+                    }}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0 uppercase tracking-wider cursor-pointer"
+                  >
+                    {language === 'ar' ? '💳 تجديد الاشتراك' : '💳 Renew License'}
+                  </button>
+                </div>
+              )}
+
+              {/* Subscription Expired Locked Overlay */}
+              {activeBuilding && isBuildingExpired(activeBuilding) && !readOnlyBypass && (activeTab === 'overview' || activeTab === 'tenants' || activeTab === 'payments' || activeTab === 'expenses' || activeTab === 'reminders' || activeTab === 'audit') && (
+                <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md z-40 rounded-3xl flex items-center justify-center p-6 animate-in fade-in duration-300">
+                  <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl space-y-6 transform animate-in zoom-in-95 duration-300">
+                    <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center mx-auto text-rose-600">
+                      <Lock className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-md font-black text-slate-800 uppercase tracking-wide">
+                        {language === 'ar' ? '🔒 الخدمة معطلة مؤقتاً لهذا العقار' : '🔒 Service Interrupted for This Property'}
+                      </h3>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {language === 'ar' 
+                          ? `انتهت فترة الاشتراك التجريبية أو المدفوعة المخصصة لهذا العقار (${activeBuilding.name}) في تاريخ ${activeBuilding.subscriptionEndDate || ''}.` 
+                          : `The premium license or trial period for this property (${activeBuilding.name}) expired on ${activeBuilding.subscriptionEndDate || 'N/A'}.`}
+                      </p>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        {language === 'ar' 
+                          ? 'لإعادة تفعيل دفتر تحصيل الإيجارات وإدارته، يرجى تفعيل أو تجديد ترخيص العقار من خلال اختيار الخطة المناسبة.' 
+                          : 'To unlock rent collections, unit registry edits, and automatic reminders, please renew your building subscription.'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      <button
+                        onClick={() => {
+                          setSettingsModalInitialTab('billing');
+                          setIsPropertySettingsOpen(true);
+                        }}
+                        className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all uppercase tracking-widest cursor-pointer"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        {language === 'ar' ? '💳 تجديد الاشتراك وتفعيل الترخيص' : '💳 Subscribe & Unlock License'}
+                      </button>
+                      
+                      <button
+                        onClick={() => setReadOnlyBypass(true)}
+                        className="w-full py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all uppercase tracking-wider cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" />
+                        {language === 'ar' ? '👁️ تصفح في وضع القراءة فقط' : '👁️ Browse in Read-Only Preview'}
+                      </button>
+                    </div>
+                    
+                    <span className="text-[10px] text-slate-400 block">
+                      {language === 'ar' ? 'بصفتك مديراً، لن يتم حذف بياناتك. يمكنك تصفحها أو تنزيل نسخة احتياطية في أي وقت.' : 'As a property owner, your data is secure and will never be deleted. You can browse or backup your data.'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'overview' && (
                 <DashboardOverview 
                   tenants={tenants} 
                   payments={payments} 
                   expenses={expenses} 
                   onNavigateToTab={(tab) => setActiveTab(tab)}
-                  onOpenImportModal={() => setIsImportModalOpen(true)}
+                  onOpenImportModal={() => {
+                    if (checkSubscriptionBarrier()) return;
+                    setIsImportModalOpen(true);
+                  }}
                   activeBuilding={activeBuilding}
                 />
               )}
@@ -2480,6 +2667,7 @@ export default function App() {
                   onEditTenant={handleEditTenant} 
                   onDeleteTenant={handleDeleteTenant}
                   activeBuilding={activeBuilding}
+                  isReadOnly={isBuildingExpired(activeBuilding) && !readOnlyBypass}
                 />
               )}
 
@@ -2494,6 +2682,7 @@ export default function App() {
                   customPaymentMethods={activeBuilding?.customPaymentMethods || DEFAULT_PAYMENT_METHODS}
                   customIncomeCategories={activeBuilding?.customIncomeCategories || DEFAULT_INCOME_CATEGORIES}
                   activeBuilding={activeBuilding}
+                  isReadOnly={isBuildingExpired(activeBuilding) && !readOnlyBypass}
                 />
               )}
 
@@ -2505,6 +2694,7 @@ export default function App() {
                   onDeleteExpense={handleDeleteExpense}
                   customExpenseCategories={activeBuilding?.customExpenseCategories || DEFAULT_EXPENSE_CATEGORIES}
                   activeBuilding={activeBuilding}
+                  isReadOnly={isBuildingExpired(activeBuilding) && !readOnlyBypass}
                 />
               )}
 
@@ -2519,6 +2709,7 @@ export default function App() {
                   onAddPayment={handleAddPayment}
                   onEditPayment={handleEditPayment}
                   onEditExpense={handleEditExpense}
+                  isReadOnly={isBuildingExpired(activeBuilding) && !readOnlyBypass}
                 />
               )}
 
@@ -2773,6 +2964,7 @@ export default function App() {
           isDemoMode={isDemoMode}
           onRestoreBackup={handleRestoreBackup}
           buildings={buildings}
+          initialTab={settingsModalInitialTab}
         />
       )}
 

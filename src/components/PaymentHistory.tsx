@@ -21,6 +21,7 @@ interface PaymentHistoryProps {
   customPaymentMethods: (string | CustomPaymentMethod)[];
   customIncomeCategories: string[];
   activeBuilding?: any;
+  isReadOnly?: boolean;
 }
 
 export default function PaymentHistory({
@@ -33,6 +34,7 @@ export default function PaymentHistory({
   customPaymentMethods,
   customIncomeCategories,
   activeBuilding,
+  isReadOnly = false,
 }: PaymentHistoryProps) {
   const { t, language } = useLanguage();
   const normalizedMethods = React.useMemo(() => {
@@ -694,12 +696,31 @@ export default function PaymentHistory({
         </div>
         <button
           onClick={openAddForm}
-          className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors"
+          disabled={isReadOnly}
+          className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors disabled:opacity-50 disabled:pointer-events-none"
         >
           <Plus className="w-4 h-4" />
           {language === 'ar' ? 'تسجيل دفعة إيراد' : 'Log Payment'}
         </button>
       </div>
+
+      {isReadOnly && (
+        <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-3 text-xs text-rose-800 animate-in fade-in duration-300">
+          <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0" />
+          <div>
+            <p className="font-bold">
+              {language === 'ar' 
+                ? 'وضع المعاينة للقراءة فقط (الاشتراك منتهي)' 
+                : 'Read-Only Preview Mode (Subscription Expired)'}
+            </p>
+            <p className="mt-0.5 opacity-90">
+              {language === 'ar' 
+                ? 'تم إيقاف العمليات التفاعلية وإمكانية الحفظ أو التعديل مؤقتاً لهذا البناية نظراً لانتهاء رخصة الاشتراك المتميزة.' 
+                : 'Interactive operations and saving modifications have been disabled temporarily due to expired subscription license.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Controls panel: Search & Filters */}
       <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center" id="payment-history-filters-container">
@@ -906,7 +927,8 @@ export default function PaymentHistory({
                         {/* Edit entry */}
                         <button
                           onClick={() => openEditForm(p)}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition-colors animate-none"
+                          disabled={isReadOnly}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition-colors animate-none disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-100"
                           title="Edit transaction details"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -919,7 +941,8 @@ export default function PaymentHistory({
                               const today = new Date().toISOString().split('T')[0];
                               onUpdatePaymentStatus(p.id, 'Paid', today);
                             }}
-                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                            disabled={isReadOnly}
+                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-50"
                             title={language === 'ar' ? 'تعيين كمدفوع' : 'Mark as Paid'}
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -964,7 +987,8 @@ export default function PaymentHistory({
                           onClick={() => {
                             setDeleteConfirmId(p.id);
                           }}
-                          className="border border-rose-50 hover:border-rose-100 text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors"
+                          disabled={isReadOnly}
+                          className="border border-rose-50 hover:border-rose-100 text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           title="Delete payment receipt log"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

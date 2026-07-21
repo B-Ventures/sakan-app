@@ -15,6 +15,7 @@ interface TenantListProps {
   onEditTenant: (tenant: Tenant) => void;
   onDeleteTenant: (id: string) => void;
   activeBuilding?: any;
+  isReadOnly?: boolean;
 }
 
 export default function TenantList({
@@ -23,6 +24,7 @@ export default function TenantList({
   onEditTenant,
   onDeleteTenant,
   activeBuilding,
+  isReadOnly = false,
 }: TenantListProps) {
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<'all' | 'active' | 'vacant'>('all');
@@ -135,13 +137,32 @@ export default function TenantList({
         </div>
         <button
           onClick={openAddForm}
-          className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors"
+          disabled={isReadOnly}
+          className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors disabled:opacity-50 disabled:pointer-events-none"
           id="btn-add-unit"
         >
           <Plus className="w-4 h-4" />
           {t('registerUnitBeneficiary')}
         </button>
       </div>
+
+      {isReadOnly && (
+        <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-3 text-xs text-rose-800 animate-in fade-in duration-300">
+          <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
+          <div>
+            <p className="font-bold">
+              {language === 'ar' 
+                ? 'وضع المعاينة للقراءة فقط (الاشتراك منتهي)' 
+                : 'Read-Only Preview Mode (Subscription Expired)'}
+            </p>
+            <p className="mt-0.5 opacity-90">
+              {language === 'ar' 
+                ? 'تم إيقاف العمليات التفاعلية وإمكانية الحفظ أو التعديل مؤقتاً لهذا البناية نظراً لانتهاء رخصة الاشتراك المتميزة.' 
+                : 'Interactive operations and saving modifications have been disabled temporarily due to expired subscription license.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Controls & searching */}
       <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -275,7 +296,8 @@ export default function TenantList({
             <div className="flex border-t border-slate-100/70 mt-5 pt-4 gap-2">
               <button
                 onClick={() => openEditForm(tItem)}
-                className="flex-1 flex justify-center items-center gap-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs py-2 rounded-xl transition-colors"
+                disabled={isReadOnly}
+                className="flex-1 flex justify-center items-center gap-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs py-2 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
                 <Edit2 className="w-3.5 h-3.5" />
                 {t('editUnitProfile')}
@@ -284,7 +306,8 @@ export default function TenantList({
                 onClick={() => {
                   setDeleteConfirmId(tItem.id);
                 }}
-                className="p-2 border border-rose-100 hover:border-rose-200 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                disabled={isReadOnly}
+                className="p-2 border border-rose-100 hover:border-rose-200 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 title={language === 'ar' ? 'حذف سجل المقيم' : 'Remove occupant record'}
               >
                 <Trash2 className="w-3.5 h-3.5" />

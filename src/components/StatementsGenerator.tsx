@@ -24,6 +24,7 @@ interface StatementsGeneratorProps {
   onAddPayment?: (payment: Omit<Payment, 'id' | 'receiptNumber'>) => Promise<void> | void;
   onEditPayment?: (payment: Payment) => Promise<void> | void;
   onEditExpense?: (expense: Expense) => Promise<void> | void;
+  isReadOnly?: boolean;
 }
 
 export default function StatementsGenerator({
@@ -36,6 +37,7 @@ export default function StatementsGenerator({
   onAddPayment,
   onEditPayment,
   onEditExpense,
+  isReadOnly = false,
 }: StatementsGeneratorProps) {
   const { t, language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'statement' | 'automation'>('statement');
@@ -979,6 +981,24 @@ export default function StatementsGenerator({
           {language === 'ar' ? 'التنبيهات والأتمتة' : 'Reminders & Automations Setup'}
         </button>
       </div>
+
+      {isReadOnly && (
+        <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-3 text-xs text-rose-800 animate-in fade-in duration-300">
+          <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+          <div>
+            <p className="font-bold">
+              {language === 'ar' 
+                ? 'وضع المعاينة للقراءة فقط (الاشتراك منتهي)' 
+                : 'Read-Only Preview Mode (Subscription Expired)'}
+            </p>
+            <p className="mt-0.5 opacity-90">
+              {language === 'ar' 
+                ? 'تم إيقاف العمليات التفاعلية وإمكانية الحفظ أو التعديل مؤقتاً لهذا البناية نظراً لانتهاء رخصة الاشتراك المتميزة.' 
+                : 'Interactive operations and saving modifications have been disabled temporarily due to expired subscription license.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* RENDER STATEMENT GENERATOR SUBTAB */}
       {activeSubTab === 'statement' && (
@@ -1976,7 +1996,8 @@ export default function StatementsGenerator({
               </div>
               <button
                 onClick={runAutopilotScan}
-                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-colors"
+                disabled={isReadOnly}
+                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-colors disabled:opacity-50 disabled:pointer-events-none"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 {language === 'ar' ? 'تشغيل فحص الدورة' : 'Run Cycle Check'}
@@ -2032,7 +2053,8 @@ export default function StatementsGenerator({
                       {/* Log Payment Button */}
                       <button
                         onClick={() => handleOpenLogPayment(group)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 hover:border-blue-300 rounded-xl px-3.5 py-2 transition-colors duration-150"
+                        disabled={isReadOnly}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-200 hover:border-blue-300 rounded-xl px-3.5 py-2 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-blue-600 disabled:hover:bg-blue-50"
                       >
                         <CheckCircle className="w-3.5 h-3.5 text-blue-500" />
                         {language === 'ar' ? 'تسجيل الدفع' : 'Log Payment'}
@@ -2399,9 +2421,9 @@ export default function StatementsGenerator({
                     <button
                       type="button"
                       onClick={handleSaveTemplate}
-                      disabled={isSavingTemplate}
+                      disabled={isSavingTemplate || isReadOnly}
                       className={`px-4 py-2 font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap ${
-                        isSavingTemplate
+                        isSavingTemplate || isReadOnly
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                           : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'
                       }`}
@@ -2461,9 +2483,9 @@ export default function StatementsGenerator({
                     <button
                       type="button"
                       onClick={handleSaveTemplate}
-                      disabled={isSavingTemplate}
+                      disabled={isSavingTemplate || isReadOnly}
                       className={`px-4 py-2 font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap ${
-                        isSavingTemplate
+                        isSavingTemplate || isReadOnly
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                           : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
                       }`}

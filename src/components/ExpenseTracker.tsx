@@ -5,7 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Expense, ExpenseCategory, formatCurrency } from '../types';
-import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign, ArrowUpDown, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import ConfirmationDialog from './ConfirmationDialog';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -16,6 +16,7 @@ interface ExpenseTrackerProps {
   onDeleteExpense: (id: string) => void;
   customExpenseCategories: string[];
   activeBuilding?: any;
+  isReadOnly?: boolean;
 }
 
 export default function ExpenseTracker({
@@ -25,6 +26,7 @@ export default function ExpenseTracker({
   onDeleteExpense,
   customExpenseCategories,
   activeBuilding,
+  isReadOnly = false,
 }: ExpenseTrackerProps) {
   const { t, language } = useLanguage();
   const [search, setSearch] = useState('');
@@ -295,12 +297,31 @@ export default function ExpenseTracker({
         </div>
         <button
           onClick={openAddForm}
-          className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors animate-none"
+          disabled={isReadOnly}
+          className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg self-start sm:self-center shadow-sm transition-colors animate-none disabled:opacity-50 disabled:pointer-events-none"
         >
           <Plus className="w-4 h-4" />
           {t('logMaintenanceExpense')}
         </button>
       </div>
+
+      {isReadOnly && (
+        <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex items-center gap-3 text-xs text-rose-800 animate-in fade-in duration-300">
+          <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+          <div>
+            <p className="font-bold">
+              {language === 'ar' 
+                ? 'وضع المعاينة للقراءة فقط (الاشتراك منتهي)' 
+                : 'Read-Only Preview Mode (Subscription Expired)'}
+            </p>
+            <p className="mt-0.5 opacity-90">
+              {language === 'ar' 
+                ? 'تم إيقاف العمليات التفاعلية وإمكانية الحفظ أو التعديل مؤقتاً لهذا البناية نظراً لانتهاء رخصة الاشتراك المتميزة.' 
+                : 'Interactive operations and saving modifications have been disabled temporarily due to expired subscription license.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Controls: Searching and Category, Status, Month filters */}
       <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center" id="expense-filters-container">
@@ -479,14 +500,16 @@ export default function ExpenseTracker({
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => openEditForm(exp)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition-colors animate-none"
+                        disabled={isReadOnly}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition-colors animate-none disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-100"
                         title={language === 'ar' ? "تعديل السجل" : "Edit entry"}
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(exp.id)}
-                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-lg transition-colors"
+                        disabled={isReadOnly}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-rose-50"
                         title={language === 'ar' ? "إزالة السجل" : "Remove entry"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />

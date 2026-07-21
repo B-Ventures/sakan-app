@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building, 
   DEFAULT_EXPENSE_CATEGORIES, 
@@ -67,6 +67,7 @@ interface PropertySettingsModalProps {
   isDemoMode: boolean;
   onRestoreBackup?: (backupData: { tenants: Tenant[], payments: Payment[], expenses: Expense[] }) => Promise<void>;
   buildings?: Building[];
+  initialTab?: SettingsTab;
 }
 
 type SettingsTab = 'general' | 'expenses' | 'paymentMethods' | 'incomeSplits' | 'billing' | 'backup';
@@ -82,9 +83,17 @@ export default function PropertySettingsModal({
   isDemoMode = false,
   onRestoreBackup,
   buildings = [],
+  initialTab = 'general',
 }: PropertySettingsModalProps) {
   const { t, language } = useLanguage();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+
+  // Sync activeTab when modal is opened or initialTab changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   // SaaS Billing State
   const [billingPlan, setBillingPlan] = useState<string>('monthly');
