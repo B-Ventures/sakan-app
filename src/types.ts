@@ -92,6 +92,11 @@ export interface Payment {
 
 export type ExpenseCategory = string; // Made dynamic instead of strict union
 
+export interface ExpenseAttachment {
+  name: string;
+  url: string;
+}
+
 export interface Expense {
   id: string;
   title: string;
@@ -101,8 +106,19 @@ export interface Expense {
   notes?: string;
   attachmentName?: string;
   attachmentUrl?: string; // Base64 data-URL or local image URL
+  attachments?: ExpenseAttachment[]; // Support for multiple receipt/invoice attachments
   status?: 'Paid' | 'Pending' | 'Overdue';
   dueDate?: string; // YYYY-MM-DD
+}
+
+export function getExpenseAttachments(exp: Expense): ExpenseAttachment[] {
+  if (exp.attachments && exp.attachments.length > 0) {
+    return exp.attachments;
+  }
+  if (exp.attachmentUrl) {
+    return [{ name: exp.attachmentName || 'Invoice Attachment', url: exp.attachmentUrl }];
+  }
+  return [];
 }
 
 export interface Building {
@@ -147,7 +163,8 @@ export interface AuditLog {
 }
 
 export function formatCurrency(amount: number, currency: string = 'JOD'): string {
-  const rounded = amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const num = typeof amount === 'number' ? amount : parseFloat(String(amount)) || 0;
+  const rounded = num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   if (currency === 'USD') {
     return `$${rounded}`;
   }

@@ -2511,6 +2511,9 @@ export default function SuperAdminPanel({
                           <option value="all">Any Premium Package</option>
                           <option value="monthly">Monthly Plan Only</option>
                           <option value="annually">Annual Plan Only</option>
+                          {saasPlans.filter(p => p.id !== 'monthly' && p.id !== 'annually').map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.interval}ly)</option>
+                          ))}
                         </select>
                       </div>
                       <div>

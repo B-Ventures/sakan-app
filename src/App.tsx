@@ -1783,10 +1783,13 @@ export default function App() {
     if (!activeBuilding) return;
     if (checkSubscriptionBarrier()) return;
 
+    // Optimistically update local React state immediately so UI changes persist without waiting
+    setExpenses(prev => prev.map((e) => e.id === updatedExpense.id ? updatedExpense : e));
+
     if (isDemoMode) {
       const updatedExpenses = expenses.map((e) => e.id === updatedExpense.id ? updatedExpense : e);
-      setExpenses(updatedExpenses);
       localStorage.setItem(`demo_expenses_${activeBuilding.id}`, JSON.stringify(updatedExpenses));
+      showGlobalToast(language === 'ar' ? 'تم تحديث سجل المصروفات بنجاح' : 'Expense record updated successfully', 'success');
       return;
     }
 
@@ -1796,14 +1799,16 @@ export default function App() {
         activeUserId || '',
         activeUserEmail || '',
         'UPDATE_EXPENSE',
-        `Maintenance expense record updated: "${updatedExpense.title}" (Amount: ${updatedExpense.amount} ${activeBuilding.currency || 'JOD'}, Category: "${updatedExpense.category}").`,
+        `Maintenance expense record updated: "${updatedExpense.title}" (Amount: ${updatedExpense.amount} ${activeBuilding.currency || 'JOD'}, Category: "${updatedExpense.category}", Status: "${updatedExpense.status || 'Paid'}").`,
         updatedExpense.id,
         'expense'
       );
 
       await saveExpense(activeBuilding.id, updatedExpense);
+      showGlobalToast(language === 'ar' ? 'تم حفظ التعديلات في السحابة بنجاح' : 'Expense updates saved to cloud successfully', 'success');
     } catch (e) {
       console.error(e);
+      showGlobalToast(language === 'ar' ? 'حدث خطأ أثناء حفظ التعديلات' : 'Failed to save expense changes', 'error');
     }
   };
 
@@ -1819,11 +1824,13 @@ export default function App() {
       const updatedExpenses = [newExp, ...expenses];
       setExpenses(updatedExpenses);
       localStorage.setItem(`demo_expenses_${activeBuilding.id}`, JSON.stringify(updatedExpenses));
+      showGlobalToast(language === 'ar' ? 'تم إضافة المصروف بنجاح' : 'Expense logged successfully', 'success');
       return;
     }
 
     try {
-      await saveExpense(activeBuilding.id, newExpenseArgs);
+      const created = await saveExpense(activeBuilding.id, newExpenseArgs);
+      setExpenses(prev => [created, ...prev.filter(e => e.id !== created.id)]);
 
       await logAction(
         activeBuilding.id,
@@ -1831,11 +1838,13 @@ export default function App() {
         activeUserEmail || '',
         'CREATE_EXPENSE',
         `New expense logged: "${newExpenseArgs.title}" (Amount: ${newExpenseArgs.amount} ${activeBuilding.currency || 'JOD'}, Category: "${newExpenseArgs.category}").`,
-        undefined,
+        created.id,
         'expense'
       );
+      showGlobalToast(language === 'ar' ? 'تم حفظ المصروف في السحابة بنجاح' : 'Expense logged to cloud successfully', 'success');
     } catch (e) {
       console.error(e);
+      showGlobalToast(language === 'ar' ? 'حدث خطأ أثناء حفظ المصروف' : 'Failed to save new expense', 'error');
     }
   };
 

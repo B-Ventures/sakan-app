@@ -4,10 +4,11 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { Expense, ExpenseCategory, formatCurrency } from '../types';
-import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign, ArrowUpDown, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Expense, ExpenseCategory, ExpenseAttachment, getExpenseAttachments, formatCurrency } from '../types';
+import { Plus, Search, Trash2, Edit2, Eye, UploadCloud, DollarSign, ArrowUpDown, ChevronLeft, ChevronRight, AlertCircle, FileText, X } from 'lucide-react';
 import ConfirmationDialog from './ConfirmationDialog';
 import { useLanguage } from '../context/LanguageContext';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface ExpenseTrackerProps {
   expenses: Expense[];
@@ -55,32 +56,52 @@ export default function ExpenseTracker({
   // Form Fields State
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('');
-  const [amount, setAmount] = useState<number>(0);
+  const [amount, setAmount] = useState<string | number>('');
   const [date, setDate] = useState('2026-06-08');
   const [status, setStatus] = useState<'Paid' | 'Pending' | 'Overdue'>('Paid');
   const [dueDate, setDueDate] = useState<string>('');
   const [notes, setNotes] = useState('');
   
-  // File upload state & base64
-  const [attachmentName, setAttachmentName] = useState<string>('');
-  const [attachmentUrl, setAttachmentUrl] = useState<string>('');
+  // File upload state for multiple attachments
+  const [attachments, setAttachments] = useState<ExpenseAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Image zoom preview popover
-  const [zoomedAttachment, setZoomedAttachment] = useState<{ url: string; title: string } | null>(null);
+  // Image zoom preview popover with multiple image gallery support
+  const [zoomedGallery, setZoomedGallery] = useState<{ items: ExpenseAttachment[]; currentIndex: number; title: string } | null>(null);
 
-  // Convert uploaded file to base64
-  const handleFileChange = (file: File) => {
-    if (!file) return;
+  const [isCompressingFiles, setIsCompressingFiles] = useState(false);
+
+  // Convert uploaded files to compressed base64 and append to attachments array
+  const handleFilesUpload = async (files: FileList | File[]) => {
+    if (!files || files.length === 0) return;
+    setIsCompressingFiles(true);
     
-    setAttachmentName(file.name);
-    
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setAttachmentUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const newAttachments: ExpenseAttachment[] = [];
+      for (const file of Array.from(files)) {
+        // Compress images client-side to keep size well under 1MB Firestore limit (~100KB per image)
+        const compressedUrl = await compressImageFile(file, 1200, 1200, 0.7);
+        
+        // Safety check on size
+        if (compressedUrl.length > 800000) {
+          alert(
+            language === 'ar'
+              ? `الملف "${file.name}" كبير جداً ولا يمكن إرفاقه (يتجاوز حد قاعدة البيانات 800 كيلوبايت). يرجى تقليل حجم الملف أو تحويله إلى صورة.`
+              : `File "${file.name}" is too large to attach (exceeds database size limit of 800KB). Please use a smaller file.`
+          );
+          continue;
+        }
+
+        newAttachments.push({ name: file.name, url: compressedUrl });
+      }
+
+      setAttachments(prev => [...prev, ...newAttachments]);
+    } catch (err) {
+      console.error("Error compressing file attachments:", err);
+    } finally {
+      setIsCompressingFiles(false);
+    }
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -96,19 +117,18 @@ export default function ExpenseTracker({
     e.preventDefault();
     setDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileChange(e.dataTransfer.files[0]);
+      handleFilesUpload(e.dataTransfer.files);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleFileChange(e.target.files[0]);
+      handleFilesUpload(e.target.files);
     }
   };
 
-  const removeAttachedFile = () => {
-    setAttachmentName('');
-    setAttachmentUrl('');
+  const removeAttachment = (indexToRemove: number) => {
+    setAttachments(prev => prev.filter((_, idx) => idx !== indexToRemove));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -118,13 +138,12 @@ export default function ExpenseTracker({
     setEditingExpense(null);
     setTitle('');
     setCategory(customExpenseCategories[0] || 'Other');
-    setAmount(0);
+    setAmount('');
     setDate(new Date().toISOString().split('T')[0]);
     setStatus('Paid');
     setDueDate('');
     setNotes('');
-    setAttachmentName('');
-    setAttachmentUrl('');
+    setAttachments([]);
     setIsFormOpen(true);
   };
 
@@ -132,35 +151,36 @@ export default function ExpenseTracker({
     setEditingExpense(exp);
     setTitle(exp.title);
     setCategory(exp.category);
-    setAmount(exp.amount);
+    setAmount(exp.amount !== undefined ? String(exp.amount) : '');
     setDate(exp.date);
     setStatus(exp.status || 'Paid');
     setDueDate(exp.dueDate || '');
     setNotes(exp.notes || '');
-    setAttachmentName(exp.attachmentName || '');
-    setAttachmentUrl(exp.attachmentUrl || '');
+    setAttachments(getExpenseAttachments(exp));
     setIsFormOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title) {
-      alert('Expense title is required');
+    if (!title.trim()) {
+      alert(language === 'ar' ? 'عنوان المصروف مطلوب' : 'Expense title is required');
       return;
     }
-    if (amount <= 0) {
-      alert('Please specify an amount greater than $0');
+    const numAmount = parseFloat(String(amount));
+    if (isNaN(numAmount) || numAmount <= 0) {
+      alert(language === 'ar' ? 'يرجى إدخال مبلغ صحيح أكبر من 0' : 'Please specify an amount greater than 0');
       return;
     }
 
     const payload = {
-      title,
+      title: title.trim(),
       category,
-      amount: Number(amount),
+      amount: Number(numAmount.toFixed(2)), // allow up to 2 decimal places without rounding down
       date,
-      notes,
-      attachmentName: attachmentUrl ? (attachmentName || 'Invoice_Attachment') : '',
-      attachmentUrl: attachmentUrl || '',
+      notes: notes.trim(),
+      attachmentName: attachments[0]?.name || '',
+      attachmentUrl: attachments[0]?.url || '',
+      attachments: attachments.length > 0 ? attachments : undefined,
       status,
       dueDate: dueDate || undefined,
     };
@@ -460,36 +480,42 @@ export default function ExpenseTracker({
                     {exp.notes || <span className="text-slate-300 italic">{t('noNotesPlaceholder')}</span>}
                   </td>
                   <td className="py-4 px-4 text-start">
-                    {exp.attachmentUrl ? (
-                      <div className="flex items-center gap-2 overflow-hidden max-w-[180px]">
-                        <div 
-                          className="w-8 h-8 rounded border bg-slate-50 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => setZoomedAttachment({ url: exp.attachmentUrl!, title: exp.title })}
-                          title={language === 'ar' ? "انقر لعرض الإيصال كاملاً" : "Click to view full receipt"}
-                        >
-                          {exp.attachmentUrl.startsWith('data:application/pdf') ? (
-                            <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-600 font-extrabold text-[8px] uppercase font-mono">
-                              PDF
+                    {(() => {
+                      const attList = getExpenseAttachments(exp);
+                      if (attList.length === 0) {
+                        return <span className="text-slate-300 text-xs italic">{t('noAttachmentPlaceholder')}</span>;
+                      }
+                      return (
+                        <div className="flex items-center gap-1.5 flex-wrap max-w-[200px]">
+                          {attList.map((att, idx) => (
+                            <div 
+                              key={idx}
+                              className="w-8 h-8 rounded border bg-slate-50 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative group"
+                              onClick={() => setZoomedGallery({ items: attList, currentIndex: idx, title: exp.title })}
+                              title={att.name || (language === 'ar' ? 'عرض المرفق' : 'View attachment')}
+                            >
+                              {att.url.startsWith('data:application/pdf') ? (
+                                <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-600 font-extrabold text-[8px] uppercase font-mono">
+                                  PDF
+                                </div>
+                              ) : (
+                                <img 
+                                  referrerPolicy="no-referrer" 
+                                  src={att.url} 
+                                  alt={att.name || 'receipt mini stub'} 
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
                             </div>
-                          ) : (
-                            <img 
-                              referrerPolicy="no-referrer" 
-                              src={exp.attachmentUrl} 
-                              alt="receipt mini stub" 
-                              className="w-full h-full object-cover"
-                            />
+                          ))}
+                          {attList.length > 1 && (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">
+                              +{attList.length}
+                            </span>
                           )}
                         </div>
-                        <div className="overflow-hidden">
-                          <span className="text-[10px] font-semibold text-slate-600 block truncate" title={exp.attachmentName}>
-                            {exp.attachmentName || (language === 'ar' ? 'مرفق' : 'Attachment')}
-                          </span>
-                          <span className="text-[8px] text-blue-500 font-bold uppercase block tracking-tight">{t('receiptVerifiedLabel')}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-slate-300 text-xs italic">{t('noAttachmentPlaceholder')}</span>
-                    )}
+                      );
+                    })()}
                   </td>
                   <td className="py-4 px-4 text-start">
                     <span className="font-mono font-extrabold text-sm text-slate-900">
@@ -677,10 +703,11 @@ export default function ExpenseTracker({
                   <input
                     type="number"
                     required
-                    min={1}
-                    placeholder={language === 'ar' ? 'مثال: 500' : 'e.g. 500'}
-                    value={amount || ''}
-                    onChange={(e) => setAmount(Number(e.target.value))}
+                    step="0.01"
+                    min="0.01"
+                    placeholder={language === 'ar' ? 'مثال: 500.50' : 'e.g. 500.50'}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
                     className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -723,55 +750,66 @@ export default function ExpenseTracker({
                 </select>
               </div>
 
-              {/* Document/Receipt PDF Image File Input */}
+              {/* Multiple Document / Receipt Images / PDF Upload */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t('attachInvoiceLabel')}</label>
-                
-                {attachmentUrl ? (
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50 flex items-center justify-between">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <div className="w-10 h-10 rounded border bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs uppercase text-slate-500 font-mono">
-                        {attachmentUrl.startsWith('data:application/pdf') ? 'PDF' : <img referrerPolicy="no-referrer" src={attachmentUrl} className="w-full h-full object-cover" />}
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 font-sans">
+                  {language === 'ar' ? 'إرفاق الإيصالات والفواتير (يمكن رفع عدة ملفات)' : 'Attach Invoices & Receipts (Multiple Files Supported)'}
+                </label>
+
+                {attachments.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {attachments.map((att, idx) => (
+                      <div key={idx} className="border border-slate-100 rounded-xl p-2.5 bg-slate-50 flex items-center justify-between">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <div 
+                            className="w-9 h-9 rounded border bg-white overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs uppercase text-slate-500 font-mono cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setZoomedGallery({ items: attachments, currentIndex: idx, title: title || 'Receipt' })}
+                          >
+                            {att.url.startsWith('data:application/pdf') ? 'PDF' : <img referrerPolicy="no-referrer" src={att.url} alt={att.name} className="w-full h-full object-cover" />}
+                          </div>
+                          <div className="overflow-hidden">
+                            <span className="text-xs font-semibold text-slate-700 block truncate" title={att.name}>{att.name}</span>
+                            <span className="text-[10px] text-emerald-600 font-bold block">✓ {t('attachmentLoaded')}</span>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => removeAttachment(idx)} 
+                          className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-white border p-1.5 rounded-lg hover:bg-slate-50"
+                          title={language === 'ar' ? "إزالة المرفق" : "Remove attachment"}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div className="overflow-hidden">
-                        <span className="text-xs font-semibold text-slate-700 block truncate">{attachmentName || (language === 'ar' ? 'مرفق' : 'attachment.png')}</span>
-                        <span className="text-[10px] text-emerald-600 font-bold block">✓ {t('attachmentLoaded')}</span>
-                      </div>
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={removeAttachedFile} 
-                      className="text-xs font-bold text-rose-500 hover:text-rose-700 bg-white border px-2.5 py-1.5 rounded-lg hover:bg-slate-50"
-                    >
-                      {t('removeLabel')}
-                    </button>
-                  </div>
-                ) : (
-                  <div 
-                    onDragOver={onDragOver}
-                    onDragLeave={onDragLeave}
-                    onDrop={onDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors ${
-                      dragOver ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-xs font-semibold text-slate-600">
-                      {language === 'ar' ? 'اسحب وأفلت الفاتورة هنا، أو ' : 'Drag & drop invoice here, or '}
-                      <span className="text-blue-500">{language === 'ar' ? 'تصفح ملفاتك' : 'browse'}</span>
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-1">{t('fileSupportHelp')}</p>
-                    
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      onChange={handleInputChange}
-                      accept="image/*,application/pdf"
-                      className="hidden" 
-                    />
+                    ))}
                   </div>
                 )}
+
+                <div 
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onDrop={onDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-colors ${
+                    dragOver ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <UploadCloud className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
+                  <p className="text-xs font-semibold text-slate-600">
+                    {language === 'ar' ? 'اسحب وأفلت الفواتير/الإيصالات هنا، أو ' : 'Drag & drop invoice images/PDFs here, or '}
+                    <span className="text-blue-500 font-bold">{language === 'ar' ? 'تصفح ملفاتك' : 'browse'}</span>
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">{t('fileSupportHelp')}</p>
+                  
+                  <input 
+                    type="file" 
+                    ref={fileInputRef}
+                    onChange={handleInputChange}
+                    accept="image/*,application/pdf"
+                    multiple
+                    className="hidden" 
+                  />
+                </div>
               </div>
 
               {/* Notes */}
@@ -806,21 +844,40 @@ export default function ExpenseTracker({
       )}
 
       {/* Zooms Attachment Viewer Modal */}
-      {zoomedAttachment && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full border shadow-2xl overflow-hidden animate-zoom-in">
+      {zoomedGallery && zoomedGallery.items.length > 0 && (
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border shadow-2xl overflow-hidden animate-zoom-in">
             <div className="p-4 bg-slate-50 border-b flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-800 truncate max-w-sm">
-                {language === 'ar' ? 'صورة الإيصال: ' : 'Receipt Image: '} {zoomedAttachment.title}
+              <span className="font-bold text-slate-800 truncate max-w-md">
+                {zoomedGallery.title} - {zoomedGallery.items[zoomedGallery.currentIndex]?.name || (language === 'ar' ? 'المرفق' : 'Attachment')} ({zoomedGallery.currentIndex + 1} / {zoomedGallery.items.length})
               </span>
-              <button onClick={() => setZoomedAttachment(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+              <button onClick={() => setZoomedGallery(null)} className="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
             </div>
             
-            <div className="p-4 bg-white flex items-center justify-center min-h-[300px]">
-              {zoomedAttachment.url.startsWith('data:application/pdf') ? (
-                <iframe src={zoomedAttachment.url} className="w-full h-[400px] border rounded" title="Receipt PDF Preview" />
+            <div className="p-4 bg-slate-900 flex items-center justify-center min-h-[350px] relative">
+              {zoomedGallery.items.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setZoomedGallery(prev => prev ? { ...prev, currentIndex: (prev.currentIndex - 1 + prev.items.length) % prev.items.length } : null)}
+                    className="absolute left-3 bg-white/20 hover:bg-white/40 text-white p-2.5 rounded-full backdrop-blur-xs transition-colors z-10"
+                    title={language === 'ar' ? "السابق" : "Previous"}
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setZoomedGallery(prev => prev ? { ...prev, currentIndex: (prev.currentIndex + 1) % prev.items.length } : null)}
+                    className="absolute right-3 bg-white/20 hover:bg-white/40 text-white p-2.5 rounded-full backdrop-blur-xs transition-colors z-10"
+                    title={language === 'ar' ? "التالي" : "Next"}
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+              
+              {zoomedGallery.items[zoomedGallery.currentIndex]?.url.startsWith('data:application/pdf') ? (
+                <iframe src={zoomedGallery.items[zoomedGallery.currentIndex].url} className="w-full h-[450px] border rounded bg-white" title="Receipt PDF Preview" />
               ) : (
-                <img referrerPolicy="no-referrer" src={zoomedAttachment.url} alt="Expanded preview receipt" className="max-w-full max-h-[450px] object-contain rounded-xl border" />
+                <img referrerPolicy="no-referrer" src={zoomedGallery.items[zoomedGallery.currentIndex]?.url} alt="Expanded preview receipt" className="max-w-full max-h-[500px] object-contain rounded-xl" />
               )}
             </div>
           </div>

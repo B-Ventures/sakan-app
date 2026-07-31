@@ -705,7 +705,14 @@ export async function fetchSaaSCoupons(): Promise<SaASCoupon[]> {
     const snap = await getDocs(q);
     const coupons: SaASCoupon[] = [];
     snap.forEach((docSnap) => {
-      coupons.push({ id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as SaASCoupon);
+      const c = { id: docSnap.id, ...sanitizeFirestoreData(docSnap.data()) } as SaASCoupon;
+      if (c.code.toUpperCase() === 'FREE30' && !c.validPlanId) {
+        c.validPlanId = 'monthly';
+        c.maxUsesPerUser = c.maxUsesPerUser ?? 1;
+        // Optionally update document in background
+        setDoc(doc(db, 'system_configs', 'billing', 'saas_coupons', c.id), cleanUndefined(c)).catch(() => {});
+      }
+      coupons.push(c);
     });
     
     if (coupons.length === 0) {
@@ -716,7 +723,7 @@ export async function fetchSaaSCoupons(): Promise<SaASCoupon[]> {
           { id: 'BOSSTSC26', code: 'BOSSTSC26', discountPercent: 50, description: 'Exclusive Partner Launch discount coupon.', isActive: true },
           { id: 'WELCOME50', code: 'WELCOME50', discountPercent: 50, description: 'Standard 50% discount for first-time premium upgraders.', isActive: true },
           { id: 'SAASFREE', code: 'SAASFREE', discountPercent: 100, description: '100% discount sandbox trial pass.', isActive: true },
-          { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off full premium pass.', isActive: true }
+          { id: 'FREE30', code: 'FREE30', discountPercent: 100, description: '30 days 100% off (Monthly Plan Only, Max 1 use per user).', isActive: true, validPlanId: 'monthly', maxUsesPerUser: 1 }
         ];
         for (const c of defaults) {
           try {

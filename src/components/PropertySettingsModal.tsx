@@ -103,31 +103,51 @@ export default function PropertySettingsModal({
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState<SaASCoupon | null>(null);
 
+  // Dynamic SaaS Billing State from Cloud
+  const [plans, setPlans] = useState<SaaSPlan[]>([]);
+  const [coupons, setCoupons] = useState<SaASCoupon[]>([]);
+  const [addons, setAddons] = useState<SaaSAddon[]>([]);
+
+  // Helper to validate if coupon is allowed for selected billing plan
+  const isCouponValidForSelectedPlan = (coupon: SaASCoupon, selectedPlanId: string) => {
+    if (!coupon.validPlanId || coupon.validPlanId === 'all') {
+      return true;
+    }
+
+    const currentPlanObj = plans.find(p => p.id === selectedPlanId);
+    const planInterval = currentPlanObj ? currentPlanObj.interval : (selectedPlanId === 'monthly' ? 'month' : selectedPlanId === 'annually' ? 'year' : '');
+
+    if (coupon.validPlanId === 'monthly' || coupon.validPlanId === 'month') {
+      return selectedPlanId === 'monthly' || planInterval === 'month';
+    }
+
+    if (coupon.validPlanId === 'annually' || coupon.validPlanId === 'annual' || coupon.validPlanId === 'year') {
+      return selectedPlanId === 'annually' || selectedPlanId === 'annual' || planInterval === 'year';
+    }
+
+    return coupon.validPlanId === selectedPlanId;
+  };
+
   // Re-validate applied coupon if user switches billing plans
   useEffect(() => {
     if (appliedCoupon) {
-      if (appliedCoupon.validPlanId && appliedCoupon.validPlanId !== billingPlan) {
+      if (!isCouponValidForSelectedPlan(appliedCoupon, billingPlan)) {
         setAppliedDiscount(0);
         setAppliedCoupon(null);
+        const requiredLabel = (appliedCoupon.validPlanId === 'monthly' || appliedCoupon.validPlanId === 'month') ? 'Monthly' : 'Annual';
         showToast(
-          `Coupon "${appliedCoupon.code}" removed because it is only valid for the ${
-            appliedCoupon.validPlanId === 'monthly' ? 'Monthly' : 'Annual'
-          } plan.`,
+          `Coupon "${appliedCoupon.code}" removed because it is only valid for the ${requiredLabel} plan.`,
           "error"
         );
       }
     }
-  }, [billingPlan, appliedCoupon]);
+  }, [billingPlan, appliedCoupon, plans]);
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [cardName, setCardName] = useState('');
   const [isSubmittingBilling, setIsSubmittingBilling] = useState(false);
 
-  // Dynamic SaaS Billing State from Cloud
-  const [plans, setPlans] = useState<SaaSPlan[]>([]);
-  const [coupons, setCoupons] = useState<SaASCoupon[]>([]);
-  const [addons, setAddons] = useState<SaaSAddon[]>([]);
   const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(null);
   const [isLoadingBillingData, setIsLoadingBillingData] = useState(false);
   const [multiPropConfig, setMultiPropConfig] = useState<MultiPropertyConfig | null>(null);
@@ -320,8 +340,13 @@ export default function PropertySettingsModal({
     }
 
     // 1. Check plan validation
-    if (matched.validPlanId && matched.validPlanId !== billingPlan) {
-      showToast(`This coupon is only valid for the ${matched.validPlanId === 'monthly' ? 'Monthly' : 'Annual'} plan.`, "error");
+    if (!isCouponValidForSelectedPlan(matched, billingPlan)) {
+      const requiredLabel = (matched.validPlanId === 'monthly' || matched.validPlanId === 'month') 
+        ? 'Monthly' 
+        : (matched.validPlanId === 'annually' || matched.validPlanId === 'annual' || matched.validPlanId === 'year')
+        ? 'Annual' 
+        : matched.validPlanId;
+      showToast(`This coupon is only valid for the ${requiredLabel} plan.`, "error");
       return;
     }
 

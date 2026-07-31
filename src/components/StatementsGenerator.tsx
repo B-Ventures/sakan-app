@@ -9,6 +9,7 @@ import { FileText, Calendar, Send, Mail, CheckCircle, RefreshCw, Eye, Printer, B
 import { getReminderWhatsAppLink } from '../utils/whatsapp';
 import { checkAndSyncPayments } from '../utils/billingSync';
 import { useLanguage } from '../context/LanguageContext';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface StatementsGeneratorProps {
   tenants: Tenant[];
@@ -97,14 +98,15 @@ export default function StatementsGenerator({
   const [dragOverExpense, setDragOverExpense] = useState(false);
   const fileInputExpenseRef = React.useRef<HTMLInputElement>(null);
 
-  const handleExpenseFileChange = (file: File) => {
+  const handleExpenseFileChange = async (file: File) => {
     if (!file) return;
     setExpenseAttachmentName(file.name);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setExpenseAttachmentUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressedUrl = await compressImageFile(file, 1200, 1200, 0.7);
+      setExpenseAttachmentUrl(compressedUrl);
+    } catch (err) {
+      console.error("Error compressing image:", err);
+    }
   };
 
   const openEditExpense = (exp: Expense) => {
@@ -2707,10 +2709,11 @@ export default function StatementsGenerator({
                       <input
                         type="number"
                         required
-                        min={1}
+                        min={0.01}
+                        step="0.01"
                         value={expenseAmount}
                         onChange={(e) => setExpenseAmount(Number(e.target.value))}
-                        className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500"
+                        className="w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-blue-500 font-mono font-bold"
                       />
                     </div>
                   </div>
