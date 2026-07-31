@@ -4,9 +4,9 @@
  */
 export async function compressImageFile(
   file: File,
-  maxWidth = 1200,
-  maxHeight = 1200,
-  quality = 0.7
+  maxWidth = 800,
+  maxHeight = 800,
+  quality = 0.55
 ): Promise<string> {
   // If non-image (like PDF), read directly as Data URL
   if (!file.type.startsWith('image/')) {

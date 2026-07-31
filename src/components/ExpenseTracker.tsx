@@ -78,21 +78,24 @@ export default function ExpenseTracker({
     setIsCompressingFiles(true);
     
     try {
+      let currentTotalBytes = attachments.reduce((acc, a) => acc + (a.url ? a.url.length : 0), 0);
+      const MAX_TOTAL_BYTES = 750000; // ~750KB total across all attachments to safely stay under Firestore's 1MB limit
+
       const newAttachments: ExpenseAttachment[] = [];
       for (const file of Array.from(files)) {
-        // Compress images client-side to keep size well under 1MB Firestore limit (~100KB per image)
-        const compressedUrl = await compressImageFile(file, 1200, 1200, 0.7);
+        // Compress images client-side (~30KB-80KB per image)
+        const compressedUrl = await compressImageFile(file, 800, 800, 0.55);
         
-        // Safety check on size
-        if (compressedUrl.length > 800000) {
+        if (currentTotalBytes + compressedUrl.length > MAX_TOTAL_BYTES) {
           alert(
             language === 'ar'
-              ? `الملف "${file.name}" كبير جداً ولا يمكن إرفاقه (يتجاوز حد قاعدة البيانات 800 كيلوبايت). يرجى تقليل حجم الملف أو تحويله إلى صورة.`
-              : `File "${file.name}" is too large to attach (exceeds database size limit of 800KB). Please use a smaller file.`
+              ? `الملف "${file.name}" كبر إجمالي حجم المستندات عن الحد المسموح به (750 كيلوبايت) للحفاظ على أداء السحابة. يرجى اختيار ملف أصغر أو إزالة مرفقات سابقة.`
+              : `Adding "${file.name}" would exceed the maximum total attachment limit (750KB per expense) for cloud storage. Please use a smaller file or remove previous attachments.`
           );
           continue;
         }
 
+        currentTotalBytes += compressedUrl.length;
         newAttachments.push({ name: file.name, url: compressedUrl });
       }
 
@@ -789,15 +792,17 @@ export default function ExpenseTracker({
                   onDragOver={onDragOver}
                   onDragLeave={onDragLeave}
                   onDrop={onDrop}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => !isCompressingFiles && fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-colors ${
-                    dragOver ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'
+                    isCompressingFiles ? 'border-blue-400 bg-blue-50/70 pointer-events-none' : dragOver ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <UploadCloud className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
+                  <UploadCloud className={`w-7 h-7 mx-auto mb-1.5 ${isCompressingFiles ? 'text-blue-600 animate-bounce' : 'text-slate-400'}`} />
                   <p className="text-xs font-semibold text-slate-600">
-                    {language === 'ar' ? 'اسحب وأفلت الفواتير/الإيصالات هنا، أو ' : 'Drag & drop invoice images/PDFs here, or '}
-                    <span className="text-blue-500 font-bold">{language === 'ar' ? 'تصفح ملفاتك' : 'browse'}</span>
+                    {isCompressingFiles
+                      ? (language === 'ar' ? 'جاري معالجة وضغط الملفات...' : 'Compressing & processing attachments...')
+                      : (language === 'ar' ? 'اسحب وأفلت الفواتير/الإيصالات هنا، أو ' : 'Drag & drop invoice images/PDFs here, or ')}
+                    {!isCompressingFiles && <span className="text-blue-500 font-bold">{language === 'ar' ? 'تصفح ملفاتك' : 'browse'}</span>}
                   </p>
                   <p className="text-[10px] text-slate-400 mt-1">{t('fileSupportHelp')}</p>
                   
