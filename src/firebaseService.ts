@@ -295,11 +295,39 @@ export async function saveExpense(buildingId: string, expense: Omit<Expense, 'id
     enforceRateLimit('expense_write');
     const expensesRef = collection(db, 'buildings', buildingId, 'expenses');
     const docRef = expense.id ? doc(expensesRef, expense.id) : doc(expensesRef);
-    const finalExpense: Expense = {
+    let finalExpense: Expense = {
       ...expense,
       id: docRef.id,
     };
-    await setDoc(docRef, cleanUndefined(finalExpense));
+
+    let cleaned = cleanUndefined(finalExpense);
+    let jsonStr = JSON.stringify(cleaned);
+
+    // Safeguard for Firestore 1MB document size limit (1,048,576 bytes)
+    // If total JSON payload exceeds 850KB (~850,000 chars), prune/compress attachments
+    if (jsonStr.length > 850000) {
+      if (finalExpense.attachments && finalExpense.attachments.length > 1) {
+        // Keep only the first attachment if multiple exist
+        finalExpense = {
+          ...finalExpense,
+          attachments: [finalExpense.attachments[0]]
+        };
+        cleaned = cleanUndefined(finalExpense);
+        jsonStr = JSON.stringify(cleaned);
+      }
+
+      if (jsonStr.length > 850000) {
+        // Omit single oversized attachment data URL if still exceeding
+        finalExpense = {
+          ...finalExpense,
+          attachmentUrl: '',
+          attachments: []
+        };
+        cleaned = cleanUndefined(finalExpense);
+      }
+    }
+
+    await setDoc(docRef, cleaned);
     return finalExpense;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);

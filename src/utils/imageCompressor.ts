@@ -4,12 +4,15 @@
  */
 export async function compressImageFile(
   file: File,
-  maxWidth = 800,
-  maxHeight = 800,
-  quality = 0.55
+  maxWidth = 750,
+  maxHeight = 750,
+  quality = 0.5
 ): Promise<string> {
-  // If non-image (like PDF), read directly as Data URL
+  // If non-image (like PDF), check raw size before Base64 encoding
   if (!file.type.startsWith('image/')) {
+    if (file.size > 524288) { // 512KB limit for PDFs
+      throw new Error(`PDF_TOO_LARGE: File size (${Math.round(file.size / 1024)}KB) exceeds the 500KB limit for document storage.`);
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -45,9 +48,22 @@ export async function compressImageFile(
           return;
         }
 
-        // Draw and compress to JPEG
+        // First pass compression
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+        // If dataUrl is still > 350KB, attempt aggressive second pass
+        if (dataUrl.length > 350000) {
+          const smallCanvas = document.createElement('canvas');
+          smallCanvas.width = Math.round(width * 0.7);
+          smallCanvas.height = Math.round(height * 0.7);
+          const smallCtx = smallCanvas.getContext('2d');
+          if (smallCtx) {
+            smallCtx.drawImage(img, 0, 0, smallCanvas.width, smallCanvas.height);
+            dataUrl = smallCanvas.toDataURL('image/jpeg', 0.4);
+          }
+        }
+
         resolve(dataUrl);
       };
 
@@ -59,3 +75,4 @@ export async function compressImageFile(
     reader.readAsDataURL(file);
   });
 }
+
