@@ -28,6 +28,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { LandingPageConfig, DEFAULT_LANDING_CONFIG } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import DMCAPolicyModal from './DMCAPolicyModal';
+import UnsubscribeModal from './UnsubscribeModal';
 
 interface LandingPageProps {
   onOpenAuth: () => void;
@@ -50,6 +52,8 @@ export default function LandingPage({
   const [isScrolled, setIsScrolled] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
+  const [isDmcaOpen, setIsDmcaOpen] = useState(false);
+  const [isUnsubscribeOpen, setIsUnsubscribeOpen] = useState(false);
   
   const baseConfig = config || DEFAULT_LANDING_CONFIG;
 
@@ -76,7 +80,7 @@ export default function LandingPage({
 
   // Dynamic manifest generator on client-side to ensure custom brand logo is fully integrated in PWA prompt
   useEffect(() => {
-    const siteName = baseConfig.siteName || "bProp";
+    const siteName = baseConfig.siteName || "amra solution";
     const shortName = baseConfig.siteLogoAbbrev || siteName.slice(0, 10);
     const logoUrl = baseConfig.siteLogoUrl || "https://img.icons8.com/color/512/000000/building.png";
 
@@ -1106,16 +1110,33 @@ export default function LandingPage({
               {activeConfig.siteName} {language === 'ar' ? 'بوابة' : 'Portal'}
             </span>
           </div>
-          <p className="font-medium">
-            © 2026 {activeConfig.siteName}. {language === 'ar' ? 'صُنع للعقارات بكل شغف. جميع الحقوق محفوظة.' : 'Made for properties with passion. All rights reserved.'}
-          </p>
-          <div className="flex gap-4 font-mono text-[10px]">
-            <a href="#problem" className="hover:underline">
+          <div className="text-center md:text-start space-y-1">
+            <p className="font-medium">
+              © 2026 {activeConfig.siteName}. {language === 'ar' ? 'صُنع للعقارات بكل شغف. جميع الحقوق محفوظة.' : 'Made for properties with passion. All rights reserved.'}
+            </p>
+            <p className="text-[10px] text-slate-600">
+              b ventures (owning company of amra solution) • 30 N Gould St, Sheridan, WY, USA, 82801 • COPPA Compliant (Ages 18+, or 13+ with guardian consent)
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-x-4 gap-y-2 font-mono text-[10px]">
+            <a href="#problem" className="hover:underline text-slate-400 hover:text-slate-200">
               {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
             </a>
-            <a href="#simulator" className="hover:underline">
+            <a href="#simulator" className="hover:underline text-slate-400 hover:text-slate-200">
               {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
             </a>
+            <button
+              onClick={() => setIsDmcaOpen(true)}
+              className="hover:underline text-slate-400 hover:text-blue-400 cursor-pointer"
+            >
+              {language === 'ar' ? 'وكيل DMCA المعتمد' : 'DMCA Agent'}
+            </button>
+            <button
+              onClick={() => setIsUnsubscribeOpen(true)}
+              className="hover:underline text-slate-400 hover:text-rose-400 cursor-pointer"
+            >
+              {language === 'ar' ? 'إلغاء الاشتراك من الرسائل' : 'Unsubscribe'}
+            </button>
           </div>
         </div>
       </footer>
@@ -1156,7 +1177,7 @@ export default function LandingPage({
                   </div>
                   <div>
                     <h3 className="text-sm font-extrabold text-white">
-                      {language === 'ar' ? 'تثبيت التطبيق على جهازك' : 'Install bProp App'}
+                      {language === 'ar' ? 'تثبيت التطبيق على جهازك' : `Install ${baseConfig.siteName || 'amra solution'} App`}
                     </h3>
                     <p className="text-[10px] text-slate-400 font-medium mt-0.5">
                       {language === 'ar' ? 'احصل على تجربة سريعة، مريحة، وتعمل بلا إنترنت.' : 'Enjoy a lightning-fast, native property portal directly on your screen.'}
@@ -1224,6 +1245,18 @@ export default function LandingPage({
           </div>
         )}
       </AnimatePresence>
+
+      {/* DMCA Designated Agent Policy Modal */}
+      <DMCAPolicyModal
+        isOpen={isDmcaOpen}
+        onClose={() => setIsDmcaOpen(false)}
+      />
+
+      {/* CAN-SPAM Unsubscribe Modal */}
+      <UnsubscribeModal
+        isOpen={isUnsubscribeOpen}
+        onClose={() => setIsUnsubscribeOpen(false)}
+      />
 
     </div>
   );

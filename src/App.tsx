@@ -13,6 +13,8 @@ import PaymentHistory from './components/PaymentHistory';
 import ExpenseTracker from './components/ExpenseTracker';
 import StatementsGenerator from './components/StatementsGenerator';
 import SuperAdminPanel from './components/SuperAdminPanel';
+import DMCAPolicyModal from './components/DMCAPolicyModal';
+import UnsubscribeModal from './components/UnsubscribeModal';
 import { 
   Building, 
   LayoutDashboard, 
@@ -118,6 +120,8 @@ export default function App() {
   // --- SAAS SUBSCRIPTION ENFORCEMENT STATES & UTILITIES ---
   const [settingsModalInitialTab, setSettingsModalInitialTab] = useState<'general' | 'expenses' | 'paymentMethods' | 'incomeSplits' | 'billing' | 'backup'>('general');
   const [readOnlyBypass, setReadOnlyBypass] = useState<boolean>(false);
+  const [isDmcaModalOpen, setIsDmcaModalOpen] = useState(false);
+  const [isUnsubscribeModalOpen, setIsUnsubscribeModalOpen] = useState(false);
 
   const getDaysRemaining = (endDateStr?: string) => {
     if (!endDateStr) return null;
@@ -192,7 +196,7 @@ export default function App() {
   // Sync document head metadata with customized database branding
   useEffect(() => {
     if (!landingConfig) return;
-    const siteName = landingConfig.siteName || "bProp";
+    const siteName = landingConfig.siteName || "amra solution";
     const logoUrl = landingConfig.siteLogoUrl || "https://img.icons8.com/color/512/000000/building.png";
 
     // Dynamic Title
@@ -1909,6 +1913,9 @@ export default function App() {
           onDemoSignIn={handleDemoSignIn}
           onSuperAdminSignIn={handleModalSuperAdminSignIn}
           authLoading={authLoading}
+          siteName={landingConfig?.siteName && landingConfig.siteName !== 'bProp' ? landingConfig.siteName : 'amra solution'}
+          siteLogoAbbrev={landingConfig?.siteLogoAbbrev && landingConfig.siteLogoAbbrev !== 'bP' ? landingConfig.siteLogoAbbrev : 'AS'}
+          siteLogoUrl={landingConfig?.siteLogoUrl}
         />
       </>
     );
@@ -2663,6 +2670,19 @@ export default function App() {
                         <CreditCard className="w-4 h-4" />
                         {language === 'ar' ? '💳 تجديد الاشتراك وتفعيل الترخيص' : '💳 Subscribe & Unlock License'}
                       </button>
+
+                      {/* Renewal Terms & Cancellation Disclosure next to Subscribe button */}
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-[10px] text-slate-500 text-start space-y-1.5 leading-relaxed">
+                        <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                          <Shield className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{language === 'ar' ? 'شروط التجديد التلقائي وتعليمات الإلغاء:' : 'Automatic Renewal Terms & Cancellation Policy:'}</span>
+                        </div>
+                        <p>
+                          {language === 'ar'
+                            ? 'تتجدد الاشتراكات دورياً (شهرياً/سنوياً حسب الخطة المختارة) تلقائياً حتى تقوم بالإلغاء. يمكنك إلغاء التجديد التلقائي في أي وقت بنقرة واحدة من لوحة الفوترة دون أي غرامات، ويظل وصولك متاحاً حتى نهاية الفترة المدفوعة.'
+                            : 'Subscriptions automatically renew on a recurring cycle (monthly/annual) until cancelled. You can easily cancel auto-renewal anytime with 1-click in Billing Settings without penalty. Access continues until your prepaid period ends.'}
+                        </p>
+                      </div>
                       
                       <button
                         onClick={() => setReadOnlyBypass(true)}
@@ -2810,6 +2830,43 @@ export default function App() {
                   onRefresh={loadSuperAdminDashboard}
                 />
               )}
+
+              {/* Compliance & Legal Information Footer */}
+              <footer className="mt-12 pt-6 pb-4 border-t border-slate-200/80 text-center text-xs text-slate-400 space-y-2 font-sans">
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px]">
+                  <button
+                    onClick={() => setIsDmcaModalOpen(true)}
+                    className="hover:text-blue-600 underline cursor-pointer"
+                  >
+                    {language === 'ar' ? 'وكيل DMCA المعتمد لحقوق النشر' : 'DMCA Designated Agent'}
+                  </button>
+                  <span>•</span>
+                  <button
+                    onClick={() => setIsUnsubscribeModalOpen(true)}
+                    className="hover:text-rose-600 underline cursor-pointer"
+                  >
+                    {language === 'ar' ? 'إلغاء الاشتراك من الرسائل البريدية' : 'Unsubscribe from Communications'}
+                  </button>
+                  <span>•</span>
+                  <button
+                    onClick={() => {
+                      setSettingsModalInitialTab('billing');
+                      setIsPropertySettingsOpen(true);
+                    }}
+                    className="hover:text-emerald-600 underline cursor-pointer"
+                  >
+                    {language === 'ar' ? 'إدارة الاشتراك والإلغاء' : 'Subscription & Renewal Terms'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  b ventures (owning company of amra solution) • 30 N Gould St, Sheridan, WY, USA, 82801
+                </p>
+                <p className="text-[9px] text-slate-400">
+                  {language === 'ar' 
+                    ? 'متوافق مع قانون حماية خصوصية الأطفال (COPPA): الحسابات مخصصة لمديري العقارات والبالغين 18+ (أو 13+ بموافقة ولي الأمر).' 
+                    : 'COPPA Notice: Designed for property managers and adults 18+ (or 13+ with guardian consent). We do not knowingly collect personal data from minors.'}
+                </p>
+              </footer>
             </>
           )}
         </main>
@@ -3027,6 +3084,18 @@ export default function App() {
           }
         }}
         onCancel={() => setBuildingToDeleteId(null)}
+      />
+
+      {/* DMCA Designated Agent Policy Modal */}
+      <DMCAPolicyModal
+        isOpen={isDmcaModalOpen}
+        onClose={() => setIsDmcaModalOpen(false)}
+      />
+
+      {/* CAN-SPAM Unsubscribe Modal */}
+      <UnsubscribeModal
+        isOpen={isUnsubscribeModalOpen}
+        onClose={() => setIsUnsubscribeModalOpen(false)}
       />
 
       {/* GLOBAL TOAST FLIGHT PANEL */}

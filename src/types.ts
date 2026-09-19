@@ -360,8 +360,8 @@ export interface LandingPageConfig {
 }
 
 export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
-  siteName: "bProp",
-  siteLogoAbbrev: "bP",
+  siteName: "amra solution",
+  siteLogoAbbrev: "AS",
   siteLogoUrl: "",
   heroBadge: "Next-Gen Property Ledgers",
   heroTitle: "Ditch the Ledger Chaos.",
@@ -370,18 +370,18 @@ export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
   featuresTitle: "Built strictly for the realities of modern building management.",
   featuresDescription: "Every utility tool we've crafted solves real on-the-ground problems, eliminating double entries, missing receipts, and human calculator errors.",
   feature1Title: "Dynamic Income ledger & Auto-Splits",
-  feature1Desc: "Define rent profiles with customizable sub-portions (e.g., base rent portions, guard fees, cleaning fees). When a payment is recorded, bProp automatically splits the ledger so you know exactly which pool has been funded.",
+  feature1Desc: "Define rent profiles with customizable sub-portions (e.g., base rent portions, guard fees, cleaning fees). When a payment is recorded, amra solution automatically splits the ledger so you know exactly which pool has been funded.",
   feature2Title: "Seamless Mobile Experience",
-  feature2Desc: "Access bProp smoothly on any smartphone, tablet, or laptop. Record payments or log maintenance expenses during building walks with a layout custom-fit for touch interaction.",
+  feature2Desc: "Access amra solution smoothly on any smartphone, tablet, or laptop. Record payments or log maintenance expenses during building walks with a layout custom-fit for touch interaction.",
   feature3Title: "Automated Secure Sync",
   feature3Desc: "Your records are securely saved to the cloud and instantly up to date across all devices. Your ledgers remain private, encrypted, and backed up with zero manual effort.",
   auditTitle: "A chronological history log keeps your portfolio accountable.",
   auditDesc: "Every rent transaction registered, utility payment made, or tenant ledger edit is tracked inside our built-in history trail. Maintain absolute clarity between owners, accountants, and on-site staff.",
   ctaTitle: "Stop losing yield. Reclaim your weekends.",
-  ctaDesc: "Join portfolio owners who trust bProp. Start with a risk-free 1-click dashboard test drive, or log in with your Google Account instantly.",
+  ctaDesc: "Join portfolio owners who trust amra solution. Start with a risk-free 1-click dashboard test drive, or log in with your Google Account instantly.",
   // Arabic defaults
-  siteNameAr: "بي بروب",
-  siteLogoAbbrevAr: "ب ب",
+  siteNameAr: "عمرا سليوشن",
+  siteLogoAbbrevAr: "عا",
   heroBadgeAr: "سجلات عقارية من الجيل القادم",
   heroTitleAr: "تخلص من فوضى الدفاتر الورقية.",
   heroTitleGradientAr: "أتمت الحسابات المالية للعقارات.",
@@ -389,15 +389,15 @@ export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
   featuresTitleAr: "مصمم خصيصاً ليناسب واقع إدارة المباني الحديثة.",
   featuresDescriptionAr: "كل أداة قمنا بتطويرها تحل مشكلة حقيقية على أرض الواقع، مما يلغي تكرار المدخلات، وفقدان الإيصالات، وأخطاء الحساب اليدوي.",
   feature1TitleAr: "سجل إيرادات ديناميكي وتقسيم تلقائي",
-  feature1DescAr: "حدد ملفات الإيجار مع أجزاء مخصصة (مثل الإيجار الأساسي، وراتب الحارس، وصندوق الصيانة). عند تسجيل أي دفعة، تقوم منصة bProp بتقسيم الدفعة تلقائياً في السجل حتى تعرف بالضبط المبلغ المتوفر لكل غرض.",
+  feature1DescAr: "حدد ملفات الإيجار مع أجزاء مخصصة (مثل الإيجار الأساسي، وراتب الحارس، وصندوق الصيانة). عند تسجيل أي دفعة، تقوم منصة عمرا سليوشن بتقسيم الدفعة تلقائياً في السجل حتى تعرف بالضبط المبلغ المتوفر لكل غرض.",
   feature2TitleAr: "تجربة استخدام سلسة على الهواتف الذكية",
-  feature2DescAr: "تصفح bProp بسلاسة تامة من أي هاتف أو جهاز لوحي أو حاسوب محمول. قم بتسجيل الدفعات أو المصروفات أثناء تفقد العقار بواجهة مستخدم مهيأة بالكامل للمس.",
+  feature2DescAr: "تصفح عمرا سليوشن بسلاسة تامة من أي هاتف أو جهاز لوحي أو حاسوب محمول. قم بتسجيل الدفعات أو المصروفات أثناء تفقد العقار بواجهة مستخدم مهيأة بالكامل للمس.",
   feature3TitleAr: "مزامنة سحابية تلقائية وآمنة",
   feature3DescAr: "تُحفظ سجلاتك بأمان تام في السحابة وتكون محدثة فوراً عبر جميع أجهزتك. تظل دفاتر الأستاذ الخاصة بك خاصة ومشفرة ومحفوظة احتياطياً بدون أي مجهود يدوي.",
   auditTitleAr: "سجل مراجعة متكامل يحافظ على الشفافية والمسؤولية.",
   auditDescAr: "يتم تتبع كل معاملة إيجار مسجلة، أو مصروف صيانة مدفوع، أو تعديل في سجلات السكان داخل سجل المراجعة المدمج. حافظ على وضوح مطلق بين الملاك، والمحاسبين، وموظفي الموقع.",
   ctaTitleAr: "توقف عن خسارة أرباحك وعائداتك. استعد عطلات نهاية الأسبوع.",
-  ctaDescAr: "انضم إلى المئات من ملاك العقارات الذين يثقون في منصة bProp. ابدأ بتجربة لوحة التحكم التجريبية بنقرة واحدة، أو سجل دخولك باستخدام حساب جوجل فوراً."
+  ctaDescAr: "انضم إلى المئات من ملاك العقارات الذين يثقون في منصة عمرا سليوشن. ابدأ بتجربة لوحة التحكم التجريبية بنقرة واحدة، أو سجل دخولك باستخدام حساب جوجل فوراً."
 };
 
 

@@ -1,9 +1,29 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
+
+// Self-hosted fonts (replaces Google Fonts network calls to comply with GDPR / privacy rulings)
+import '@fontsource/cairo/400.css';
+import '@fontsource/cairo/500.css';
+import '@fontsource/cairo/600.css';
+import '@fontsource/cairo/700.css';
+import '@fontsource/cairo/800.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
+import '@fontsource/jetbrains-mono/700.css';
+
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { LanguageProvider } from './context/LanguageContext.tsx';
+import { initSessionReplayPrivacy } from './utils/sessionReplay.ts';
+
+// Initialize Privacy Safeguards: Session Replay OFF by default and sensitive input masking active
+initSessionReplayPrivacy();
 
 // Conditionally register service worker based on domain type to prevent stale dev caching
 const isDevDomain = 

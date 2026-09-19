@@ -372,6 +372,29 @@ export default function PropertySettingsModal({
     showToast(`Coupon applied! ${matched.code} active (${matched.discountPercent}% off).`, "success");
   };
 
+  const handleCancelSubscription = async () => {
+    const confirmMessage = language === 'ar'
+      ? 'هل أنت متأكد من رغبتك في إلغاء التجديد التلقائي للاشتراك؟ سيظل وصولك متاحاً حتى نهاية دورة الفوترة المدفوعة الحالية.'
+      : 'Are you sure you want to cancel your recurring subscription? Your access will remain active until the end of your current prepaid billing term.';
+    if (!window.confirm(confirmMessage)) return;
+
+    setIsSubmittingBilling(true);
+    try {
+      await onUpdateSettings({
+        subscriptionStatus: 'none',
+        subscriptionPlan: 'cancelled'
+      });
+      showToast(
+        language === 'ar' ? 'تم إلغاء التجديد التلقائي بنجاح.' : 'Recurring subscription cancelled successfully.',
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Failed to cancel subscription', 'error');
+    } finally {
+      setIsSubmittingBilling(false);
+    }
+  };
+
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     const selectedPlanObj = plans.find(p => p.id === billingPlan);
@@ -1670,9 +1693,35 @@ export default function PropertySettingsModal({
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                      Your premium service is fully unlocked and secure. You have already completed checkout for this cycle. If you wish to upgrade, downgrade, or cancel your plan, please contact the platform Super Admin team, or wait until your current cycle ends on <strong className="font-mono">{building.subscriptionEndDate || 'N/A'}</strong>.
-                    </p>
+                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h6 className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                            {language === 'ar' ? 'إدارة الاشتراك والتجديد التلقائي' : 'Subscription & Cancellation Policy'}
+                          </h6>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            {language === 'ar'
+                              ? `يتجدد اشتراكك تلقائياً في نهاية الدورة (${building.subscriptionEndDate || 'تاريخ التجديد'}). يمكنك إلغاء التجديد التلقائي في أي وقت بنقرة واحدة بدون أي غرامات.`
+                              : `Your subscription automatically renews at the end of each period (${building.subscriptionEndDate || 'Renewal Date'}). You can cancel anytime with 1-click.`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCancelSubscription}
+                          disabled={isSubmittingBilling}
+                          className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          {isSubmittingBilling 
+                            ? (language === 'ar' ? 'جاري الإلغاء...' : 'Cancelling...') 
+                            : (language === 'ar' ? 'إلغاء التجديد التلقائي' : 'Cancel Subscription')}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 border-t border-slate-200/60 pt-2">
+                        {language === 'ar'
+                          ? 'عند الإلغاء، يظل وصولك فعالاً بالكامل حتى نهاية الفترة المدفوعة مسبقاً. لن يتم تحصيل أي مبالغ إضافية.'
+                          : 'Upon cancellation, full access remains unlocked until the prepaid expiration date. No further charges will occur.'}
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <div className="border border-slate-200/60 rounded-3xl p-6 bg-white shadow-xs space-y-6">
@@ -1855,7 +1904,7 @@ export default function PropertySettingsModal({
                       {appliedDiscount < 100 && (
                         stripeConfig?.isEnabled && stripeConfig?.checkoutRedirectType === 'hosted_checkout' ? (
                           <div className="border-t border-slate-150 pt-5 space-y-4">
-                            <div className="flex justify-end">
+                            <div className="flex flex-col gap-3">
                               <button
                                 type="submit"
                                 disabled={isSubmittingBilling}
@@ -1873,6 +1922,36 @@ export default function PropertySettingsModal({
                                   </>
                                 )}
                               </button>
+
+                              {/* Renewal terms and cancel instructions right next to button */}
+                              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-start space-y-2 text-slate-600">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                                  <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span>{language === 'ar' ? 'شروط التجديد التلقائي وتعليمات الإلغاء' : 'Automatic Renewal Terms & Cancellation Policy'}</span>
+                                </div>
+                                <p className="text-[11px] leading-relaxed text-slate-500">
+                                  {language === 'ar' ? (
+                                    <>
+                                      بالنقر على <strong>متابعة الدفع</strong>، فإنك توافق على اشتراك دوري يتجدد تلقائياً كل {billingPlan === 'annually' ? 'سنة' : 'شهر'} بقيمة {getPlanCurrency()} {Math.max(0, getPlanBasePrice(billingPlan) - (getPlanBasePrice(billingPlan) * appliedDiscount) / 100)} حتى تقوم بإلغائه. سيتم الخصم تلقائياً عند بدء كل دورة فوترة.
+                                    </>
+                                  ) : (
+                                    <>
+                                      By clicking <strong>Proceed to Secure Checkout</strong>, you agree to an automatic recurring subscription of {getPlanCurrency()} {Math.max(0, getPlanBasePrice(billingPlan) - (getPlanBasePrice(billingPlan) * appliedDiscount) / 100)} billed every {billingPlan === 'annually' ? 'year' : 'month'} until cancelled. Your payment method will be charged automatically on each renewal.
+                                    </>
+                                  )}
+                                </p>
+                                <div className="bg-white border border-slate-200/60 rounded-xl p-3 text-[10px] space-y-1 text-slate-500">
+                                  <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>{language === 'ar' ? 'طريقة الإلغاء الفوري (إلغاء بنقرة واحدة):' : 'Easy 1-Click Cancellation Instructions:'}</span>
+                                  </div>
+                                  <p>
+                                    {language === 'ar'
+                                      ? 'يمكنك إلغاء التجديد التلقائي في أي وقت من "إعدادات العقار > الفوترة والترقية > إلغاء الاشتراك" أو بمراسلة billing@bprop.app. قم بالإلغاء قبل 24 ساعة من التجديد لتجنب تحصيل الدورة التالية. يظل الوصول فعالاً حتى نهاية الفترة المدفوعة.'
+                                      : 'You can cancel auto-renewal anytime in Property Settings > Billing > Cancel Subscription, or by contacting billing@bprop.app. Cancel at least 24 hours before your renewal date to avoid future charges. Access remains fully active until your current term ends.'}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ) : (
@@ -1888,6 +1967,9 @@ export default function PropertySettingsModal({
                                   type="text" 
                                   placeholder="4111 2222 3333 4444"
                                   maxLength={19}
+                                  data-mask="true"
+                                  data-private="true"
+                                  autoComplete="off"
                                   value={cardNumber}
                                   onChange={(e) => {
                                     const value = e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim();
@@ -1901,6 +1983,9 @@ export default function PropertySettingsModal({
                                 <input 
                                   type="text" 
                                   placeholder="Name as written on Card"
+                                  data-mask="true"
+                                  data-private="true"
+                                  autoComplete="off"
                                   value={cardName}
                                   onChange={(e) => setCardName(e.target.value)}
                                   className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-800 bg-slate-50 focus:bg-white"
@@ -1915,6 +2000,9 @@ export default function PropertySettingsModal({
                                   type="text" 
                                   placeholder="MM/YY"
                                   maxLength={5}
+                                  data-mask="true"
+                                  data-private="true"
+                                  autoComplete="off"
                                   value={cardExpiry}
                                   onChange={(e) => {
                                     let v = e.target.value;
@@ -1932,6 +2020,9 @@ export default function PropertySettingsModal({
                                   type="password" 
                                   placeholder="•••"
                                   maxLength={3}
+                                  data-mask="true"
+                                  data-private="true"
+                                  autoComplete="off"
                                   value={cardCvv}
                                   onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
                                   className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-slate-800 bg-slate-50 focus:bg-white"
@@ -1957,29 +2048,66 @@ export default function PropertySettingsModal({
                                 </button>
                               </div>
                             </div>
+
+                            {/* Renewal terms and cancel instructions right next to direct subscribe button */}
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-start space-y-2 text-slate-600">
+                              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                                <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>{language === 'ar' ? 'شروط التجديد التلقائي وتعليمات الإلغاء' : 'Automatic Renewal Terms & Cancellation Policy'}</span>
+                              </div>
+                              <p className="text-[11px] leading-relaxed text-slate-500">
+                                {language === 'ar' ? (
+                                  <>
+                                    بالنقر على <strong>اشتراك</strong>، فإنك تفوض الخصم الدوري المتكرر بمبلغ {getPlanCurrency()} {Math.max(0, getPlanBasePrice(billingPlan) - (getPlanBasePrice(billingPlan) * appliedDiscount) / 100)} كل {billingPlan === 'annually' ? 'سنة' : 'شهر'} من بطاقتك الائتمانية حتى تقوم بالإلغاء. يتجدد الاشتراك تلقائياً في موعد كل استحقاق.
+                                  </>
+                                ) : (
+                                  <>
+                                    By clicking <strong>Subscribe</strong>, you agree to an automatic recurring subscription of {getPlanCurrency()} {Math.max(0, getPlanBasePrice(billingPlan) - (getPlanBasePrice(billingPlan) * appliedDiscount) / 100)} billed every {billingPlan === 'annually' ? 'year' : 'month'} until cancelled. Your card will be charged automatically at each renewal period.
+                                  </>
+                                )}
+                              </p>
+                              <div className="bg-white border border-slate-200/60 rounded-xl p-3 text-[10px] space-y-1 text-slate-500">
+                                <div className="font-bold text-slate-700 flex items-center gap-1.5">
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>{language === 'ar' ? 'طريقة الإلغاء الفوري (إلغاء بنقرة واحدة):' : 'Easy 1-Click Cancellation Instructions:'}</span>
+                                </div>
+                                <p>
+                                  {language === 'ar'
+                                    ? 'يمكنك إلغاء التجديد التلقائي في أي وقت من "إعدادات العقار > الفوترة والترقية > إلغاء الاشتراك" أو بمراسلة billing@bprop.app. قم بالإلغاء قبل 24 ساعة من موعد التجديد لتفادي احتساب الدورة القادمة. يظل الوصول متاحاً بالكامل حتى نهاية الفترة الحالية.'
+                                    : 'You can cancel auto-renewal anytime from Property Settings > Billing > Cancel Subscription, or by contacting billing@bprop.app. Cancel at least 24 hours before your renewal date to prevent renewal charges. Full access continues until the end of your current term.'}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         )
                       )}
 
                       {appliedDiscount === 100 && (
-                        <div className="border-t border-slate-150 pt-5 flex justify-end">
-                          <button
-                            type="submit"
-                            disabled={isSubmittingBilling}
-                            className="py-3 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wide"
-                          >
-                            {isSubmittingBilling ? (
-                              <>
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                Activating...
-                              </>
-                            ) : (
-                              <>
-                                <Check className="w-4 h-4" />
-                                Activate Promo Access (100% Free)
-                              </>
-                            )}
-                          </button>
+                        <div className="border-t border-slate-150 pt-5 space-y-3">
+                          <div className="flex justify-end">
+                            <button
+                              type="submit"
+                              disabled={isSubmittingBilling}
+                              className="py-3 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wide"
+                            >
+                              {isSubmittingBilling ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  Activating...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  Activate Promo Access (100% Free)
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400 text-right">
+                            {language === 'ar'
+                              ? 'الخطة الترويجية المجانية 100% لا تتطلب أي وسيلة دفع ولن يتم تجديدها بخصم مالي.'
+                              : '100% Promotional access requires no payment method and will not auto-bill.'}
+                          </p>
                         </div>
                       )}
                     </form>
